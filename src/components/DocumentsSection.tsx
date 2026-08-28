@@ -1417,6 +1417,31 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       }
     }
 
+    // Pre-sync print buffer into DOM ahead of time for instant 1st-try Ctrl+P printing
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      let printContainer = document.getElementById('snapid-global-print-area');
+      if (!printContainer) {
+        printContainer = document.createElement('div');
+        printContainer.id = 'snapid-global-print-area';
+        printContainer.style.display = 'none';
+        document.body.appendChild(printContainer);
+      } else {
+        printContainer.style.display = 'none';
+      }
+      let img = printContainer.querySelector('img') as HTMLImageElement | null;
+      if (!img) {
+        img = document.createElement('img');
+        img.alt = 'Document Print Sheet';
+        printContainer.appendChild(img);
+      }
+      img.src = dataUrl;
+      if (img.decode) {
+        img.decode().catch(() => {});
+      }
+    } catch {
+      // ignore
+    }
   }, [
     activeDocType,
     layoutStyle,
@@ -1578,8 +1603,58 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     }
   };
 
+  // Sync document print area with pre-decode and dynamic page rules
+  const syncDocPrintArea = async () => {
+    const canvas = assemblyCanvasRef.current;
+    if (!canvas || (!frontImage && !backImage)) return false;
+
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      let printContainer = document.getElementById('snapid-global-print-area');
+      if (!printContainer) {
+        printContainer = document.createElement('div');
+        printContainer.id = 'snapid-global-print-area';
+        printContainer.style.display = 'none';
+        document.body.appendChild(printContainer);
+      } else {
+        printContainer.style.display = 'none';
+      }
+
+      let img = printContainer.querySelector('img') as HTMLImageElement | null;
+      if (!img) {
+        img = document.createElement('img');
+        img.alt = 'Document Print Sheet';
+        printContainer.appendChild(img);
+      }
+      img.src = dataUrl;
+
+      let styleEl = document.getElementById('snapid-print-style') as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'snapid-print-style';
+        document.head.appendChild(styleEl);
+      }
+      styleEl.innerHTML = `
+        @media print {
+          @page {
+            size: A4 ${docPrintOrientation} !important;
+            margin: 0mm !important;
+          }
+        }
+      `;
+
+      if (img.decode) {
+        await img.decode().catch(() => {});
+      }
+      return true;
+    } catch (err) {
+      console.warn('Doc print sync error:', err);
+      return false;
+    }
+  };
+
   // eMitra / Cyber Cafe Instant direct print system on standard A4 layout
-  const handleDirectPrintDoc = () => {
+  const handleDirectPrintDoc = async () => {
     if (!frontImage && !backImage) {
       alert(language === 'hi'
         ? 'कृपया प्रिंट या डाउनलोड करने से पहले कम से कम एक दस्तावेज़ (फ्रंट या बैक) अपलोड करें!'
@@ -1593,76 +1668,40 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         : 'Print Error: Layout canvas is not available.');
       return;
     }
-    window.print();
+    await syncDocPrintArea();
+    setTimeout(() => {
+      window.print();
+    }, 40);
   };
+
+  // Instant Ctrl+P / Cmd+P Keyboard Interceptor for Documents
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        if ((frontImage || backImage) && assemblyCanvasRef.current) {
+          e.preventDefault();
+          await syncDocPrintArea();
+          setTimeout(() => {
+            window.print();
+          }, 40);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [frontImage, backImage, docPrintOrientation, layoutStyle, docPrintCopiesCount, docPrintCopiesMode]);
 
   useEffect(() => {
     const handleBeforePrint = () => {
-      if (!frontImage && !backImage) return;
-
-      const canvas = assemblyCanvasRef.current;
-      if (!canvas) return;
-
-      const dataUrl = canvas.toDataURL('image/png');
-
-      const styleEl = document.createElement('style');
-      styleEl.id = 'snapid-print-style';
-      styleEl.innerHTML = `
-        @media print {
-          @page {
-            size: A4 ${docPrintOrientation};
-            margin: 0mm;
-          }
-          body > *:not(#snapid-global-print-area) {
-            display: none !important;
-          }
-          #snapid-global-print-area {
-            display: flex !important;
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background-color: #ffffff !important;
-            justify-content: center !important;
-            align-items: center !important;
-            z-index: 9999999 !important;
-          }
-          #snapid-global-print-area img {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            width: auto !important;
-            height: auto !important;
-            object-fit: contain !important;
-            display: block !important;
-            image-rendering: -webkit-optimize-contrast !important;
-            image-rendering: crisp-edges !important;
-          }
-        }
-      `;
-      document.head.appendChild(styleEl);
-
-      const printContainer = document.createElement('div');
-      printContainer.id = 'snapid-global-print-area';
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      printContainer.appendChild(img);
-      document.body.appendChild(printContainer);
-    };
-
-    const handleAfterPrint = () => {
-      document.getElementById('snapid-print-style')?.remove();
-      document.getElementById('snapid-global-print-area')?.remove();
+      syncDocPrintArea();
     };
 
     window.addEventListener('beforeprint', handleBeforePrint);
-    window.addEventListener('afterprint', handleAfterPrint);
-
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
-      window.removeEventListener('afterprint', handleAfterPrint);
     };
   }, [frontImage, backImage, docPrintOrientation]);
 

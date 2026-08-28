@@ -15,7 +15,9 @@ import {
   ChevronRight,
   Eye,
   FileDown,
-  Camera
+  Camera,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { 
   AppLanguage, 
@@ -400,7 +402,34 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const selectedSizePreset = PASSPORT_PRESETS.find(p => p.id === sizePreset) || PASSPORT_PRESETS[0];
   const selectedSheetPreset = SHEET_SIZE_PRESETS.find(p => p.id === sheetSize) || SHEET_SIZE_PRESETS[0];
 
-  const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(8);
+  // Dynamically calculate maximum photos that fit on the selected paper without overflowing margins
+  const maxCopiesOnPaper = React.useMemo(() => {
+    if (sheetSize === 'single' || sheetSize === 'single_a4_centered') return 1;
+    const wBase = selectedSheetPreset.widthMm || 210;
+    const hBase = selectedSheetPreset.heightMm || 297;
+    const pageW = printOrientation === 'portrait' ? wBase : hBase;
+    const pageH = printOrientation === 'portrait' ? hBase : wBase;
+
+    const marginMm = sheetSize === 'size_4x6' ? 6 : 14;
+    const gapMm = sheetSize === 'size_4x6' ? 3 : 4;
+
+    const maxCols = Math.max(1, Math.floor((pageW - marginMm) / (selectedSizePreset.widthMm + gapMm)));
+    const maxRows = Math.max(1, Math.floor((pageH - marginMm) / (selectedSizePreset.heightMm + gapMm)));
+
+    return Math.max(2, maxCols * maxRows);
+  }, [selectedSheetPreset, selectedSizePreset, printOrientation, sheetSize]);
+
+  const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(6);
+
+  // Keep copies count strictly bounded between 2 and max paper capacity
+  useEffect(() => {
+    if (photosCopiesCount > maxCopiesOnPaper) {
+      setPhotosCopiesCount(maxCopiesOnPaper);
+    } else if (photosCopiesCount < 2) {
+      setPhotosCopiesCount(2);
+    }
+  }, [maxCopiesOnPaper]);
+
   const [showBeforePreview, setShowBeforePreview] = useState<boolean>(false);
   const [singleCanvasUpdated, setSingleCanvasUpdated] = useState<number>(0);
 
@@ -797,28 +826,20 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     }
 
     // Sheet layouts
-    const gapPx = Math.round(4 * dpm); // 4mm gaps between photos
+    const gapMm = sheetSize === 'size_4x6' ? 3 : 4;
+    const marginMm = sheetSize === 'size_4x6' ? 6 : 14;
+    const gapPx = Math.round(gapMm * dpm);
 
-    let numPhotos = photosCopiesCount;
-    let numCols = 4;
-    if (numPhotos === 4) numCols = 2;
-    else if (numPhotos === 6) numCols = 3;
-    else if (numPhotos === 8) numCols = 4;
-    else if (numPhotos === 12) numCols = 4;
-    else if (numPhotos === 16) numCols = 4;
+    const maxCols = Math.max(1, Math.floor((pageWidthMm - marginMm) / (selectedSizePreset.widthMm + gapMm)));
+    const maxRows = Math.max(1, Math.floor((pageHeightMm - marginMm) / (selectedSizePreset.heightMm + gapMm)));
+    const maxCapacity = maxCols * maxRows;
 
-    // Recalculate columns relative to constraints of page size (aligned with selected orientation)
-    if (sheetSize === 'size_a4') {
-      const maxCols = Math.floor((pageWidthMm - 20) / (selectedSizePreset.widthMm + 4)); // 20mm margin
-      numCols = Math.max(1, Math.min(maxCols, numCols));
-      const maxRows = Math.floor((pageHeightMm - 20) / (selectedSizePreset.heightMm + 4));
-      numPhotos = Math.min(photosCopiesCount, numCols * maxRows);
-    } else if (sheetSize === 'size_4x6') {
-      // Fit max onto 4x6"
-      const fitsWide = Math.floor((pageWidthMm - 10) / (selectedSizePreset.widthMm + 3));
-      const fitsTall = Math.floor((pageHeightMm - 10) / (selectedSizePreset.heightMm + 3));
-      numCols = Math.max(1, Math.min(fitsWide, numCols));
-      numPhotos = Math.min(photosCopiesCount, numCols * fitsTall);
+    let numPhotos = Math.max(2, Math.min(photosCopiesCount, maxCapacity));
+
+    // Choose optimal columns to keep layout clean and within maxCols and maxRows
+    let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? 3 : 4);
+    if (Math.ceil(numPhotos / numCols) > maxRows) {
+      numCols = Math.min(maxCols, Math.ceil(numPhotos / maxRows));
     }
 
     // Compute layout margins to center the entire grid
@@ -843,6 +864,32 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       ctx.strokeRect(px - 1, py - 1, photoWidthPx + 2, photoHeightPx + 2);
 
       ctx.drawImage(singleCanvas, px, py, photoWidthPx, photoHeightPx);
+    }
+
+    // Pre-sync print buffer into DOM ahead of time for instant 1st-try Ctrl+P printing
+    try {
+      const dataUrl = sheetCanvas.toDataURL('image/png');
+      let printContainer = document.getElementById('snapid-global-print-area');
+      if (!printContainer) {
+        printContainer = document.createElement('div');
+        printContainer.id = 'snapid-global-print-area';
+        printContainer.style.display = 'none';
+        document.body.appendChild(printContainer);
+      } else {
+        printContainer.style.display = 'none';
+      }
+      let img = printContainer.querySelector('img') as HTMLImageElement | null;
+      if (!img) {
+        img = document.createElement('img');
+        img.alt = 'Print Sheet';
+        printContainer.appendChild(img);
+      }
+      img.src = dataUrl;
+      if (img.decode) {
+        img.decode().catch(() => {});
+      }
+    } catch {
+      // ignore
     }
   }, [
     sizePreset, 
@@ -940,26 +987,18 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         // Build millimetric copy placement to match canvas sheets
         const photoWidthMm = selectedSizePreset.widthMm;
         const photoHeightMm = selectedSizePreset.heightMm;
-        const gapMm = 4; // 4mm grid gaps
-        
-        let numPhotos = photosCopiesCount;
-        let numCols = 4;
-        if (numPhotos === 4) numCols = 2;
-        else if (numPhotos === 6) numCols = 3;
-        else if (numPhotos === 8) numCols = 4;
-        else if (numPhotos === 12) numCols = 4;
-        else if (numPhotos === 16) numCols = 4;
+        const gapMm = is4x6 ? 3 : 4;
+        const marginMm = is4x6 ? 6 : 14;
 
-        if (isA4) {
-          const maxCols = Math.floor((widthMm - 20) / (photoWidthMm + 4));
-          numCols = Math.max(1, Math.min(maxCols, numCols));
-          const maxRows = Math.floor((heightMm - 20) / (photoHeightMm + 4));
-          numPhotos = Math.min(photosCopiesCount, numCols * maxRows);
-        } else if (is4x6) {
-          const fitsWide = Math.floor((widthMm - 10) / (photoWidthMm + 3));
-          const fitsTall = Math.floor((heightMm - 10) / (photoHeightMm + 3));
-          numCols = Math.max(1, Math.min(fitsWide, numCols));
-          numPhotos = Math.min(photosCopiesCount, numCols * fitsTall);
+        const maxCols = Math.max(1, Math.floor((widthMm - marginMm) / (photoWidthMm + gapMm)));
+        const maxRows = Math.max(1, Math.floor((heightMm - marginMm) / (photoHeightMm + gapMm)));
+        const maxCapacity = maxCols * maxRows;
+
+        let numPhotos = Math.max(2, Math.min(photosCopiesCount, maxCapacity));
+
+        let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? 3 : 4);
+        if (Math.ceil(numPhotos / numCols) > maxRows) {
+          numCols = Math.min(maxCols, Math.ceil(numPhotos / maxRows));
         }
 
         const gridWidth = (numCols * photoWidthMm) + ((numCols - 1) * gapMm);
@@ -993,81 +1032,100 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     }
   };
 
-  // eMitra & Cyber Cafe style instant Direct Print
-  const handleDirectPrint = () => {
-    if (!sheetCanvasRef.current || !originalImage) {
-      alert("Please upload and process an image first before printing.");
-      return;
-    }
-    window.print();
-  };
+  // Sync print buffer into dedicated DOM element with styles and pre-decode
+  const syncPrintArea = async () => {
+    const canvas = sheetCanvasRef.current;
+    if (!canvas || !originalImage) return false;
 
-  useEffect(() => {
-    const handleBeforePrint = () => {
-      if (!sheetCanvasRef.current || !originalImage) return;
-
-      const canvas = sheetCanvasRef.current;
+    try {
       const dataUrl = canvas.toDataURL('image/png');
+      let printContainer = document.getElementById('snapid-global-print-area');
+      if (!printContainer) {
+        printContainer = document.createElement('div');
+        printContainer.id = 'snapid-global-print-area';
+        printContainer.style.display = 'none';
+        document.body.appendChild(printContainer);
+      } else {
+        printContainer.style.display = 'none';
+      }
 
-      const styleEl = document.createElement('style');
-      styleEl.id = 'snapid-print-style';
+      let img = printContainer.querySelector('img') as HTMLImageElement | null;
+      if (!img) {
+        img = document.createElement('img');
+        img.alt = 'Print Preview';
+        printContainer.appendChild(img);
+      }
+      img.src = dataUrl;
+
+      let styleEl = document.getElementById('snapid-print-style') as HTMLStyleElement | null;
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = 'snapid-print-style';
+        document.head.appendChild(styleEl);
+      }
       const actualPaperSize = printPaperSize === '4x6' ? '101.6mm 152.4mm' : 'A4';
       styleEl.innerHTML = `
         @media print {
           @page {
-            size: ${actualPaperSize} ${printOrientation};
-            margin: 0mm;
-          }
-          body > *:not(#snapid-global-print-area) {
-            display: none !important;
-          }
-          #snapid-global-print-area {
-            display: flex !important;
-            position: fixed !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background-color: #ffffff !important;
-            justify-content: center !important;
-            align-items: center !important;
-            z-index: 9999999 !important;
-          }
-          #snapid-global-print-area img {
-            max-width: 100% !important;
-            max-height: 100% !important;
-            width: auto !important;
-            height: auto !important;
-            object-fit: contain !important;
-            display: block !important;
-            image-rendering: -webkit-optimize-contrast !important;
-            image-rendering: crisp-edges !important;
+            size: ${actualPaperSize} ${printOrientation} !important;
+            margin: 0mm !important;
           }
         }
       `;
-      document.head.appendChild(styleEl);
 
-      const printContainer = document.createElement('div');
-      printContainer.id = 'snapid-global-print-area';
-      const img = document.createElement('img');
-      img.src = dataUrl;
-      printContainer.appendChild(img);
-      document.body.appendChild(printContainer);
+      if (img.decode) {
+        await img.decode().catch(() => {});
+      }
+      return true;
+    } catch (err) {
+      console.warn('Print sync error:', err);
+      return false;
+    }
+  };
+
+  // Instant 1st-try Direct Print Trigger
+  const handleDirectPrint = async () => {
+    if (!sheetCanvasRef.current || !originalImage) {
+      alert(language === 'hi' 
+        ? "कृपया प्रिंट करने से पहले फोटो अपलोड और प्रोसेस करें।"
+        : "Please upload and process an image first before printing.");
+      return;
+    }
+    await syncPrintArea();
+    setTimeout(() => {
+      window.print();
+    }, 40);
+  };
+
+  // Instant Ctrl+P / Cmd+P Keyboard Interceptor
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        if (originalImage && sheetCanvasRef.current) {
+          e.preventDefault();
+          await syncPrintArea();
+          setTimeout(() => {
+            window.print();
+          }, 40);
+        }
+      }
     };
 
-    const handleAfterPrint = () => {
-      document.getElementById('snapid-print-style')?.remove();
-      document.getElementById('snapid-global-print-area')?.remove();
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [originalImage, printPaperSize, printOrientation, sheetSize, photosCopiesCount, sizePreset, singleCanvasUpdated]);
+
+  // Browser BeforePrint fallback hook
+  useEffect(() => {
+    const handleBeforePrint = () => {
+      syncPrintArea();
     };
 
     window.addEventListener('beforeprint', handleBeforePrint);
-    window.addEventListener('afterprint', handleAfterPrint);
-
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
-      window.removeEventListener('afterprint', handleAfterPrint);
     };
   }, [originalImage, printPaperSize, printOrientation]);
 
@@ -1438,41 +1496,62 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   </div>
                 </div>
 
-                {/* Copies selection panel - custom grid options */}
+                {/* Copies selection panel - compact interactive stepper */}
                 {sheetSize !== 'single' && (
-                  <div className="pt-2 animate-fadeIn">
-                    <label className="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">
-                      Passport Copies count
-                    </label>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {[4, 6, 8, 12, 16].map((count) => {
-                        const isAllowedOnPaper = sheetSize === 'size_4x6' ? count <= 8 : true;
-                        return (
-                          <button
-                            key={count}
-                            type="button"
-                            disabled={!isAllowedOnPaper}
-                            onClick={() => setPhotosCopiesCount(count)}
-                            className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                              !isAllowedOnPaper
-                                ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
-                                : photosCopiesCount === count
-                                  ? 'border-blue-500 bg-blue-500/10 text-blue-500'
-                                  : theme === 'dark'
-                                    ? 'border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-750 hover:text-white'
-                                    : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-350 hover:text-slate-950'
-                            }`}
-                          >
-                            {count}
-                          </button>
-                        );
-                      })}
+                  <div className="pt-1 animate-fadeIn">
+                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
+                      theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
+                    }`}>
+                      <div className="flex flex-col">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                          {language === 'hi' ? 'प्रतियाँ (Copies)' : 'Copies Count'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-medium">
+                          {sheetSize === 'size_4x6' ? `4x6" (Max: ${maxCopiesOnPaper})` : `A4 (Max: ${maxCopiesOnPaper})`}
+                        </span>
+                      </div>
+
+                      {/* Compact Stepper (- [count] +) */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          id="passport-copies-decrease-btn"
+                          disabled={photosCopiesCount <= 2}
+                          onClick={() => setPhotosCopiesCount(prev => Math.max(2, prev - 1))}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                            photosCopiesCount <= 2
+                              ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
+                              : theme === 'dark'
+                                ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white active:scale-95'
+                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 active:scale-95'
+                          }`}
+                          title={language === 'hi' ? 'कम करें (-1)' : 'Decrease (-1)'}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+
+                        <div className="min-w-[40px] text-center">
+                          <span className="text-base font-black font-mono text-blue-500">
+                            {photosCopiesCount}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          id="passport-copies-increase-btn"
+                          disabled={photosCopiesCount >= maxCopiesOnPaper}
+                          onClick={() => setPhotosCopiesCount(prev => Math.min(maxCopiesOnPaper, prev + 1))}
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                            photosCopiesCount >= maxCopiesOnPaper
+                              ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
+                              : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
+                          }`}
+                          title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <p className={`text-[10.5px] mt-1.5 leading-normal ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
-                      {sheetSize === 'size_4x6' 
-                        ? '4"x6" Photo papers are optimized for 4, 6, or 8 photo print alignments.' 
-                        : 'A4 pages support dense grids: up to 16 passport duplicates perfectly packed.'}
-                    </p>
                   </div>
                 )}
               </div>
