@@ -1,0 +1,49 @@
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background Gradient for the Icon Squircle matching the neon blue-to-purple glow -->
+    <linearGradient id="logo-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+
+    <!-- Symbol White Gradient for premium look -->
+    <linearGradient id="symbol-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f1f5f9" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle container -->
+  <rect x="0" y="0" width="100" height="100" rx="24" fill="url(#logo-grad)" />
+  
+  <!-- Gloss overlay -->
+  <path d="M 0 24 C 0 10.7 10.7 0 24 0 L 76 0 C 89.3 0 100 10.7 100 24 L 100 45 C 100 45 75 35 50 35 C 25 35 0 45 0 45 Z" fill="white" fill-opacity="0.15" />
+  
+  <!-- Camera Body -->
+  <path 
+    d="M32 29L36.5 21.5C38 19 40.5 17.5 43.5 17.5H56.5C59.5 17.5 62 19 63.5 21.5L68 29H81C85.4 29 89 32.6 89 37V71C89 75.4 85.4 79 81 79H19C14.6 79 11 75.4 11 71V37C11 32.6 14.6 29 19 29H32Z" 
+    stroke="url(#symbol-grad)" 
+    stroke-width="5.5" 
+    stroke-linecap="round" 
+    stroke-linejoin="round"
+  />
+  
+  <!-- Camera Dual Circular Lens Ring -->
+  <circle 
+    cx="50" 
+    cy="53" 
+    r="15" 
+    stroke="url(#symbol-grad)" 
+    stroke-width="5.5"
+  />
+  
+  <!-- Inner Glass reflection circle -->
+  <circle 
+    cx="50" 
+    cy="53" 
+    r="6.5" 
+    fill="white" 
+    fill-opacity="0.85"
+  />
+</svg>

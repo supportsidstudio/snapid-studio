@@ -1,0 +1,11 @@
+# Model Attribution & License
+
+## U²-NetP (U-Square Net Portable)
+- **Model Name**: U²-NetP (Portable & Lite Salient Object Detection / Background Removal)
+- **Format**: ONNX (`u2netp.onnx`)
+- **Size**: ~4.36 MiB
+- **Input Resolution**: 320x320 RGB
+- **License**: Apache License 2.0
+- **Original Authors & Repository**: Xuebin Qin, Zichen Zhang, Chenyang Huang, Masood Dehghan, Osmar R. Zaiane, Martin Jagersand (University of Alberta)
+- **Repository Reference**: https://github.com/xuebinqin/U-2-Net / https://huggingface.co/edgetools/u2netp
+- **License Term**: Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0

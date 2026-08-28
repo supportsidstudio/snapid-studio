@@ -1,0 +1,6 @@
+{
+  "name": "SnapID",
+  "description": "Premium AI Passport Photo and Document Layout Suite with client-side AI background removal, custom backgrounds, and standard Indian document prep.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

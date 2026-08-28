@@ -1,0 +1,10 @@
+# robots.txt for SnapID Studio
+User-agent: *
+Allow: /
+
+# Exclude temporary cache folders if any
+Disallow: /dist/
+Disallow: /node_modules/
+
+# Sitemap location
+Sitemap: https://snapid.studio/sitemap.xml
