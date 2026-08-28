@@ -17,7 +17,16 @@ import {
   FileDown,
   Camera,
   Plus,
-  Minus
+  Minus,
+  Crop,
+  ChevronUp,
+  ChevronDown,
+  RotateCcw,
+  FlipHorizontal,
+  X,
+  Grid3X3,
+  Square,
+  Move
 } from 'lucide-react';
 import { 
   AppLanguage, 
@@ -371,10 +380,244 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
+  // Raw original uncropped image stored for repeated high-fidelity cropping
+  const [rawSourceImage, setRawSourceImage] = useState<string | null>(null);
+
+  // Android Phone Style Crop Station state
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState<'passport' | 'free' | '1:1' | '4:3' | '16:9'>('passport');
+  const [cropRotation, setCropRotation] = useState<number>(0);
+  const [cropFlipH, setCropFlipH] = useState<boolean>(false);
+  const [cropDragAction, setCropDragAction] = useState<string | null>(null);
+  const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number; box: { x: number; y: number; w: number; h: number } }>({
+    x: 0,
+    y: 0,
+    box: { x: 10, y: 10, w: 80, h: 80 }
+  });
+  const cropDisplayContainerRef = useRef<HTMLDivElement>(null);
+
   // Serial queue for local AI background removal (prevents concurrent execution of ONNX sessions)
   const bgRemovalChainRef = useRef<Promise<any>>(Promise.resolve());
   const latestRequestedSrcRef = useRef<string | null>(null);
   const pendingRequestsCountRef = useRef<number>(0);
+
+  // Helper to initialize cropping box centered in the displayed image dimensions
+  const initCropBox = (imgW: number, imgH: number, ratioMode: string) => {
+    const containerRatio = imgW / imgH;
+    let targetRatio = containerRatio;
+    if (ratioMode === 'passport') {
+      targetRatio = selectedSizePreset.widthMm / selectedSizePreset.heightMm;
+    } else if (ratioMode === '1:1') {
+      targetRatio = 1.0;
+    } else if (ratioMode === '4:3') {
+      targetRatio = 4 / 3;
+    } else if (ratioMode === '16:9') {
+      targetRatio = 16 / 9;
+    } else if (ratioMode === 'free') {
+      targetRatio = containerRatio;
+    }
+
+    let w = 85;
+    let h = (w / targetRatio) * containerRatio;
+    if (h > 85) {
+      h = 85;
+      w = (h * targetRatio) / containerRatio;
+    }
+    const x = (100 - w) / 2;
+    const y = (100 - h) / 2;
+    return {
+      x: Math.max(2, Math.min(90, x)),
+      y: Math.max(2, Math.min(90, y)),
+      w: Math.max(10, Math.min(96, w)),
+      h: Math.max(10, Math.min(96, h)),
+    };
+  };
+
+  const openAndroidCropModal = () => {
+    if (!originalImage && !rawSourceImage) return;
+    setCropRotation(0);
+    setCropFlipH(false);
+    setCropAspectRatio('passport');
+    setCropModalOpen(true);
+  };
+
+  const handleCropRatioChange = (ratioMode: 'passport' | 'free' | '1:1' | '4:3' | '16:9') => {
+    setCropAspectRatio(ratioMode);
+    if (cropDisplayContainerRef.current) {
+      const imgEl = cropDisplayContainerRef.current.querySelector('img');
+      if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+        let nw = imgEl.naturalWidth;
+        let nh = imgEl.naturalHeight;
+        if (cropRotation === 90 || cropRotation === 270) {
+          nw = imgEl.naturalHeight;
+          nh = imgEl.naturalWidth;
+        }
+        setCropBox(initCropBox(nw, nh, ratioMode));
+      }
+    }
+  };
+
+  const startCropBoxDrag = (action: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!cropBox) return;
+    setCropDragAction(action);
+    setCropDragStart({
+      x: e.clientX,
+      y: e.clientY,
+      box: { ...cropBox }
+    });
+  };
+
+  const startCropBoxDragTouch = (action: string, e: React.TouchEvent) => {
+    if (e.touches && e.touches[0] && cropBox) {
+      e.stopPropagation();
+      setCropDragAction(action);
+      setCropDragStart({
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        box: { ...cropBox }
+      });
+    }
+  };
+
+  const updateCropWithDelta = (deltaX: number, deltaY: number, containerW: number, containerH: number) => {
+    if (!containerW || !containerH || !cropBox) return;
+    const pctX = (deltaX / containerW) * 100;
+    const pctY = (deltaY / containerH) * 100;
+    const start = cropDragStart.box;
+    const minSize = 8; // minimum 8% size for crop box
+
+    if (cropDragAction === 'move') {
+      let newX = start.x + pctX;
+      let newY = start.y + pctY;
+      newX = Math.max(0, Math.min(100 - start.w, newX));
+      newY = Math.max(0, Math.min(100 - start.h, newY));
+      setCropBox({ ...start, x: newX, y: newY });
+    } else if (cropDragAction === 'resize-se') {
+      let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
+      let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
+      setCropBox({ ...start, w: newW, h: newH });
+    } else if (cropDragAction === 'resize-sw') {
+      let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
+      let newW = (start.x + start.w) - newX;
+      let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
+      setCropBox({ ...start, x: newX, w: newW, h: newH });
+    } else if (cropDragAction === 'resize-nw') {
+      let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
+      let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
+      let newW = (start.x + start.w) - newX;
+      let newH = (start.y + start.h) - newY;
+      setCropBox({ ...start, x: newX, y: newY, w: newW, h: newH });
+    } else if (cropDragAction === 'resize-ne') {
+      let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
+      let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
+      let newH = (start.y + start.h) - newY;
+      setCropBox({ ...start, y: newY, w: newW, h: newH });
+    } else if (cropDragAction === 'resize-n') {
+      let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
+      let newH = (start.y + start.h) - newY;
+      setCropBox({ ...start, y: newY, h: newH });
+    } else if (cropDragAction === 'resize-s') {
+      let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
+      setCropBox({ ...start, h: newH });
+    } else if (cropDragAction === 'resize-w') {
+      let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
+      let newW = (start.x + start.w) - newX;
+      setCropBox({ ...start, x: newX, w: newW });
+    } else if (cropDragAction === 'resize-e') {
+      let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
+      setCropBox({ ...start, w: newW });
+    }
+  };
+
+  const handleCropContainerMouseMove = (e: React.MouseEvent) => {
+    if (!cropDragAction || !cropDisplayContainerRef.current) return;
+    const rect = cropDisplayContainerRef.current.getBoundingClientRect();
+    const deltaX = e.clientX - cropDragStart.x;
+    const deltaY = e.clientY - cropDragStart.y;
+    updateCropWithDelta(deltaX, deltaY, rect.width, rect.height);
+  };
+
+  const handleCropContainerTouchMove = (e: React.TouchEvent) => {
+    if (!cropDragAction || !cropDisplayContainerRef.current || !e.touches[0]) return;
+    const rect = cropDisplayContainerRef.current.getBoundingClientRect();
+    const deltaX = e.touches[0].clientX - cropDragStart.x;
+    const deltaY = e.touches[0].clientY - cropDragStart.y;
+    updateCropWithDelta(deltaX, deltaY, rect.width, rect.height);
+  };
+
+  const handleCropContainerMouseUp = () => {
+    setCropDragAction(null);
+  };
+
+  const applyCrop = () => {
+    const sourceToUse = rawSourceImage || originalImage;
+    if (!sourceToUse || !cropBox) return;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const naturalW = img.naturalWidth || img.width;
+      const naturalH = img.naturalHeight || img.height;
+
+      // Step 1: Render source image with rotation and flip to intermediate canvas
+      const intermediateCanvas = document.createElement('canvas');
+      let interW = naturalW;
+      let interH = naturalH;
+      if (cropRotation === 90 || cropRotation === 270) {
+        intermediateCanvas.width = naturalH;
+        intermediateCanvas.height = naturalW;
+        interW = naturalH;
+        interH = naturalW;
+      } else {
+        intermediateCanvas.width = naturalW;
+        intermediateCanvas.height = naturalH;
+      }
+
+      const interCtx = intermediateCanvas.getContext('2d');
+      if (!interCtx) return;
+
+      interCtx.save();
+      interCtx.translate(intermediateCanvas.width / 2, intermediateCanvas.height / 2);
+      interCtx.rotate((cropRotation * Math.PI) / 180);
+      if (cropFlipH) interCtx.scale(-1, 1);
+      interCtx.drawImage(img, -naturalW / 2, -naturalH / 2);
+      interCtx.restore();
+
+      // Step 2: Slice the crop rectangle
+      const rx = Math.max(0, Math.min(1, cropBox.x / 100));
+      const ry = Math.max(0, Math.min(1, cropBox.y / 100));
+      const rw = Math.max(0.01, Math.min(1 - rx, cropBox.w / 100));
+      const rh = Math.max(0.01, Math.min(1 - ry, cropBox.h / 100));
+
+      const cropX = Math.round(rx * interW);
+      const cropY = Math.round(ry * interH);
+      const cropW = Math.max(20, Math.round(rw * interW));
+      const cropH = Math.max(20, Math.round(rh * interH));
+
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = cropW;
+      finalCanvas.height = cropH;
+      const finalCtx = finalCanvas.getContext('2d');
+      if (!finalCtx) return;
+
+      finalCtx.drawImage(intermediateCanvas, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      const croppedDataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
+
+      setOriginalImage(croppedDataUrl);
+      setRemovedBgImg(null); // Reset background so AI auto-extracts the newly cropped portrait
+      setZoom(1.0);
+      setPanX(0);
+      setPanY(0);
+      setRotation(0);
+      setCropModalOpen(false);
+
+      // Re-run AI background removal on the freshly cropped portrait
+      runBackgroundRemoval(croppedDataUrl);
+    };
+    img.src = sourceToUse;
+  };
 
   // Mobile device detection
   const [isMobile, setIsMobile] = useState(false);
@@ -499,6 +742,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     try {
       // Preserve full image quality (up to 2048px for sharp 300DPI passport printing)
       const optimizedUrl = await resizeAndCompressImage(file, 2048, 0.95);
+      setRawSourceImage(optimizedUrl);
       setOriginalImage(optimizedUrl);
       setRemovedBgImg(null);
       setZoom(1.0);
@@ -1579,7 +1823,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={() => setBgColorType('white')}
-                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all ${
+                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     bgColorType === 'white'
                       ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500'
                       : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
@@ -1592,7 +1836,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={() => setBgColorType('blue')}
-                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all ${
+                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     bgColorType === 'blue'
                       ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500'
                       : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
@@ -1602,81 +1846,302 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   <span>Blue</span>
                 </button>
               </div>
+
+              {/* Dedicated Crop & Align Button with Crop Icon directly below background color */}
+              <div className="pt-2 border-t border-slate-800/60">
+                <button
+                  type="button"
+                  id="passport-crop-action-btn"
+                  onClick={openAndroidCropModal}
+                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm ${
+                    theme === 'dark'
+                      ? 'border-blue-500/60 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:border-blue-400 ring-1 ring-blue-500/30'
+                      : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-500 shadow-xs'
+                  }`}
+                >
+                  <Crop className="w-4 h-4 text-blue-500" />
+                  <span>{language === 'hi' ? 'फोटो क्रॉप करें (Android Style Crop)' : 'Crop Photo (Phone Style)'}</span>
+                </button>
+              </div>
             </div>
 
-            {/* Panel Card: Crop Adjustments */}
-            <div className={`p-5 rounded-2xl border ${
+            {/* Panel Card: Crop Adjustments & Scaling */}
+            <div className={`p-4 sm:p-5 rounded-2xl border ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-            } space-y-4`}>
-              <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-blue-500" />
-                <span>Adjustments & Scaling</span>
-              </h3>
+            } space-y-3.5`}>
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-blue-500" />
+                  <span>Adjustments & Scaling</span>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setZoom(1.0);
+                    setRotation(0);
+                    setBrightness(100);
+                    setContrast(100);
+                  }}
+                  className="text-[10px] font-semibold text-slate-400 hover:text-blue-400 flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Reset Adjustments"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Reset</span>
+                </button>
+              </div>
 
-              {/* Sliders */}
-              <div className="space-y-4.5">
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.zoomLabel}</span>
-                    <span className="font-mono text-slate-400">{zoom.toFixed(1)}x</span>
+              {/* Sliders with compact mini bars and Up/Down stepper input boxes in single row */}
+              <div className="space-y-3">
+                {/* 1. Zoom */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                      <Maximize2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      {t.zoomLabel}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">0.5x - 4.0x</span>
                   </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="4.0"
-                    step="0.05"
-                    value={zoom}
-                    onChange={(e) => setZoom(parseFloat(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
+
+                  <div className="flex items-center gap-2">
+                    {/* Compact Mini Slider Bar */}
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="4.0"
+                      step="0.05"
+                      value={zoom}
+                      onChange={(e) => setZoom(parseFloat(e.target.value))}
+                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    {/* Stepper Box with Up/Down Arrows */}
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
+                    }`}>
+                      <input
+                        type="number"
+                        min="0.5"
+                        max="4.0"
+                        step="0.1"
+                        value={Number(zoom.toFixed(1))}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val)) setZoom(Math.max(0.5, Math.min(4.0, val)));
+                        }}
+                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+                        }`}
+                      />
+                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setZoom(prev => Math.min(4.0, parseFloat((prev + 0.1).toFixed(1))))}
+                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
+                          title="Increase Zoom (+0.1)"
+                        >
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setZoom(prev => Math.max(0.5, parseFloat((prev - 0.1).toFixed(1))))}
+                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
+                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+                          }`}
+                          title="Decrease Zoom (-0.1)"
+                        >
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.rotateLabel}</span>
-                    <span className="font-mono text-slate-400">{rotation}°</span>
+                {/* 2. Rotation */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                      <RotateCw className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      {t.rotateLabel}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">-180° to +180°</span>
                   </div>
-                  <input
-                    type="range"
-                    min="-180"
-                    max="180"
-                    step="1"
-                    value={rotation}
-                    onChange={(e) => setRotation(parseInt(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
+
+                  <div className="flex items-center gap-2">
+                    {/* Compact Mini Slider Bar */}
+                    <input
+                      type="range"
+                      min="-180"
+                      max="180"
+                      step="1"
+                      value={rotation}
+                      onChange={(e) => setRotation(parseInt(e.target.value))}
+                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    {/* Stepper Box with Up/Down Arrows */}
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
+                    }`}>
+                      <input
+                        type="number"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={rotation}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val)) setRotation(Math.max(-180, Math.min(180, val)));
+                        }}
+                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+                        }`}
+                      />
+                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setRotation(prev => Math.min(180, prev + 1))}
+                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
+                          title="Rotate Right (+1°)"
+                        >
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setRotation(prev => Math.max(-180, prev - 1))}
+                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
+                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+                          }`}
+                          title="Rotate Left (-1°)"
+                        >
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.brightnessLabel}</span>
-                    <span className="font-mono text-slate-400">{brightness}%</span>
+                {/* 3. Brightness */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                      <Sun className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      {t.brightnessLabel}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">50% - 180%</span>
                   </div>
-                  <input
-                    type="range"
-                    min="50"
-                    max="180"
-                    step="1"
-                    value={brightness}
-                    onChange={(e) => setBrightness(parseInt(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
+
+                  <div className="flex items-center gap-2">
+                    {/* Compact Mini Slider Bar */}
+                    <input
+                      type="range"
+                      min="50"
+                      max="180"
+                      step="1"
+                      value={brightness}
+                      onChange={(e) => setBrightness(parseInt(e.target.value))}
+                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    {/* Stepper Box with Up/Down Arrows */}
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
+                    }`}>
+                      <input
+                        type="number"
+                        min="50"
+                        max="180"
+                        step="1"
+                        value={brightness}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val)) setBrightness(Math.max(50, Math.min(180, val)));
+                        }}
+                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+                        }`}
+                      />
+                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setBrightness(prev => Math.min(180, prev + 5))}
+                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
+                          title="Increase Brightness (+5%)"
+                        >
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBrightness(prev => Math.max(50, prev - 5))}
+                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
+                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+                          }`}
+                          title="Decrease Brightness (-5%)"
+                        >
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.contrastLabel}</span>
-                    <span className="font-mono text-slate-400">{contrast}%</span>
+                {/* 4. Contrast */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex flex-col">
+                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                      <Sliders className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      {t.contrastLabel}
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-mono">50% - 180%</span>
                   </div>
-                  <input
-                    type="range"
-                    min="50"
-                    max="180"
-                    step="1"
-                    value={contrast}
-                    onChange={(e) => setContrast(parseInt(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                  />
+
+                  <div className="flex items-center gap-2">
+                    {/* Compact Mini Slider Bar */}
+                    <input
+                      type="range"
+                      min="50"
+                      max="180"
+                      step="1"
+                      value={contrast}
+                      onChange={(e) => setContrast(parseInt(e.target.value))}
+                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    {/* Stepper Box with Up/Down Arrows */}
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
+                    }`}>
+                      <input
+                        type="number"
+                        min="50"
+                        max="180"
+                        step="1"
+                        value={contrast}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val)) setContrast(Math.max(50, Math.min(180, val)));
+                        }}
+                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
+                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+                        }`}
+                      />
+                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
+                        <button
+                          type="button"
+                          onClick={() => setContrast(prev => Math.min(180, prev + 5))}
+                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
+                          title="Increase Contrast (+5%)"
+                        >
+                          <ChevronUp className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setContrast(prev => Math.max(50, prev - 5))}
+                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
+                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+                          }`}
+                          title="Decrease Contrast (-5%)"
+                        >
+                          <ChevronDown className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1861,6 +2326,372 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <ImageIcon className="w-4 h-4 text-blue-500" />
                 <span>Choose Another Image</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Android Phone Style Interactive Photo Crop Modal */}
+      {cropModalOpen && (rawSourceImage || originalImage) && (
+        <div 
+          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between text-white p-3 sm:p-5 select-none animate-fadeIn"
+          onMouseMove={handleCropContainerMouseMove}
+          onTouchMove={handleCropContainerTouchMove}
+          onMouseUp={handleCropContainerMouseUp}
+          onTouchEnd={handleCropContainerMouseUp}
+        >
+          {/* Top Bar (Phone Gallery Header) */}
+          <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
+                <Crop className="w-4 h-4 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
+                  <span>{language === 'hi' ? 'फोटो क्रॉपिंग और संरेखण (Android Crop)' : 'Crop & Straighten Photo'}</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">
+                  {language === 'hi' ? 'कोनों व किनारों को खींचकर फोटो को सही आकार में सेट करें' : 'Drag the corner brackets or edges to frame your photo'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setCropRotation(0);
+                  setCropFlipH(false);
+                  if (cropDisplayContainerRef.current) {
+                    const imgEl = cropDisplayContainerRef.current.querySelector('img');
+                    if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+                      let nw = imgEl.naturalWidth;
+                      let nh = imgEl.naturalHeight;
+                      if (cropRotation === 90 || cropRotation === 270) {
+                        nw = imgEl.naturalHeight;
+                        nh = imgEl.naturalWidth;
+                      }
+                      setCropBox(initCropBox(nw, nh, cropAspectRatio));
+                    }
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 border border-slate-700"
+                title="Reset Crop Box"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{language === 'hi' ? 'रीसेट' : 'Reset'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCropModalOpen(false)}
+                className="p-1.5 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {/* Stage: Interactive Image Container with Android Crop Overlay */}
+          <div className="flex-1 flex items-center justify-center p-2 relative overflow-hidden min-h-[300px]">
+            <div 
+              ref={cropDisplayContainerRef}
+              className="relative max-w-full max-h-[56vh] flex items-center justify-center select-none"
+            >
+              <img 
+                src={rawSourceImage || originalImage || ''}
+                alt="Source preview"
+                style={{
+                  transform: `rotate(${cropRotation}deg) scaleX(${cropFlipH ? -1 : 1})`,
+                  transition: 'transform 0.15s ease-out'
+                }}
+                onLoad={(e) => {
+                  const imgEl = e.currentTarget;
+                  let nw = imgEl.naturalWidth;
+                  let nh = imgEl.naturalHeight;
+                  if (cropRotation === 90 || cropRotation === 270) {
+                    nw = imgEl.naturalHeight;
+                    nh = imgEl.naturalWidth;
+                  }
+                  setCropBox(initCropBox(nw, nh, cropAspectRatio));
+                }}
+                className="max-w-full max-h-[52vh] block object-contain select-none pointer-events-none opacity-90 shadow-2xl rounded-sm"
+              />
+
+              {/* Outer dark vignette overlay around crop area */}
+              {cropBox && (
+                <div className="absolute inset-0 pointer-events-none z-10">
+                  <div className="absolute top-0 left-0 right-0 bg-black/75" style={{ height: `${cropBox.y}%` }} />
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/75" style={{ top: `${cropBox.y + cropBox.h}%` }} />
+                  <div className="absolute left-0 bg-black/75" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, width: `${cropBox.x}%` }} />
+                  <div className="absolute right-0 bg-black/75" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, left: `${cropBox.x + cropBox.w}%` }} />
+                </div>
+              )}
+
+              {/* Draggable Android-style Crop Frame */}
+              {cropBox && (
+                <div 
+                  style={{
+                    left: `${cropBox.x}%`,
+                    top: `${cropBox.y}%`,
+                    width: `${cropBox.w}%`,
+                    height: `${cropBox.h}%`,
+                  }}
+                  className="absolute border border-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.4)] z-20 select-none"
+                >
+                  {/* Center Area: Pan / Move handle */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('move', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('move', e)}
+                    className="absolute inset-0 cursor-move bg-blue-500/5 hover:bg-blue-500/10 transition-colors select-none z-10"
+                    title="Drag to reposition crop"
+                  />
+
+                  {/* Android 3x3 Rule-of-Thirds Grid */}
+                  <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
+                    <div className="border-r border-b border-white/30" />
+                    <div className="border-r border-b border-white/30" />
+                    <div className="border-b border-white/30" />
+                    <div className="border-r border-b border-white/30" />
+                    <div className="border-r border-b border-white/30" />
+                    <div className="border-b border-white/30" />
+                    <div className="border-r border-b border-white/30" />
+                    <div className="border-r border-b border-white/30" />
+                    <div />
+                  </div>
+
+                  {/* Android-Style Thick L-Corner Brackets (4 corners) */}
+                  {/* NW - Top Left */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-nw', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-nw', e)}
+                    className="absolute -top-3 -left-3 w-8 h-8 flex items-start justify-start cursor-nwse-resize select-none pointer-events-auto z-30 group p-1"
+                  >
+                    <div className="w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                  </div>
+
+                  {/* NE - Top Right */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-ne', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-ne', e)}
+                    className="absolute -top-3 -right-3 w-8 h-8 flex items-start justify-end cursor-nesw-resize select-none pointer-events-auto z-30 group p-1"
+                  >
+                    <div className="w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                  </div>
+
+                  {/* SE - Bottom Right */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-se', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-se', e)}
+                    className="absolute -bottom-3 -right-3 w-8 h-8 flex items-end justify-end cursor-nwse-resize select-none pointer-events-auto z-30 group p-1"
+                  >
+                    <div className="w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                  </div>
+
+                  {/* SW - Bottom Left */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-sw', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-sw', e)}
+                    className="absolute -bottom-3 -left-3 w-8 h-8 flex items-end justify-start cursor-nesw-resize select-none pointer-events-auto z-30 group p-1"
+                  >
+                    <div className="w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                  </div>
+
+                  {/* 4 Edge Handles (Android Middle Bars) */}
+                  {/* Top */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-n', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-n', e)}
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 h-6 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
+                  >
+                    <div className="w-6 h-1.5 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
+                  </div>
+
+                  {/* Bottom */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-s', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-s', e)}
+                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-10 h-6 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
+                  >
+                    <div className="w-6 h-1.5 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
+                  </div>
+
+                  {/* Left */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-w', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-w', e)}
+                    className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-10 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
+                  >
+                    <div className="w-1.5 h-6 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
+                  </div>
+
+                  {/* Right */}
+                  <div 
+                    onMouseDown={(e) => startCropBoxDrag('resize-e', e)}
+                    onTouchStart={(e) => startCropBoxDragTouch('resize-e', e)}
+                    className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-10 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
+                  >
+                    <div className="w-1.5 h-6 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Toolbar: Phone Gallery Aspect Ratios + Rotations + Action Buttons */}
+          <div className="pt-3 border-t border-slate-800/80 space-y-3">
+            {/* Aspect Ratio Options */}
+            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('passport')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  cropAspectRatio === 'passport'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>Passport ({selectedSizePreset.widthMm}×{selectedSizePreset.heightMm}mm)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('free')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  cropAspectRatio === 'free'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>{language === 'hi' ? 'फ्री (Freeform)' : 'Freeform'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('1:1')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  cropAspectRatio === '1:1'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <Square className="w-3.5 h-3.5" />
+                <span>1:1 Square</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('4:3')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  cropAspectRatio === '4:3'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>4:3</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('16:9')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                  cropAspectRatio === '16:9'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>16:9</span>
+              </button>
+            </div>
+
+            {/* Rotation / Flip and Final Action Buttons Row */}
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+              {/* Transform Tools */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextRot = (cropRotation - 90 + 360) % 360;
+                    setCropRotation(nextRot);
+                    if (cropDisplayContainerRef.current) {
+                      const imgEl = cropDisplayContainerRef.current.querySelector('img');
+                      if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+                        let nw = imgEl.naturalWidth;
+                        let nh = imgEl.naturalHeight;
+                        if (nextRot === 90 || nextRot === 270) {
+                          nw = imgEl.naturalHeight;
+                          nh = imgEl.naturalWidth;
+                        }
+                        setCropBox(initCropBox(nw, nh, cropAspectRatio));
+                      }
+                    }
+                  }}
+                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer"
+                  title="Rotate Left (-90°)"
+                >
+                  <RotateCcw className="w-4 h-4 text-blue-400" />
+                  <span className="hidden sm:inline">Rotate -90°</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextRot = (cropRotation + 90) % 360;
+                    setCropRotation(nextRot);
+                    if (cropDisplayContainerRef.current) {
+                      const imgEl = cropDisplayContainerRef.current.querySelector('img');
+                      if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+                        let nw = imgEl.naturalWidth;
+                        let nh = imgEl.naturalHeight;
+                        if (nextRot === 90 || nextRot === 270) {
+                          nw = imgEl.naturalHeight;
+                          nh = imgEl.naturalWidth;
+                        }
+                        setCropBox(initCropBox(nw, nh, cropAspectRatio));
+                      }
+                    }
+                  }}
+                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer"
+                  title="Rotate Right (+90°)"
+                >
+                  <RotateCw className="w-4 h-4 text-blue-400" />
+                  <span className="hidden sm:inline">Rotate +90°</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCropFlipH(f => !f)}
+                  className={`p-2 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                    cropFlipH 
+                      ? 'bg-blue-600 border-blue-500 text-white' 
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                  }`}
+                  title="Flip Horizontal"
+                >
+                  <FlipHorizontal className="w-4 h-4" />
+                  <span className="hidden sm:inline">Flip</span>
+                </button>
+              </div>
+
+              {/* Action Confirm / Cancel */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCropModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+                >
+                  {language === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={applyCrop}
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 flex items-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <Check className="w-4 h-4" />
+                  <span>{language === 'hi' ? 'क्रॉप लागू करें (Apply Crop)' : 'Apply Crop'}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
