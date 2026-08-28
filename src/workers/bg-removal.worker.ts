@@ -4,11 +4,10 @@ import * as ort from 'onnxruntime-web';
 const ORT_VERSION = '1.29.0';
 const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
-const MODEL_PATH = '/models/u2netp.onnx';
 const MODEL_SOURCES = [
-  MODEL_PATH,
+  '/models/u2netp.onnx',
   'https://huggingface.co/edgetools/u2netp/resolve/main/u2netp.onnx',
-  'https://cdn.jsdelivr.net/gh/danielgatis/rembg@master/models/u2netp.onnx'
+  'https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx'
 ];
 
 function getWasmBasePath(): string {
@@ -20,7 +19,6 @@ function getWasmBasePath(): string {
 
 try {
   ort.env.wasm.wasmPaths = getWasmBasePath();
-  // Single-thread safe for iframe, Netlify, and standard browser workers
   ort.env.wasm.numThreads = 1;
 } catch (e) {
   console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
@@ -29,34 +27,30 @@ try {
 let session: ort.InferenceSession | null = null;
 let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
 
-async function fetchModelBinary(): Promise<Uint8Array> {
-  let lastError: any = null;
+async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
+  const resolvedUrl = (typeof location !== 'undefined' && location.origin && location.origin !== 'null' && !location.origin.startsWith('blob:') && url.startsWith('/'))
+    ? `${location.origin}${url}`
+    : url;
 
-  for (const source of MODEL_SOURCES) {
-    try {
-      const resolvedUrl = (typeof location !== 'undefined' && location.origin && location.origin !== 'null' && !location.origin.startsWith('blob:') && source.startsWith('/'))
-        ? `${location.origin}${source}`
-        : source;
-
-      console.log(`[U2NetP Worker] Attempting to load U²-NetP model from: ${resolvedUrl}`);
-      const response = await fetch(resolvedUrl, { cache: 'force-cache' });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} (${response.statusText})`);
-      }
-      const buffer = await response.arrayBuffer();
-      if (buffer.byteLength < 1000000) {
-        // Less than 1MB is likely a 404 HTML redirect or corrupt file
-        throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes`);
-      }
-      console.log(`[U2NetP Worker] Successfully fetched U²-NetP model (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB) from: ${resolvedUrl}`);
-      return new Uint8Array(buffer);
-    } catch (err) {
-      console.warn(`[U2NetP Worker] Source failed (${source}):`, err);
-      lastError = err;
-    }
+  console.log(`[U2NetP Worker] Attempting to load U²-NetP model from: ${resolvedUrl}`);
+  const response = await fetch(resolvedUrl, { cache: 'force-cache' });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} (${response.statusText})`);
+  }
+  const buffer = await response.arrayBuffer();
+  if (buffer.byteLength < 4000000) {
+    // Standard U2NetP model is ~4.5MB. Small size means 404 HTML, git lfs pointer, or truncated download
+    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes`);
   }
 
-  throw new Error(`Could not fetch U²-NetP ONNX model from any source. Last error: ${lastError?.message || lastError}`);
+  // Validate protobuf ONNX magic header (starts with 0x08)
+  const header = new Uint8Array(buffer, 0, 4);
+  if (header[0] !== 0x08) {
+    throw new Error(`Invalid ONNX protobuf header: [${Array.from(header).join(', ')}]`);
+  }
+
+  console.log(`[U2NetP Worker] Successfully verified U²-NetP model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB) from: ${resolvedUrl}`);
+  return buffer;
 }
 
 /**
@@ -68,37 +62,45 @@ async function getSession(): Promise<ort.InferenceSession> {
   if (sessionLoadingPromise) return sessionLoadingPromise;
 
   sessionLoadingPromise = (async () => {
-    try {
-      ort.env.wasm.wasmPaths = getWasmBasePath();
-      ort.env.wasm.numThreads = 1;
+    let lastError: any = null;
 
-      // Configure execution providers
-      const sessionOptions: ort.InferenceSession.SessionOptions = {
-        executionProviders: ['wasm'],
-        graphOptimizationLevel: 'all',
-      };
-
-      const modelBytes = await fetchModelBinary();
-      console.log('[U2NetP Worker] Initializing ONNX InferenceSession with WebAssembly...');
-
-      let newSession: ort.InferenceSession;
+    // Try creating session with each verified model source until one succeeds
+    for (const source of MODEL_SOURCES) {
       try {
-        newSession = await ort.InferenceSession.create(modelBytes, sessionOptions);
-      } catch (sessErr) {
-        console.warn('[U2NetP Worker] Local WASM init failed, switching to CDN wasmPaths fallback...', sessErr);
-        ort.env.wasm.wasmPaths = CDN_WASM_PATH;
-        newSession = await ort.InferenceSession.create(modelBytes, sessionOptions);
-      }
+        const buffer = await fetchValidModelBuffer(source);
 
-      console.log(`[U2NetP Worker] U²-NetP session active! Inputs: [${newSession.inputNames.join(', ')}], Outputs: [${newSession.outputNames.join(', ')}]`);
-      
-      session = newSession;
-      return newSession;
-    } catch (err: any) {
-      sessionLoadingPromise = null;
-      console.error('[U2NetP Worker] Failed to load ONNX session:', err);
-      throw err;
+        const sessionOptions: ort.InferenceSession.SessionOptions = {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
+        };
+
+        // Try local wasm first
+        try {
+          ort.env.wasm.wasmPaths = getWasmBasePath();
+          ort.env.wasm.numThreads = 1;
+          const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
+          console.log(`[U2NetP Worker] U²-NetP session active via local WASM! Inputs: [${newSession.inputNames.join(', ')}]`);
+          session = newSession;
+          return newSession;
+        } catch (localWasmErr) {
+          console.warn('[U2NetP Worker] Local WASM init failed, switching to CDN wasmPaths fallback...', localWasmErr);
+          ort.env.wasm.wasmPaths = CDN_WASM_PATH;
+          ort.env.wasm.numThreads = 1;
+          const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
+          console.log(`[U2NetP Worker] U²-NetP session active via CDN WASM! Inputs: [${newSession.inputNames.join(', ')}]`);
+          session = newSession;
+          return newSession;
+        }
+      } catch (srcErr: any) {
+        console.warn(`[U2NetP Worker] Failed loading model from source ${source}:`, srcErr.message || srcErr);
+        lastError = srcErr;
+      }
     }
+
+    sessionLoadingPromise = null;
+    const finalErr = new Error(`Could not initialize U²-NetP ONNX session from any source. Reason: ${lastError?.message || lastError}`);
+    console.error('[U2NetP Worker] Failed to load ONNX session:', finalErr);
+    throw finalErr;
   })();
 
   return sessionLoadingPromise;
