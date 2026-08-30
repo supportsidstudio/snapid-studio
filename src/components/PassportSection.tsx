@@ -23,6 +23,10 @@ import {
   ChevronDown,
   RotateCcw,
   FlipHorizontal,
+  FlipVertical,
+  Crosshair,
+  Lock,
+  Unlock,
   X,
   Grid3X3,
   Square,
@@ -331,6 +335,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
   // Image upload states
   const [originalImage, setOriginalImage] = useState<string | null>(null);
+  const [rawSourceImage, setRawSourceImage] = useState<string | null>(null);
   const [removedBgImg, setRemovedBgImg] = useState<string | null>(null);
   
   // Settings & Toggles
@@ -378,15 +383,15 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Raw original uncropped image stored for repeated high-fidelity cropping
-  const [rawSourceImage, setRawSourceImage] = useState<string | null>(null);
-
-  // Android Phone Style Crop Station state
+  // Photoshop Pro Studio Crop Station state
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropBox, setCropBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
-  const [cropAspectRatio, setCropAspectRatio] = useState<'passport' | 'free' | '1:1' | '4:3' | '16:9'>('passport');
+  const [cropAspectRatio, setCropAspectRatio] = useState<'passport' | 'free' | '1:1' | '3:4' | '4:3' | '16:9'>('passport');
+  const [cropSymmetricMode, setCropSymmetricMode] = useState<boolean>(true); // Photoshop Alt/Center Anchor scaling standard
+  const [cropGridOverlay, setCropGridOverlay] = useState<'thirds' | 'grid' | 'crosshair' | 'none'>('thirds');
   const [cropRotation, setCropRotation] = useState<number>(0);
   const [cropFlipH, setCropFlipH] = useState<boolean>(false);
+  const [cropFlipV, setCropFlipV] = useState<boolean>(false);
   const [cropDragAction, setCropDragAction] = useState<string | null>(null);
   const [cropDragStart, setCropDragStart] = useState<{ x: number; y: number; box: { x: number; y: number; w: number; h: number } }>({
     x: 0,
@@ -408,6 +413,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       targetRatio = selectedSizePreset.widthMm / selectedSizePreset.heightMm;
     } else if (ratioMode === '1:1') {
       targetRatio = 1.0;
+    } else if (ratioMode === '3:4') {
+      targetRatio = 3 / 4;
     } else if (ratioMode === '4:3') {
       targetRatio = 4 / 3;
     } else if (ratioMode === '16:9') {
@@ -416,31 +423,37 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       targetRatio = containerRatio;
     }
 
-    let w = 85;
+    let w = 80;
     let h = (w / targetRatio) * containerRatio;
     if (h > 85) {
       h = 85;
       w = (h * targetRatio) / containerRatio;
     }
+    if (w > 85) {
+      w = 85;
+      h = (w / targetRatio) * containerRatio;
+    }
     const x = (100 - w) / 2;
     const y = (100 - h) / 2;
     return {
-      x: Math.max(2, Math.min(90, x)),
-      y: Math.max(2, Math.min(90, y)),
-      w: Math.max(10, Math.min(96, w)),
-      h: Math.max(10, Math.min(96, h)),
+      x: Math.max(1, Math.min(95, x)),
+      y: Math.max(1, Math.min(95, y)),
+      w: Math.max(10, Math.min(98, w)),
+      h: Math.max(10, Math.min(98, h)),
     };
   };
 
-  const openAndroidCropModal = () => {
+  const openPhotoshopCropModal = () => {
     if (!originalImage && !rawSourceImage) return;
     setCropRotation(0);
     setCropFlipH(false);
+    setCropFlipV(false);
     setCropAspectRatio('passport');
+    setCropSymmetricMode(true); // Default to Photoshop center symmetrical crop
     setCropModalOpen(true);
   };
 
-  const handleCropRatioChange = (ratioMode: 'passport' | 'free' | '1:1' | '4:3' | '16:9') => {
+  const handleCropRatioChange = (ratioMode: 'passport' | 'free' | '1:1' | '3:4' | '4:3' | '16:9') => {
     setCropAspectRatio(ratioMode);
     if (cropDisplayContainerRef.current) {
       const imgEl = cropDisplayContainerRef.current.querySelector('img');
@@ -485,7 +498,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const pctX = (deltaX / containerW) * 100;
     const pctY = (deltaY / containerH) * 100;
     const start = cropDragStart.box;
-    const minSize = 8; // minimum 8% size for crop box
+    const minSize = 6;
 
     if (cropDragAction === 'move') {
       let newX = start.x + pctX;
@@ -493,40 +506,159 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       newX = Math.max(0, Math.min(100 - start.w, newX));
       newY = Math.max(0, Math.min(100 - start.h, newY));
       setCropBox({ ...start, x: newX, y: newY });
-    } else if (cropDragAction === 'resize-se') {
-      let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
-      let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
-      setCropBox({ ...start, w: newW, h: newH });
-    } else if (cropDragAction === 'resize-sw') {
-      let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
-      let newW = (start.x + start.w) - newX;
-      let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
-      setCropBox({ ...start, x: newX, w: newW, h: newH });
-    } else if (cropDragAction === 'resize-nw') {
-      let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
-      let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
-      let newW = (start.x + start.w) - newX;
-      let newH = (start.y + start.h) - newY;
-      setCropBox({ ...start, x: newX, y: newY, w: newW, h: newH });
-    } else if (cropDragAction === 'resize-ne') {
-      let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
-      let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
-      let newH = (start.y + start.h) - newY;
-      setCropBox({ ...start, y: newY, w: newW, h: newH });
-    } else if (cropDragAction === 'resize-n') {
-      let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
-      let newH = (start.y + start.h) - newY;
-      setCropBox({ ...start, y: newY, h: newH });
-    } else if (cropDragAction === 'resize-s') {
-      let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
-      setCropBox({ ...start, h: newH });
-    } else if (cropDragAction === 'resize-w') {
-      let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
-      let newW = (start.x + start.w) - newX;
-      setCropBox({ ...start, x: newX, w: newW });
-    } else if (cropDragAction === 'resize-e') {
-      let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
-      setCropBox({ ...start, w: newW });
+      return;
+    }
+
+    // Determine target aspect ratio multiplier in percentage coordinates
+    let targetRatio = containerW / containerH;
+    if (cropAspectRatio === 'passport') {
+      targetRatio = selectedSizePreset.widthMm / selectedSizePreset.heightMm;
+    } else if (cropAspectRatio === '1:1') {
+      targetRatio = 1.0;
+    } else if (cropAspectRatio === '3:4') {
+      targetRatio = 3 / 4;
+    } else if (cropAspectRatio === '4:3') {
+      targetRatio = 4 / 3;
+    } else if (cropAspectRatio === '16:9') {
+      targetRatio = 16 / 9;
+    } else if (cropAspectRatio === 'free') {
+      targetRatio = (start.w / 100 * containerW) / (start.h / 100 * containerH);
+    }
+
+    const aspectRatioPct = targetRatio * (containerH / containerW);
+
+    // 4-SIDE SYMMETRIC (CENTER-ANCHORED) UNIFORM CROP ENGINE
+    // When dragging ANY of the 4 corners, Left, Right, Top, Bottom all resize equally around the center
+    if (cropSymmetricMode) {
+      const cx = start.x + start.w / 2;
+      const cy = start.y + start.h / 2;
+      const halfW = start.w / 2;
+      const halfH = start.h / 2;
+
+      let deltaHalfW = 0;
+      if (cropDragAction === 'resize-se') {
+        deltaHalfW = (pctX + pctY * aspectRatioPct) / 2;
+      } else if (cropDragAction === 'resize-nw') {
+        deltaHalfW = (-pctX - pctY * aspectRatioPct) / 2;
+      } else if (cropDragAction === 'resize-ne') {
+        deltaHalfW = (pctX - pctY * aspectRatioPct) / 2;
+      } else if (cropDragAction === 'resize-sw') {
+        deltaHalfW = (-pctX + pctY * aspectRatioPct) / 2;
+      }
+
+      let newHalfW = halfW + deltaHalfW;
+
+      if (cropAspectRatio !== 'free') {
+        // Max half-dimensions possible from center without exceeding container [0, 100]
+        const maxHalfW_X = Math.min(cx, 100 - cx);
+        const maxHalfH_Y = Math.min(cy, 100 - cy);
+        const maxHalfWAllowed = Math.min(maxHalfW_X, maxHalfH_Y * aspectRatioPct);
+        const minHalfW = Math.max(3, 3 * aspectRatioPct);
+
+        newHalfW = Math.max(minHalfW, Math.min(maxHalfWAllowed, newHalfW));
+        const newHalfH = newHalfW / aspectRatioPct;
+
+        setCropBox({
+          x: Math.max(0, cx - newHalfW),
+          y: Math.max(0, cy - newHalfH),
+          w: Math.min(100, newHalfW * 2),
+          h: Math.min(100, newHalfH * 2),
+        });
+      } else {
+        // Freeform symmetric mode
+        const maxHalfW = Math.min(cx, 100 - cx);
+        const maxHalfH = Math.min(cy, 100 - cy);
+        let dHW = 0;
+        let dHH = 0;
+        if (cropDragAction === 'resize-se') {
+          dHW = pctX;
+          dHH = pctY;
+        } else if (cropDragAction === 'resize-nw') {
+          dHW = -pctX;
+          dHH = -pctY;
+        } else if (cropDragAction === 'resize-ne') {
+          dHW = pctX;
+          dHH = -pctY;
+        } else if (cropDragAction === 'resize-sw') {
+          dHW = -pctX;
+          dHH = pctY;
+        }
+        let newHalfW = Math.max(3, Math.min(maxHalfW, halfW + dHW));
+        let newHalfH = Math.max(3, Math.min(maxHalfH, halfH + dHH));
+
+        setCropBox({
+          x: Math.max(0, cx - newHalfW),
+          y: Math.max(0, cy - newHalfH),
+          w: Math.min(100, newHalfW * 2),
+          h: Math.min(100, newHalfH * 2),
+        });
+      }
+      return;
+    } else {
+      // Standard Corner Anchor Mode (Non-Symmetric)
+      if (cropDragAction === 'resize-se') {
+        let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
+        let newH = cropAspectRatio === 'free' ? Math.max(minSize, Math.min(100 - start.y, start.h + pctY)) : newW / aspectRatioPct;
+        if (start.y + newH > 100) {
+          newH = 100 - start.y;
+          if (cropAspectRatio !== 'free') newW = newH * aspectRatioPct;
+        }
+        setCropBox({ ...start, w: newW, h: newH });
+      } else if (cropDragAction === 'resize-sw') {
+        let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
+        let newW = (start.x + start.w) - newX;
+        let newH = cropAspectRatio === 'free' ? Math.max(minSize, Math.min(100 - start.y, start.h + pctY)) : newW / aspectRatioPct;
+        if (start.y + newH > 100) {
+          newH = 100 - start.y;
+          if (cropAspectRatio !== 'free') {
+            newW = newH * aspectRatioPct;
+            newX = (start.x + start.w) - newW;
+          }
+        }
+        setCropBox({ ...start, x: newX, w: newW, h: newH });
+      } else if (cropDragAction === 'resize-nw') {
+        let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
+        let newW = (start.x + start.w) - newX;
+        let newH = cropAspectRatio === 'free' ? Math.max(minSize, (start.y + start.h) - (start.y + pctY)) : newW / aspectRatioPct;
+        let newY = (start.y + start.h) - newH;
+        if (newY < 0) {
+          newY = 0;
+          newH = start.y + start.h;
+          if (cropAspectRatio !== 'free') {
+            newW = newH * aspectRatioPct;
+            newX = (start.x + start.w) - newW;
+          }
+        }
+        setCropBox({ ...start, x: newX, y: newY, w: newW, h: newH });
+      } else if (cropDragAction === 'resize-ne') {
+        let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
+        let newH = cropAspectRatio === 'free' ? Math.max(minSize, (start.y + start.h) - (start.y + pctY)) : newW / aspectRatioPct;
+        let newY = (start.y + start.h) - newH;
+        if (newY < 0) {
+          newY = 0;
+          newH = start.y + start.h;
+          if (cropAspectRatio !== 'free') newW = newH * aspectRatioPct;
+        }
+        setCropBox({ ...start, y: newY, w: newW, h: newH });
+      } else if (cropDragAction === 'resize-n') {
+        let newY = Math.max(0, Math.min(start.y + start.h - minSize, start.y + pctY));
+        let newH = (start.y + start.h) - newY;
+        let newW = cropAspectRatio === 'free' ? start.w : newH * aspectRatioPct;
+        setCropBox({ ...start, y: newY, w: Math.min(100 - start.x, newW), h: newH });
+      } else if (cropDragAction === 'resize-s') {
+        let newH = Math.max(minSize, Math.min(100 - start.y, start.h + pctY));
+        let newW = cropAspectRatio === 'free' ? start.w : newH * aspectRatioPct;
+        setCropBox({ ...start, w: Math.min(100 - start.x, newW), h: newH });
+      } else if (cropDragAction === 'resize-w') {
+        let newX = Math.max(0, Math.min(start.x + start.w - minSize, start.x + pctX));
+        let newW = (start.x + start.w) - newX;
+        let newH = cropAspectRatio === 'free' ? start.h : newW / aspectRatioPct;
+        setCropBox({ ...start, x: newX, w: newW, h: Math.min(100 - start.y, newH) });
+      } else if (cropDragAction === 'resize-e') {
+        let newW = Math.max(minSize, Math.min(100 - start.x, start.w + pctX));
+        let newH = cropAspectRatio === 'free' ? start.h : newW / aspectRatioPct;
+        setCropBox({ ...start, w: newW, h: Math.min(100 - start.y, newH) });
+      }
     }
   };
 
@@ -579,7 +711,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       interCtx.save();
       interCtx.translate(intermediateCanvas.width / 2, intermediateCanvas.height / 2);
       interCtx.rotate((cropRotation * Math.PI) / 180);
-      if (cropFlipH) interCtx.scale(-1, 1);
+      interCtx.scale(cropFlipH ? -1 : 1, cropFlipV ? -1 : 1);
       interCtx.drawImage(img, -naturalW / 2, -naturalH / 2);
       interCtx.restore();
 
@@ -616,6 +748,22 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     };
     img.src = sourceToUse;
   };
+
+  // Keyboard shortcut listener for Photoshop Crop Modal
+  useEffect(() => {
+    if (!cropModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyCrop();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        setCropModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cropModalOpen, cropBox, cropRotation, cropFlipH, cropFlipV, rawSourceImage, originalImage]);
 
   // Mobile device detection
   const [isMobile, setIsMobile] = useState(false);
@@ -2050,20 +2198,20 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 </button>
               </div>
 
-              {/* Dedicated Crop & Align Button with Crop Icon directly below background color */}
+              {/* Dedicated Crop Button with Crop Icon directly below background color */}
               <div className="pt-2 border-t border-slate-800/60">
                 <button
                   type="button"
                   id="passport-crop-action-btn"
-                  onClick={openAndroidCropModal}
+                  onClick={openPhotoshopCropModal}
                   className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm ${
                     theme === 'dark'
-                      ? 'border-blue-500/60 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:border-blue-400 ring-1 ring-blue-500/30'
+                      ? 'border-blue-500/60 bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 hover:border-blue-400 ring-1 ring-blue-500/40'
                       : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-500 shadow-xs'
                   }`}
                 >
                   <Crop className="w-4 h-4 text-blue-500" />
-                  <span>{language === 'hi' ? 'फोटो क्रॉप करें (Android Style Crop)' : 'Crop Photo (Phone Style)'}</span>
+                  <span>{language === 'hi' ? 'फोटो क्रॉप करें (Crop)' : 'Crop Photo'}</span>
                 </button>
               </div>
             </div>
@@ -2534,78 +2682,178 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         </div>
       )}
 
-      {/* Android Phone Style Interactive Photo Crop Modal */}
+      {/* Interactive Photo Crop Station */}
       {cropModalOpen && (rawSourceImage || originalImage) && (
         <div 
-          className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between text-white p-3 sm:p-5 select-none animate-fadeIn"
+          className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col justify-between text-white p-2.5 sm:p-4 select-none animate-fadeIn"
           onMouseMove={handleCropContainerMouseMove}
           onTouchMove={handleCropContainerTouchMove}
           onMouseUp={handleCropContainerMouseUp}
           onTouchEnd={handleCropContainerMouseUp}
         >
-          {/* Top Bar (Phone Gallery Header) */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center border border-blue-500/30">
-                <Crop className="w-4 h-4 text-blue-400" />
+          {/* Top Options Bar */}
+          <div className="flex flex-col gap-2 pb-2.5 border-b border-slate-800">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {/* Left: Crop Title with Icon */}
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-600/20 border border-blue-500/40 flex items-center justify-center shadow-md">
+                  <Crop className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold tracking-tight text-white flex items-center gap-2">
+                    <span>{language === 'hi' ? 'फोटो क्रॉप (Crop Photo)' : 'Crop Photo'}</span>
+                  </h3>
+                  <p className="text-[10px] sm:text-[11px] text-slate-400">
+                    {language === 'hi' 
+                      ? 'किसी भी एक कोने को खींचकर चारों तरफ से फोटो क्रॉप करें' 
+                      : 'Drag any corner to crop uniformly from all 4 sides'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold tracking-tight text-white flex items-center gap-1.5">
-                  <span>{language === 'hi' ? 'फोटो क्रॉपिंग और संरेखण (Android Crop)' : 'Crop & Straighten Photo'}</span>
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  {language === 'hi' ? 'कोनों व किनारों को खींचकर फोटो को सही आकार में सेट करें' : 'Drag the corner brackets or edges to frame your photo'}
-                </p>
+
+              {/* Right: Quick Actions */}
+              <div className="flex items-center gap-2">
+                {/* Reset Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCropRotation(0);
+                    setCropFlipH(false);
+                    setCropFlipV(false);
+                    if (cropDisplayContainerRef.current) {
+                      const imgEl = cropDisplayContainerRef.current.querySelector('img');
+                      if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
+                        let nw = imgEl.naturalWidth;
+                        let nh = imgEl.naturalHeight;
+                        if (cropRotation === 90 || cropRotation === 270) {
+                          nw = imgEl.naturalHeight;
+                          nh = imgEl.naturalWidth;
+                        }
+                        setCropBox(initCropBox(nw, nh, cropAspectRatio));
+                      }
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 border border-slate-700"
+                  title="Reset Crop Box"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{language === 'hi' ? 'रीसेट' : 'Reset'}</span>
+                </button>
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setCropModalOpen(false)}
+                  className="p-1.5 px-2.5 rounded-lg text-xs font-bold bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer border border-slate-700"
+                  title="Cancel & Close (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Ratio Selector Presets Row */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               <button
                 type="button"
-                onClick={() => {
-                  setCropRotation(0);
-                  setCropFlipH(false);
-                  if (cropDisplayContainerRef.current) {
-                    const imgEl = cropDisplayContainerRef.current.querySelector('img');
-                    if (imgEl && imgEl.naturalWidth && imgEl.naturalHeight) {
-                      let nw = imgEl.naturalWidth;
-                      let nh = imgEl.naturalHeight;
-                      if (cropRotation === 90 || cropRotation === 270) {
-                        nw = imgEl.naturalHeight;
-                        nh = imgEl.naturalWidth;
-                      }
-                      setCropBox(initCropBox(nw, nh, cropAspectRatio));
-                    }
-                  }
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 border border-slate-700"
-                title="Reset Crop Box"
+                onClick={() => handleCropRatioChange('passport')}
+                className={`px-3 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  cropAspectRatio === 'passport'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>{language === 'hi' ? 'रीसेट' : 'Reset'}</span>
+                <span>📷 Passport ({selectedSizePreset.widthMm}×{selectedSizePreset.heightMm}mm)</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setCropModalOpen(false)}
-                className="p-1.5 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-700"
+                onClick={() => handleCropRatioChange('1:1')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  cropAspectRatio === '1:1'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
               >
-                ✕
+                <Square className="w-3 h-3" />
+                <span>1:1 (2×2" Visa)</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('3:4')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition-all cursor-pointer ${
+                  cropAspectRatio === '3:4'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>3:4 Portrait</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('4:3')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition-all cursor-pointer ${
+                  cropAspectRatio === '4:3'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>4:3 Standard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('16:9')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition-all cursor-pointer ${
+                  cropAspectRatio === '16:9'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <span>16:9</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleCropRatioChange('free')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                  cropAspectRatio === 'free'
+                    ? 'bg-blue-600 border-blue-400 text-white shadow-sm ring-1 ring-blue-400'
+                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
+                }`}
+              >
+                <Unlock className="w-3 h-3" />
+                <span>{language === 'hi' ? 'फ्री (Freeform)' : 'Freeform'}</span>
+              </button>
+
+              {/* Grid Toggle Selector */}
+              <div className="ml-auto flex items-center gap-1 pl-2 border-l border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setCropGridOverlay(cropGridOverlay === 'thirds' ? 'crosshair' : cropGridOverlay === 'crosshair' ? 'grid' : 'thirds')}
+                  className="px-2 py-1 rounded text-[10px] font-mono text-slate-400 hover:text-white bg-slate-900 border border-slate-800 flex items-center gap-1 cursor-pointer"
+                  title="Cycle Grid Overlay"
+                >
+                  <Grid3X3 className="w-3 h-3 text-blue-400" />
+                  <span className="capitalize">{cropGridOverlay}</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Stage: Interactive Image Container with Android Crop Overlay */}
+          {/* Stage: Interactive Image Container with Crop Overlay */}
           <div className="flex-1 flex items-center justify-center p-2 relative overflow-hidden min-h-[300px]">
             <div 
               ref={cropDisplayContainerRef}
-              className="relative max-w-full max-h-[56vh] flex items-center justify-center select-none"
+              className="relative max-w-full max-h-[58vh] flex items-center justify-center select-none"
             >
               <img 
                 src={rawSourceImage || originalImage || ''}
                 alt="Source preview"
                 style={{
-                  transform: `rotate(${cropRotation}deg) scaleX(${cropFlipH ? -1 : 1})`,
+                  transform: `rotate(${cropRotation}deg) scaleX(${cropFlipH ? -1 : 1}) scaleY(${cropFlipV ? -1 : 1})`,
                   transition: 'transform 0.15s ease-out'
                 }}
                 onLoad={(e) => {
@@ -2618,20 +2866,20 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   }
                   setCropBox(initCropBox(nw, nh, cropAspectRatio));
                 }}
-                className="max-w-full max-h-[52vh] block object-contain select-none pointer-events-none opacity-90 shadow-2xl rounded-sm"
+                className="max-w-full max-h-[54vh] block object-contain select-none pointer-events-none opacity-90 shadow-2xl rounded-xs"
               />
 
-              {/* Outer dark vignette overlay around crop area */}
+              {/* Outer dark vignette mask outside crop boundary */}
               {cropBox && (
                 <div className="absolute inset-0 pointer-events-none z-10">
-                  <div className="absolute top-0 left-0 right-0 bg-black/75" style={{ height: `${cropBox.y}%` }} />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/75" style={{ top: `${cropBox.y + cropBox.h}%` }} />
-                  <div className="absolute left-0 bg-black/75" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, width: `${cropBox.x}%` }} />
-                  <div className="absolute right-0 bg-black/75" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, left: `${cropBox.x + cropBox.w}%` }} />
+                  <div className="absolute top-0 left-0 right-0 bg-black/80" style={{ height: `${cropBox.y}%` }} />
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/80" style={{ top: `${cropBox.y + cropBox.h}%` }} />
+                  <div className="absolute left-0 bg-black/80" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, width: `${cropBox.x}%` }} />
+                  <div className="absolute right-0 bg-black/80" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, left: `${cropBox.x + cropBox.w}%` }} />
                 </div>
               )}
 
-              {/* Draggable Android-style Crop Frame */}
+              {/* Draggable Crop Frame with 4-Corner Handles */}
               {cropBox && (
                 <div 
                   style={{
@@ -2640,177 +2888,114 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     width: `${cropBox.w}%`,
                     height: `${cropBox.h}%`,
                   }}
-                  className="absolute border border-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.4)] z-20 select-none"
+                  className="absolute border border-white/90 shadow-[0_0_0_1px_rgba(0,0,0,0.8),0_0_15px_rgba(0,0,0,0.5)] z-20 select-none"
                 >
-                  {/* Center Area: Pan / Move handle */}
+                  {/* Floating Dimension HUD Badge */}
+                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-950/90 text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded border border-blue-500/40 shadow-lg pointer-events-none whitespace-nowrap z-40 flex items-center gap-1.5">
+                    <span className="text-blue-400">
+                      {cropAspectRatio === 'passport' 
+                        ? `${selectedSizePreset.widthMm}×${selectedSizePreset.heightMm} mm` 
+                        : cropAspectRatio === '1:1' 
+                        ? '50×50 mm (1:1)' 
+                        : `${cropAspectRatio}`}
+                    </span>
+                    <span className="text-slate-500">•</span>
+                    <span className="text-emerald-400 font-semibold">
+                      4-Side Symmetric
+                    </span>
+                  </div>
+
+                  {/* Center Pan Handle: Drag inside to move frame */}
                   <div 
                     onMouseDown={(e) => startCropBoxDrag('move', e)}
                     onTouchStart={(e) => startCropBoxDragTouch('move', e)}
                     className="absolute inset-0 cursor-move bg-blue-500/5 hover:bg-blue-500/10 transition-colors select-none z-10"
-                    title="Drag to reposition crop"
+                    title="Drag to reposition crop area"
                   />
 
-                  {/* Android 3x3 Rule-of-Thirds Grid */}
-                  <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div className="border-r border-b border-white/30" />
-                    <div />
+                  {/* 3x3 Rule-of-Thirds Grid */}
+                  {cropGridOverlay === 'thirds' && (
+                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
+                      <div className="border-r border-b border-white/30" />
+                      <div className="border-r border-b border-white/30" />
+                      <div className="border-b border-white/30" />
+                      <div className="border-r border-b border-white/30" />
+                      <div className="border-r border-b border-white/30" />
+                      <div className="border-b border-white/30" />
+                      <div className="border-r border-b border-white/30" />
+                      <div className="border-r border-b border-white/30" />
+                      <div />
+                    </div>
+                  )}
+
+                  {/* Dense 6x6 Grid */}
+                  {cropGridOverlay === 'grid' && (
+                    <div className="absolute inset-0 grid grid-cols-6 grid-rows-6 pointer-events-none">
+                      {Array.from({ length: 36 }).map((_, i) => (
+                        <div key={i} className="border-r border-b border-white/15" />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Center Anchor Point Target */}
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-25 flex items-center justify-center">
+                    <div className="w-5 h-5 rounded-full border border-blue-400/80 flex items-center justify-center bg-blue-500/20 shadow-xs">
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-sm" />
+                    </div>
+                    <div className="absolute w-8 h-[1px] bg-blue-400/60" />
+                    <div className="absolute h-8 w-[1px] bg-blue-400/60" />
                   </div>
 
-                  {/* Android-Style Thick L-Corner Brackets (4 corners) */}
+                  {/* Signature Thick Corner L-Brackets (4 Corners ONLY) */}
                   {/* NW - Top Left */}
                   <div 
                     onMouseDown={(e) => startCropBoxDrag('resize-nw', e)}
                     onTouchStart={(e) => startCropBoxDragTouch('resize-nw', e)}
-                    className="absolute -top-3 -left-3 w-8 h-8 flex items-start justify-start cursor-nwse-resize select-none pointer-events-auto z-30 group p-1"
+                    className="absolute -top-3.5 -left-3.5 w-9 h-9 flex items-start justify-start cursor-nwse-resize select-none pointer-events-auto z-30 group p-1"
+                    title="Drag corner to resize all 4 sides uniformly"
                   >
-                    <div className="w-5 h-5 border-t-[3.5px] border-l-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                    <div className="w-6 h-6 border-t-[4px] border-l-[4px] border-white shadow-[0_2px_5px_rgba(0,0,0,0.9)] group-hover:scale-115 group-hover:border-blue-400 group-active:scale-95 transition-all" />
                   </div>
 
                   {/* NE - Top Right */}
                   <div 
                     onMouseDown={(e) => startCropBoxDrag('resize-ne', e)}
                     onTouchStart={(e) => startCropBoxDragTouch('resize-ne', e)}
-                    className="absolute -top-3 -right-3 w-8 h-8 flex items-start justify-end cursor-nesw-resize select-none pointer-events-auto z-30 group p-1"
+                    className="absolute -top-3.5 -right-3.5 w-9 h-9 flex items-start justify-end cursor-nesw-resize select-none pointer-events-auto z-30 group p-1"
+                    title="Drag corner to resize all 4 sides uniformly"
                   >
-                    <div className="w-5 h-5 border-t-[3.5px] border-r-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                    <div className="w-6 h-6 border-t-[4px] border-r-[4px] border-white shadow-[0_2px_5px_rgba(0,0,0,0.9)] group-hover:scale-115 group-hover:border-blue-400 group-active:scale-95 transition-all" />
                   </div>
 
                   {/* SE - Bottom Right */}
                   <div 
                     onMouseDown={(e) => startCropBoxDrag('resize-se', e)}
                     onTouchStart={(e) => startCropBoxDragTouch('resize-se', e)}
-                    className="absolute -bottom-3 -right-3 w-8 h-8 flex items-end justify-end cursor-nwse-resize select-none pointer-events-auto z-30 group p-1"
+                    className="absolute -bottom-3.5 -right-3.5 w-9 h-9 flex items-end justify-end cursor-nwse-resize select-none pointer-events-auto z-30 group p-1"
+                    title="Drag corner to resize all 4 sides uniformly"
                   >
-                    <div className="w-5 h-5 border-b-[3.5px] border-r-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
+                    <div className="w-6 h-6 border-b-[4px] border-r-[4px] border-white shadow-[0_2px_5px_rgba(0,0,0,0.9)] group-hover:scale-115 group-hover:border-blue-400 group-active:scale-95 transition-all" />
                   </div>
 
                   {/* SW - Bottom Left */}
                   <div 
                     onMouseDown={(e) => startCropBoxDrag('resize-sw', e)}
                     onTouchStart={(e) => startCropBoxDragTouch('resize-sw', e)}
-                    className="absolute -bottom-3 -left-3 w-8 h-8 flex items-end justify-start cursor-nesw-resize select-none pointer-events-auto z-30 group p-1"
+                    className="absolute -bottom-3.5 -left-3.5 w-9 h-9 flex items-end justify-start cursor-nesw-resize select-none pointer-events-auto z-30 group p-1"
+                    title="Drag corner to resize all 4 sides uniformly"
                   >
-                    <div className="w-5 h-5 border-b-[3.5px] border-l-[3.5px] border-white shadow-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] group-hover:scale-110 group-active:scale-95 transition-transform" />
-                  </div>
-
-                  {/* 4 Edge Handles (Android Middle Bars) */}
-                  {/* Top */}
-                  <div 
-                    onMouseDown={(e) => startCropBoxDrag('resize-n', e)}
-                    onTouchStart={(e) => startCropBoxDragTouch('resize-n', e)}
-                    className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 h-6 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
-                  >
-                    <div className="w-6 h-1.5 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
-                  </div>
-
-                  {/* Bottom */}
-                  <div 
-                    onMouseDown={(e) => startCropBoxDrag('resize-s', e)}
-                    onTouchStart={(e) => startCropBoxDragTouch('resize-s', e)}
-                    className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-10 h-6 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
-                  >
-                    <div className="w-6 h-1.5 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
-                  </div>
-
-                  {/* Left */}
-                  <div 
-                    onMouseDown={(e) => startCropBoxDrag('resize-w', e)}
-                    onTouchStart={(e) => startCropBoxDragTouch('resize-w', e)}
-                    className="absolute top-1/2 -left-3 -translate-y-1/2 w-6 h-10 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
-                  >
-                    <div className="w-1.5 h-6 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
-                  </div>
-
-                  {/* Right */}
-                  <div 
-                    onMouseDown={(e) => startCropBoxDrag('resize-e', e)}
-                    onTouchStart={(e) => startCropBoxDragTouch('resize-e', e)}
-                    className="absolute top-1/2 -right-3 -translate-y-1/2 w-6 h-10 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
-                  >
-                    <div className="w-1.5 h-6 bg-white rounded-full shadow-md group-hover:scale-125 transition-transform" />
+                    <div className="w-6 h-6 border-b-[4px] border-l-[4px] border-white shadow-[0_2px_5px_rgba(0,0,0,0.9)] group-hover:scale-115 group-hover:border-blue-400 group-active:scale-95 transition-all" />
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Bottom Toolbar: Phone Gallery Aspect Ratios + Rotations + Action Buttons */}
-          <div className="pt-3 border-t border-slate-800/80 space-y-3">
-            {/* Aspect Ratio Options */}
-            <div className="flex items-center justify-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => handleCropRatioChange('passport')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  cropAspectRatio === 'passport'
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <span>Passport ({selectedSizePreset.widthMm}×{selectedSizePreset.heightMm}mm)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCropRatioChange('free')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  cropAspectRatio === 'free'
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <span>{language === 'hi' ? 'फ्री (Freeform)' : 'Freeform'}</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCropRatioChange('1:1')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  cropAspectRatio === '1:1'
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <Square className="w-3.5 h-3.5" />
-                <span>1:1 Square</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCropRatioChange('4:3')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  cropAspectRatio === '4:3'
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <span>4:3</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleCropRatioChange('16:9')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                  cropAspectRatio === '16:9'
-                    ? 'bg-blue-600 border-blue-500 text-white shadow-sm ring-1 ring-blue-400'
-                    : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
-                }`}
-              >
-                <span>16:9</span>
-              </button>
-            </div>
-
-            {/* Rotation / Flip and Final Action Buttons Row */}
-            <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
-              {/* Transform Tools */}
-              <div className="flex items-center gap-2">
+          {/* Bottom Toolbar: Photoshop Transformations + Shortcuts + Commit/Apply */}
+          <div className="pt-2.5 border-t border-slate-800 space-y-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              {/* Transform Tools (Rotate & Flips) */}
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -2829,11 +3014,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       }
                     }
                   }}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer"
                   title="Rotate Left (-90°)"
                 >
-                  <RotateCcw className="w-4 h-4 text-blue-400" />
-                  <span className="hidden sm:inline">Rotate -90°</span>
+                  <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="hidden sm:inline">-90°</span>
                 </button>
 
                 <button
@@ -2854,26 +3039,49 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       }
                     }
                   }}
-                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer"
                   title="Rotate Right (+90°)"
                 >
-                  <RotateCw className="w-4 h-4 text-blue-400" />
-                  <span className="hidden sm:inline">Rotate +90°</span>
+                  <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                  <span className="hidden sm:inline">+90°</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setCropFlipH(f => !f)}
-                  className={`p-2 rounded-xl border flex items-center gap-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-lg border flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer ${
                     cropFlipH 
                       ? 'bg-blue-600 border-blue-500 text-white' 
                       : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
                   }`}
                   title="Flip Horizontal"
                 >
-                  <FlipHorizontal className="w-4 h-4" />
-                  <span className="hidden sm:inline">Flip</span>
+                  <FlipHorizontal className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Flip H</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCropFlipV(f => !f)}
+                  className={`px-2.5 py-1.5 rounded-lg border flex items-center gap-1 text-xs font-semibold transition-all cursor-pointer ${
+                    cropFlipV 
+                      ? 'bg-blue-600 border-blue-500 text-white' 
+                      : 'bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border-slate-800'
+                  }`}
+                  title="Flip Vertical"
+                >
+                  <FlipVertical className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Flip V</span>
+                </button>
+              </div>
+
+              {/* Keyboard Shortcut Hint */}
+              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-slate-400 font-mono">
+                <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">↵ Enter</span>
+                <span>to Apply</span>
+                <span className="mx-1 text-slate-600">|</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-300">Esc</span>
+                <span>to Cancel</span>
               </div>
 
               {/* Action Confirm / Cancel */}
@@ -2881,18 +3089,18 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={() => setCropModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
                 >
-                  {language === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel'}
+                  {language === 'hi' ? 'रद्द करें (Esc)' : 'Cancel (Esc)'}
                 </button>
 
                 <button
                   type="button"
                   onClick={applyCrop}
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 flex items-center gap-2 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  className="px-4.5 sm:px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-550 text-white shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                 >
                   <Check className="w-4 h-4" />
-                  <span>{language === 'hi' ? 'क्रॉप लागू करें (Apply Crop)' : 'Apply Crop'}</span>
+                  <span>{language === 'hi' ? 'क्रॉप लागू करें (Commit Crop)' : 'Apply Crop (Enter)'}</span>
                 </button>
               </div>
             </div>
