@@ -1,4 +1,4 @@
-export type AppTab = 'home' | 'passport' | 'documents' | 'help' | 'about' | 'legal' | 'contact' | 'blog' | 'sitemap';
+export type AppTab = 'home' | 'passport' | 'documents' | 'resizer' | 'help' | 'about' | 'legal' | 'contact' | 'blog' | 'sitemap';
 export type AppTheme = 'dark' | 'light';
 export type AppLanguage = 'en' | 'hi';
 

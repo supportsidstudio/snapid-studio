@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import PassportSection from './components/PassportSection';
 import DocumentsSection from './components/DocumentsSection';
+import PhotoSignatureResizerSection from './components/PhotoSignatureResizerSection';
 import HelpAboutLegal from './components/HelpAboutLegal';
 import ContactSection from './components/ContactSection';
 import { AppTab, AppTheme, AppLanguage } from './types';
@@ -9,6 +10,7 @@ import { translations } from './translations';
 import { 
   User, 
   FileText, 
+  Sliders,
   ChevronRight, 
   Sparkles, 
   CheckCircle, 
@@ -75,6 +77,8 @@ export default function App() {
         return <PassportSection language={language} theme={theme} />;
       case 'documents':
         return <DocumentsSection language={language} theme={theme} />;
+      case 'resizer':
+        return <PhotoSignatureResizerSection language={language} theme={theme} />;
       case 'help':
       case 'about':
       case 'legal':
@@ -121,8 +125,8 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Two Feature Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Main Three Feature Cards Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Card 1: Passport Size Photo Section */}
         <div className={`rounded-2xl border p-6 flex flex-col justify-between transition-all group ${
           theme === 'dark'
@@ -178,6 +182,35 @@ export default function App() {
           >
             <span>{t.getStarted}</span>
             <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform text-slate-400" />
+          </button>
+        </div>
+
+        {/* Card 3: Photo Resizer */}
+        <div className={`rounded-2xl border p-6 flex flex-col justify-between transition-all group ${
+          theme === 'dark'
+            ? 'bg-slate-950/70 border-slate-900 hover:border-slate-800'
+            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
+        }`}>
+          <div>
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${
+              theme === 'dark' ? 'bg-indigo-600/10 text-indigo-400' : 'bg-indigo-50 text-indigo-700'
+            }`}>
+              <Sliders className="w-6 h-6" />
+            </div>
+            <h3 className="text-xl font-bold font-display tracking-tight group-hover:text-indigo-500 transition-colors">
+              {(t as any).cardResizerTitle || 'Photo Resizer'}
+            </h3>
+            <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
+              {(t as any).cardResizerDesc || 'Resize dimensions (px/%), compress to target KB (10–200 KB), and adjust quality for photos and signatures.'}
+            </p>
+          </div>
+
+          <button
+            onClick={() => setCurrentTab('resizer')}
+            className="mt-6 inline-flex items-center justify-between px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md group/btn cursor-pointer transition-colors"
+          >
+            <span>{t.getStarted}</span>
+            <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform text-white" />
           </button>
         </div>
       </div>

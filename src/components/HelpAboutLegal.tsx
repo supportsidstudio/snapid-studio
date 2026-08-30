@@ -1188,6 +1188,19 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                   <p className="text-[11px] text-slate-400 mt-0.5">Prepare standard Indian identity cards (Aadhaar, PAN Card, Voter ID, Driving Licence) in exact wallet proportions.</p>
                 </div>
               </div>
+
+              <div className="flex items-start gap-3">
+                <CornerDownRight className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                <div>
+                  <button 
+                    onClick={() => onChangeTab && onChangeTab('resizer')}
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                  >
+                    Photo Resizer
+                  </button>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Resize dimensions (px/%), compress to target KB (10–200 KB), adjust quality, and export crisp photos & signatures.</p>
+                </div>
+              </div>
             </div>
           </div>
 
