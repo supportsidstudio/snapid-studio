@@ -296,8 +296,34 @@ const PASSPORT_PRESETS: PassportSizePreset[] = [
 ];
 
 const SHEET_SIZE_PRESETS: SheetSizePreset[] = [
-  { id: 'single', nameEn: 'Single Photo (Individual)', nameHi: 'एकल उच्च-गुणवत्ता फोटो', widthMm: 0, heightMm: 0, photosCount: 1, cols: 1 },
-  { id: 'size_a4', nameEn: 'A4 Standard Sheet', nameHi: 'A4 स्टैंडर्ड पेज (30 फोटो)', widthMm: 210, heightMm: 297, photosCount: 30, cols: 5 },
+  { id: 'size_4x6', nameEn: '10 x 15 cm (4 x 6 in)', nameHi: '10 x 15 सेमी (4 x 6 इंच फोटो पेपर)', widthMm: 101.6, heightMm: 152.4, category: 'Photo Paper' },
+  { id: 'size_a4', nameEn: 'A4 210 x 297 mm', nameHi: 'A4 210 x 297 मिमी (मानक शीट)', widthMm: 210, heightMm: 297, category: 'Standard Paper' },
+  { id: 'size_5x7', nameEn: '13 x 18 cm (5 x 7 in)', nameHi: '13 x 18 सेमी (5 x 7 इंच)', widthMm: 127, heightMm: 178, category: 'Photo Paper' },
+  { id: 'size_a6', nameEn: 'A6 105 x 148 mm', nameHi: 'A6 105 x 148 मिमी', widthMm: 105, heightMm: 148, category: 'Standard Paper' },
+  { id: 'size_a5', nameEn: 'A5 148 x 210 mm', nameHi: 'A5 148 x 210 मिमी', widthMm: 148, heightMm: 210, category: 'Standard Paper' },
+  { id: 'size_b5', nameEn: 'B5 182 x 257 mm', nameHi: 'B5 182 x 257 मिमी', widthMm: 182, heightMm: 257, category: 'Standard Paper' },
+  { id: 'size_b6', nameEn: 'B6 128 x 182 mm', nameHi: 'B6 128 x 182 मिमी', widthMm: 128, heightMm: 182, category: 'Standard Paper' },
+  { id: 'size_3_5x5', nameEn: '9 x 13 cm (3.5 x 5 in)', nameHi: '9 x 13 सेमी (3.5 x 5 इंच)', widthMm: 89, heightMm: 127, category: 'Photo Paper' },
+  { id: 'size_5x8', nameEn: '5 x 8 in (127 x 203 mm)', nameHi: '5 x 8 इंच (127 x 203 मिमी)', widthMm: 127, heightMm: 203, category: 'Photo Paper' },
+  { id: 'size_8x10', nameEn: '20 x 25 cm (8 x 10 in)', nameHi: '20 x 25 सेमी (8 x 10 इंच)', widthMm: 203.2, heightMm: 254, category: 'Photo Paper' },
+  { id: 'size_16_9_wide', nameEn: '16:9 wide (4 x 7.11 in)', nameHi: '16:9 वाइड (102 x 181 मिमी)', widthMm: 101.6, heightMm: 180.6, category: 'Photo Paper' },
+  { id: 'size_100x148', nameEn: '100 x 148 mm', nameHi: '100 x 148 मिमी (पोस्टकार्ड)', widthMm: 100, heightMm: 148, category: 'Photo Paper' },
+  { id: 'env_10', nameEn: 'Envelope #10 105 x 241 mm', nameHi: 'Envelope #10 (105 x 241 मिमी)', widthMm: 105, heightMm: 241, category: 'Envelope' },
+  { id: 'env_dl', nameEn: 'Envelope DL 110 x 220 mm', nameHi: 'Envelope DL (110 x 220 मिमी)', widthMm: 110, heightMm: 220, category: 'Envelope' },
+  { id: 'env_c6', nameEn: 'Envelope C6 114 x 162 mm', nameHi: 'Envelope C6 (114 x 162 मिमी)', widthMm: 114, heightMm: 162, category: 'Envelope' },
+  { id: 'size_letter', nameEn: 'Letter 8.5 x 11 in (216 x 279 mm)', nameHi: 'Letter 8.5 x 11 in (216 x 279 मिमी)', widthMm: 215.9, heightMm: 279.4, category: 'Standard Paper' },
+  { id: 'size_8_5x13', nameEn: '8.5 x 13 in', nameHi: '8.5 x 13 in (फोलियो / F4)', widthMm: 215.9, heightMm: 330.2, category: 'Standard Paper' },
+  { id: 'size_indian_legal', nameEn: 'Indian-Legal 215 x 345 mm', nameHi: 'Indian-Legal 215 x 345 मिमी', widthMm: 215, heightMm: 345, category: 'Legal / Official' },
+  { id: 'size_legal', nameEn: 'Legal 8.5 x 14 in (216 x 356 mm)', nameHi: 'Legal 8.5 x 14 in (216 x 356 मिमी)', widthMm: 215.9, heightMm: 355.6, category: 'Legal / Official' },
+  { id: 'size_a3', nameEn: 'A3 297 x 420 mm', nameHi: 'A3 297 x 420 मिमी', widthMm: 297, heightMm: 420, category: 'Large Format' },
+  { id: 'size_a3_plus', nameEn: 'A3+ 329 x 483 mm', nameHi: 'A3+ 329 x 483 मिमी (Super A3)', widthMm: 329, heightMm: 483, category: 'Large Format' },
+  { id: 'size_a2', nameEn: 'A2 420 x 594 mm', nameHi: 'A2 420 x 594 मिमी', widthMm: 420, heightMm: 594, category: 'Large Format' },
+  { id: 'size_b4', nameEn: 'B4 257 x 364 mm', nameHi: 'B4 257 x 364 मिमी', widthMm: 257, heightMm: 364, category: 'Large Format' },
+  { id: 'size_b3', nameEn: 'B3 364 x 515 mm', nameHi: 'B3 364 x 515 मिमी', widthMm: 364, heightMm: 515, category: 'Large Format' },
+  { id: 'size_8k', nameEn: '8K 270 x 390 mm', nameHi: '8K 270 x 390 मिमी', widthMm: 270, heightMm: 390, category: 'Special' },
+  { id: 'size_16k', nameEn: '16K 195 x 270 mm', nameHi: '16K 195 x 270 मिमी', widthMm: 195, heightMm: 270, category: 'Special' },
+  { id: 'size_user_defined', nameEn: 'User-Defined (Custom mm)', nameHi: 'User-Defined (कस्टम mm)', widthMm: 100, heightMm: 150, category: 'Custom' },
+  { id: 'single', nameEn: 'Single Photo (Individual)', nameHi: 'एकल उच्च-गुणवत्ता फोटो', widthMm: 0, heightMm: 0, category: 'Single' },
 ];
 
 export default function PassportSection({ language, theme }: PassportSectionProps) {
@@ -309,37 +335,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   
   // Settings & Toggles
   const [sizePreset, setSizePreset] = useState<PassportPresetId>('eu_uk');
-  const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_a4');
+  const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_4x6');
+  const [customPaperWidthMm, setCustomPaperWidthMm] = useState<number>(100);
+  const [customPaperHeightMm, setCustomPaperHeightMm] = useState<number>(150);
 
-  // eMitra & Cyber Cafe Direct Print Settings
-  const [printPaperSize, setPrintPaperSize] = useState<'a4'>('a4');
+  // Direct Print & Orientation Settings
   const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
-  const [printCopiesMode, setPrintCopiesMode] = useState<'single' | 'multiple'>('multiple');
-
-  // Automatically keep print properties in sync with sheet selections
-  useEffect(() => {
-    if (sheetSize === 'single') {
-      if (printCopiesMode !== 'single') setPrintCopiesMode('single');
-    } else if (sheetSize === 'size_a4') {
-      if (printPaperSize !== 'a4') setPrintPaperSize('a4');
-      if (printCopiesMode !== 'multiple') setPrintCopiesMode('multiple');
-    } else if (sheetSize === 'single_a4_centered') {
-      if (printCopiesMode !== 'single') setPrintCopiesMode('single');
-      if (printPaperSize !== 'a4') setPrintPaperSize('a4');
-    }
-  }, [sheetSize]);
-
-  useEffect(() => {
-    if (printCopiesMode === 'single') {
-      if (sheetSize !== 'single_a4_centered' && sheetSize !== 'single') {
-        setSheetSize('single_a4_centered');
-      }
-    } else {
-      if (sheetSize !== 'size_a4') {
-        setSheetSize('size_a4');
-      }
-    }
-  }, [printCopiesMode, printPaperSize]);
 
   // Background selection
   const [bgColorType, setBgColorType] = useState<'white' | 'blue' | 'red' | 'transparent' | 'custom'>('white');
@@ -647,20 +648,27 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
   // Dynamically calculate maximum photos that fit on the selected paper without overflowing margins
   const maxCopiesOnPaper = React.useMemo(() => {
-    if (sheetSize === 'single' || sheetSize === 'single_a4_centered') return 1;
-    const wBase = selectedSheetPreset.widthMm || 210;
-    const hBase = selectedSheetPreset.heightMm || 297;
-    const pageW = printOrientation === 'portrait' ? wBase : hBase;
-    const pageH = printOrientation === 'portrait' ? hBase : wBase;
+    if (sheetSize === 'single') return 1;
+    let wBase = selectedSheetPreset.widthMm || 101.6;
+    let hBase = selectedSheetPreset.heightMm || 152.4;
+    if (sheetSize === 'size_user_defined') {
+      wBase = customPaperWidthMm || 100;
+      hBase = customPaperHeightMm || 150;
+    }
+    const minDim = Math.min(wBase, hBase);
+    const maxDim = Math.max(wBase, hBase);
+    const pageW = printOrientation === 'portrait' ? minDim : maxDim;
+    const pageH = printOrientation === 'portrait' ? maxDim : minDim;
 
-    const marginMm = sheetSize === 'size_4x6' ? 6 : 14;
-    const gapMm = sheetSize === 'size_4x6' ? 3 : 4;
+    const isSmallPhotoPaper = pageW <= 160 && pageH <= 210;
+    const marginMm = isSmallPhotoPaper ? 6 : 12;
+    const gapMm = isSmallPhotoPaper ? 3 : 4;
 
     const maxCols = Math.max(1, Math.floor((pageW - marginMm) / (selectedSizePreset.widthMm + gapMm)));
     const maxRows = Math.max(1, Math.floor((pageH - marginMm) / (selectedSizePreset.heightMm + gapMm)));
 
     return Math.max(2, maxCols * maxRows);
-  }, [selectedSheetPreset, selectedSizePreset, printOrientation, sheetSize]);
+  }, [selectedSheetPreset, selectedSizePreset, printOrientation, sheetSize, customPaperWidthMm, customPaperHeightMm]);
 
   const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(6);
 
@@ -1018,21 +1026,24 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const singleCanvas = previewCanvasRef.current;
     
     // Physical Page Config
-    let pageWidthMm = selectedSheetPreset.widthMm;
-    let pageHeightMm = selectedSheetPreset.heightMm;
+    let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
+    let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
+    if (sheetSize === 'size_user_defined') {
+      baseWidthMm = customPaperWidthMm || 100;
+      baseHeightMm = customPaperHeightMm || 150;
+    }
+
+    let pageWidthMm = baseWidthMm;
+    let pageHeightMm = baseHeightMm;
     
     if (sheetSize === 'single') {
       pageWidthMm = selectedSizePreset.widthMm + (borderWidth * 2);
       pageHeightMm = selectedSizePreset.heightMm + (borderWidth * 2);
-    } else if (sheetSize === 'single_a4_centered') {
-      pageWidthMm = printOrientation === 'portrait' ? 210 : 297;
-      pageHeightMm = printOrientation === 'portrait' ? 297 : 210;
     } else {
-      // Respect orientation setting for sheet grids!
-      const wBase = selectedSheetPreset.widthMm || 210;
-      const hBase = selectedSheetPreset.heightMm || 297;
-      pageWidthMm = printOrientation === 'portrait' ? wBase : hBase;
-      pageHeightMm = printOrientation === 'portrait' ? hBase : wBase;
+      const minDim = Math.min(baseWidthMm, baseHeightMm);
+      const maxDim = Math.max(baseWidthMm, baseHeightMm);
+      pageWidthMm = printOrientation === 'portrait' ? minDim : maxDim;
+      pageHeightMm = printOrientation === 'portrait' ? maxDim : minDim;
     }
 
     // Set 300 DPI high-res scale (1 inch = 25.4 mm)
@@ -1055,30 +1066,17 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const photoWidthPx = Math.round(selectedSizePreset.widthMm * dpm);
     const photoHeightPx = Math.round(selectedSizePreset.heightMm * dpm);
 
-    if (sheetSize === 'single_a4_centered') {
-      // Draw exactly one photo centered on the A4 page template
-      const px = Math.round((widthPx - photoWidthPx) / 2);
-      const py = Math.round((heightPx - photoHeightPx) / 2);
-
-      // Draw faint cut mark around card limit
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px - 1, py - 1, photoWidthPx + 2, photoHeightPx + 2);
-
-      ctx.drawImage(singleCanvas, px, py, photoWidthPx, photoHeightPx);
-      return;
-    }
-
-    // Sheet layouts
-    const gapMm = sheetSize === 'size_4x6' ? 3 : 4;
-    const marginMm = sheetSize === 'size_4x6' ? 6 : 14;
+    // Sheet layouts with smart adaptive padding
+    const isSmallPhotoPaper = pageWidthMm <= 160 && pageHeightMm <= 210;
+    const gapMm = isSmallPhotoPaper ? 3 : 4;
+    const marginMm = isSmallPhotoPaper ? 6 : 12;
     const gapPx = Math.round(gapMm * dpm);
 
     const maxCols = Math.max(1, Math.floor((pageWidthMm - marginMm) / (selectedSizePreset.widthMm + gapMm)));
     const maxRows = Math.max(1, Math.floor((pageHeightMm - marginMm) / (selectedSizePreset.heightMm + gapMm)));
     const maxCapacity = maxCols * maxRows;
 
-    let numPhotos = Math.max(2, Math.min(photosCopiesCount, maxCapacity));
+    let numPhotos = Math.max(1, Math.min(photosCopiesCount, maxCapacity));
 
     // Choose optimal columns to keep layout clean and within maxCols and maxRows
     let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? 3 : 4);
@@ -1151,9 +1149,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     contrast, 
     borderWidth, 
     borderColor,
-    printPaperSize,
     printOrientation,
-    printCopiesMode,
+    customPaperWidthMm,
+    customPaperHeightMm,
     singleCanvasUpdated
   ]);
 
@@ -1180,35 +1178,36 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     if (!previewCanvasRef.current) return;
 
     try {
-      // Setup PDF in millimeters
+      // Setup PDF in exact millimeters
       const isSingleRaw = sheetSize === 'single';
-      const isSingleA4 = sheetSize === 'single_a4_centered';
-      const isA4 = sheetSize === 'size_a4' || isSingleA4;
-      const is4x6 = sheetSize === 'size_4x6';
       
-      let widthMm = 210;
-      let heightMm = 297;
+      let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
+      let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
+      if (sheetSize === 'size_user_defined') {
+        baseWidthMm = customPaperWidthMm || 100;
+        baseHeightMm = customPaperHeightMm || 150;
+      }
+      
+      let widthMm = baseWidthMm;
+      let heightMm = baseHeightMm;
       
       if (isSingleRaw) {
         widthMm = selectedSizePreset.widthMm + (borderWidth * 2);
         heightMm = selectedSizePreset.heightMm + (borderWidth * 2);
-      } else if (is4x6) {
-        widthMm = printOrientation === 'portrait' ? 101.6 : 152.4;
-        heightMm = printOrientation === 'portrait' ? 152.4 : 101.6;
       } else {
-        // A4 pages
-        widthMm = printOrientation === 'portrait' ? 210 : 297;
-        heightMm = printOrientation === 'portrait' ? 297 : 210;
+        const minDim = Math.min(baseWidthMm, baseHeightMm);
+        const maxDim = Math.max(baseWidthMm, baseHeightMm);
+        widthMm = printOrientation === 'portrait' ? minDim : maxDim;
+        heightMm = printOrientation === 'portrait' ? maxDim : minDim;
       }
       
       const orientation = printOrientation === 'portrait' ? 'portrait' : 'landscape';
-      const format = isSingleRaw ? [widthMm, heightMm] : 'a4';
 
       // Initialize doc with precise physical formats
       const doc = new jsPDF({
         orientation: orientation as any,
         unit: 'mm',
-        format: format as any
+        format: [widthMm, heightMm]
       });
 
       const cardImgData = previewCanvasRef.current.toDataURL('image/png');
@@ -1216,29 +1215,19 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       if (isSingleRaw) {
         // Just fit the card precisely to the page limits
         doc.addImage(cardImgData, 'PNG', 0, 0, widthMm, heightMm);
-      } else if (isSingleA4) {
-        // Center single photo on A4
-        const photoWidthMm = selectedSizePreset.widthMm;
-        const photoHeightMm = selectedSizePreset.heightMm;
-        const px = (widthMm - photoWidthMm) / 2;
-        const py = (heightMm - photoHeightMm) / 2;
-        
-        doc.setDrawColor(220, 220, 220);
-        doc.setLineWidth(0.1);
-        doc.rect(px - 0.2, py - 0.2, photoWidthMm + 0.4, photoHeightMm + 0.4, 'S');
-        doc.addImage(cardImgData, 'PNG', px, py, photoWidthMm, photoHeightMm);
       } else {
         // Build millimetric copy placement to match canvas sheets
         const photoWidthMm = selectedSizePreset.widthMm;
         const photoHeightMm = selectedSizePreset.heightMm;
-        const gapMm = is4x6 ? 3 : 4;
-        const marginMm = is4x6 ? 6 : 14;
+        const isSmallPhotoPaper = widthMm <= 160 && heightMm <= 210;
+        const gapMm = isSmallPhotoPaper ? 3 : 4;
+        const marginMm = isSmallPhotoPaper ? 6 : 12;
 
         const maxCols = Math.max(1, Math.floor((widthMm - marginMm) / (photoWidthMm + gapMm)));
         const maxRows = Math.max(1, Math.floor((heightMm - marginMm) / (photoHeightMm + gapMm)));
         const maxCapacity = maxCols * maxRows;
 
-        let numPhotos = Math.max(2, Math.min(photosCopiesCount, maxCapacity));
+        let numPhotos = Math.max(1, Math.min(photosCopiesCount, maxCapacity));
 
         let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? 3 : 4);
         if (Math.ceil(numPhotos / numCols) > maxRows) {
@@ -1260,7 +1249,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           const py = startY + (r * (photoHeightMm + gapMm));
 
           // Draw a very faint cut guidelines
-          doc.setDrawColor(240, 240, 240);
+          doc.setDrawColor(230, 230, 230);
           doc.setLineWidth(0.1);
           doc.rect(px - 0.2, py - 0.2, photoWidthMm + 0.4, photoHeightMm + 0.4, 'S');
 
@@ -1276,7 +1265,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     }
   };
 
-  // Sync print buffer into dedicated DOM element with styles and pre-decode
+  // Sync print buffer into dedicated DOM element with exact physical millimeter @page CSS
   const syncPrintArea = async () => {
     const canvas = sheetCanvasRef.current;
     if (!canvas || !originalImage) return false;
@@ -1307,11 +1296,31 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         styleEl.id = 'snapid-print-style';
         document.head.appendChild(styleEl);
       }
-      const actualPaperSize = printPaperSize === '4x6' ? '101.6mm 152.4mm' : 'A4';
+
+      let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
+      let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
+      if (sheetSize === 'size_user_defined') {
+        baseWidthMm = customPaperWidthMm || 100;
+        baseHeightMm = customPaperHeightMm || 150;
+      }
+      
+      let widthMm = baseWidthMm;
+      let heightMm = baseHeightMm;
+      
+      if (sheetSize === 'single') {
+        widthMm = selectedSizePreset.widthMm + (borderWidth * 2);
+        heightMm = selectedSizePreset.heightMm + (borderWidth * 2);
+      } else {
+        const minDim = Math.min(baseWidthMm, baseHeightMm);
+        const maxDim = Math.max(baseWidthMm, baseHeightMm);
+        widthMm = printOrientation === 'portrait' ? minDim : maxDim;
+        heightMm = printOrientation === 'portrait' ? maxDim : minDim;
+      }
+
       styleEl.innerHTML = `
         @media print {
           @page {
-            size: ${actualPaperSize} ${printOrientation} !important;
+            size: ${widthMm}mm ${heightMm}mm !important;
             margin: 0mm !important;
           }
         }
@@ -1359,7 +1368,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [originalImage, printPaperSize, printOrientation, sheetSize, photosCopiesCount, sizePreset, singleCanvasUpdated]);
+  }, [originalImage, printOrientation, sheetSize, photosCopiesCount, sizePreset, customPaperWidthMm, customPaperHeightMm, singleCanvasUpdated]);
 
   // Browser BeforePrint fallback hook
   useEffect(() => {
@@ -1371,7 +1380,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
     };
-  }, [originalImage, printPaperSize, printOrientation]);
+  }, [originalImage, printOrientation, sheetSize, customPaperWidthMm, customPaperHeightMm]);
 
   return (
     <div className="space-y-6">
@@ -1686,119 +1695,343 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           {/* Right Panel: Settings panels, sliders, borders, choices (4-cols on desktop) */}
           <div className="xl:col-span-4 space-y-6">
             
-            {/* Panel Card: Target Spec */}
+            {/* Panel Card: Target Spec & Document Sizes */}
             <div className={`p-5 rounded-2xl border ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
             } space-y-4`}>
-              <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
-                <Layout className="w-4 h-4 text-blue-500" />
-                <span>Layout Specifications</span>
-              </h3>
+              <div className="flex items-center justify-between border-b pb-2">
+                <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
+                  <Layout className="w-4 h-4 text-blue-500" />
+                  <span>Layout Specifications</span>
+                </h3>
+                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-500">
+                  {selectedSheetPreset.id === 'single' ? 'Single Photo' : selectedSheetPreset.nameEn.split(' ')[0]}
+                </span>
+              </div>
 
-              {/* Preset selectors */}
-              <div className="space-y-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
-                    {t.sheetSizeLabel}
+              {/* 1. Passport Photo Size Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
+                  {language === 'hi' ? 'पासपोर्ट फोटो आकार (Photo Size)' : 'Passport Photo Size'}
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {PASSPORT_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => setSizePreset(preset.id)}
+                      className={`px-2.5 py-2 rounded-xl text-left text-xs border transition-all cursor-pointer ${
+                        sizePreset === preset.id
+                          ? 'border-blue-500 bg-blue-500/10 font-bold text-blue-500 ring-1 ring-blue-500'
+                          : theme === 'dark'
+                            ? 'border-slate-800 hover:border-slate-700 text-slate-300 bg-slate-900/40'
+                            : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-slate-50'
+                      }`}
+                    >
+                      <div className="font-semibold truncate text-[11px]">{preset.nameEn.split('(')[0]}</div>
+                      <div className="text-[10px] font-mono text-slate-400">
+                        {preset.widthMm} x {preset.heightMm} mm
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Document / Paper Size with Down-Arrow Dropdown */}
+              <div className="space-y-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
+                    {language === 'hi' ? 'डॉक्यूमेंट / शीट साइज (Document Size)' : 'Document / Paper Size'}
                   </label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {SHEET_SIZE_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        onClick={() => {
-                          setSheetSize(preset.id);
-                          if (preset.id === 'single') {
-                            setPhotosCopiesCount(1);
-                          }
-                        }}
-                        className={`px-3 py-2.5 rounded-xl text-left text-xs font-medium border flex items-center justify-between transition-all cursor-pointer ${
-                          sheetSize === preset.id
-                            ? 'border-blue-500 bg-blue-500/5 font-semibold text-blue-500 ring-1 ring-blue-500'
-                            : theme === 'dark'
-                              ? 'border-slate-800 hover:border-slate-750 text-slate-300 bg-slate-900/50'
-                              : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex flex-col">
-                          <span>{language === 'hi' ? preset.nameHi : preset.nameEn}</span>
-                          {preset.id !== 'single' && (
-                            <span className="text-[10px] font-mono text-slate-500">
-                              Grid Size: {preset.widthMm} x {preset.heightMm} mm
-                            </span>
-                          )}
-                        </div>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-mono ${
-                          sheetSize === preset.id
-                            ? 'bg-blue-500/10 text-blue-500'
-                            : 'bg-slate-500/5 text-slate-500'
-                        }`}>
-                          {preset.id === 'single' ? 'Single' : 'Multi-Grid'}
-                        </span>
-                      </button>
-                    ))}
+                  <span className="text-[10px] font-mono text-blue-500 font-bold">
+                    {sheetSize === 'size_user_defined'
+                      ? `${customPaperWidthMm} x ${customPaperHeightMm} mm`
+                      : sheetSize === 'single'
+                        ? 'Individual'
+                        : `${selectedSheetPreset.widthMm} x ${selectedSheetPreset.heightMm} mm`}
+                  </span>
+                </div>
+
+                {/* Dropdown with custom styling & down arrow */}
+                <div className="relative">
+                  <select
+                    id="passport-document-size-dropdown"
+                    value={sheetSize}
+                    onChange={(e) => {
+                      const newSize = e.target.value as SheetSizeId;
+                      setSheetSize(newSize);
+                      if (newSize === 'single') {
+                        setPhotosCopiesCount(1);
+                      }
+                    }}
+                    className={`w-full appearance-none px-3.5 py-2.5 pr-10 rounded-xl text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      theme === 'dark'
+                        ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-600'
+                        : 'bg-white border-slate-300 text-slate-800 hover:border-slate-400 shadow-sm'
+                    }`}
+                  >
+                    <optgroup label="⭐ Most Popular for Photo Printing">
+                      {SHEET_SIZE_PRESETS.slice(0, 3).map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.nameEn} {preset.category ? `(${preset.category})` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="📄 Standard Paper Sizes">
+                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Standard Paper').map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.nameEn}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="🖼️ Photo & Card Papers">
+                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Photo Paper' && p.id !== 'size_4x6' && p.id !== 'size_5x7').map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.nameEn}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="⚖️ Legal / Official Formats">
+                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Legal / Official').map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.nameEn}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="✉️ Envelope Formats">
+                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Envelope').map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.nameEn}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="📐 Large Formats & Special (A3, A2, B4, 8K, 16K)">
+                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Large Format' || p.category === 'Special').map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.nameEn}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="⚙️ Custom & Single">
+                      <option value="size_user_defined">User-Defined (Custom mm)</option>
+                      <option value="single">Single Photo (Individual)</option>
+                    </optgroup>
+                  </select>
+
+                  {/* Down Arrow Indicator */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
+                    <ChevronDown className="w-4 h-4 text-blue-500" />
                   </div>
                 </div>
 
-                {/* Copies selection panel - compact interactive stepper */}
-                {sheetSize !== 'single' && (
-                  <div className="pt-1 animate-fadeIn">
-                    <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
-                      theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      <div className="flex flex-col">
-                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                          {language === 'hi' ? 'प्रतियाँ (Copies)' : 'Copies Count'}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-medium">
-                          {sheetSize === 'size_4x6' ? `4x6" (Max: ${maxCopiesOnPaper})` : `A4 (Max: ${maxCopiesOnPaper})`}
-                        </span>
+                {/* Quick Selection Chips */}
+                <div className="grid grid-cols-4 gap-1 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSheetSize('size_4x6')}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                      sheetSize === 'size_4x6'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                    title="10 x 15 cm (4 x 6 in)"
+                  >
+                    10x15 (4x6")
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSheetSize('size_a4')}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                      sheetSize === 'size_a4'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                    title="A4 Standard Sheet"
+                  >
+                    A4 Sheet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSheetSize('size_5x7')}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                      sheetSize === 'size_5x7'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                    title="13 x 18 cm (5 x 7 in)"
+                  >
+                    13x18 (5x7")
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSheetSize('single');
+                      setPhotosCopiesCount(1);
+                    }}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                      sheetSize === 'single'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                    title="Single Photo"
+                  >
+                    Single
+                  </button>
+                </div>
+
+                {/* User-Defined Custom Millimeter inputs */}
+                {sheetSize === 'size_user_defined' && (
+                  <div className={`p-2.5 rounded-xl border space-y-2 animate-fadeIn ${
+                    theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="text-[11px] font-bold text-blue-500 flex items-center justify-between">
+                      <span>Custom Dimensions</span>
+                      <span className="font-mono text-[10px]">Max Fit: {maxCopiesOnPaper}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-semibold block mb-0.5">Width (mm)</span>
+                        <input
+                          type="number"
+                          min={50}
+                          max={600}
+                          value={customPaperWidthMm}
+                          onChange={(e) => setCustomPaperWidthMm(Math.max(30, Number(e.target.value) || 100))}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                            theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                          }`}
+                        />
                       </div>
-
-                      {/* Compact Stepper (- [count] +) */}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          id="passport-copies-decrease-btn"
-                          disabled={photosCopiesCount <= 2}
-                          onClick={() => setPhotosCopiesCount(prev => Math.max(2, prev - 1))}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
-                            photosCopiesCount <= 2
-                              ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
-                              : theme === 'dark'
-                                ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white active:scale-95'
-                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 active:scale-95'
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-semibold block mb-0.5">Height (mm)</span>
+                        <input
+                          type="number"
+                          min={50}
+                          max={900}
+                          value={customPaperHeightMm}
+                          onChange={(e) => setCustomPaperHeightMm(Math.max(30, Number(e.target.value) || 150))}
+                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                            theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
-                          title={language === 'hi' ? 'कम करें (-1)' : 'Decrease (-1)'}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-
-                        <div className="min-w-[40px] text-center">
-                          <span className="text-base font-black font-mono text-blue-500">
-                            {photosCopiesCount}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          id="passport-copies-increase-btn"
-                          disabled={photosCopiesCount >= maxCopiesOnPaper}
-                          onClick={() => setPhotosCopiesCount(prev => Math.min(maxCopiesOnPaper, prev + 1))}
-                          className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
-                            photosCopiesCount >= maxCopiesOnPaper
-                              ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
-                              : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
-                          }`}
-                          title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                        />
                       </div>
                     </div>
                   </div>
                 )}
+
+                {/* Orientation Selector */}
+                {sheetSize !== 'single' && (
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] font-semibold text-slate-400">
+                      {language === 'hi' ? 'दिशा (Orientation)' : 'Orientation'}
+                    </span>
+                    <div className={`flex p-0.5 rounded-lg border gap-0.5 ${
+                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={() => setPrintOrientation('portrait')}
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
+                          printOrientation === 'portrait'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-inherit'
+                        }`}
+                      >
+                        Portrait
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPrintOrientation('landscape')}
+                        className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
+                          printOrientation === 'landscape'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-inherit'
+                        }`}
+                      >
+                        Landscape
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* 3. Copies Selection Panel - Compact Interactive Stepper */}
+              {sheetSize !== 'single' && (
+                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-2">
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
+                    theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                        {language === 'hi' ? 'प्रतियाँ (Copies)' : 'Copies Count'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-medium">
+                        Fit Capacity: Max {maxCopiesOnPaper}
+                      </span>
+                    </div>
+
+                    {/* Stepper (- [count] +) */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        id="passport-copies-decrease-btn"
+                        disabled={photosCopiesCount <= 1}
+                        onClick={() => setPhotosCopiesCount(prev => Math.max(1, prev - 1))}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                          photosCopiesCount <= 1
+                            ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
+                            : theme === 'dark'
+                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white active:scale-95'
+                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 active:scale-95'
+                        }`}
+                        title={language === 'hi' ? 'कम करें (-1)' : 'Decrease (-1)'}
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+
+                      <div className="min-w-[36px] text-center">
+                        <span className="text-base font-black font-mono text-blue-500">
+                          {photosCopiesCount}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        id="passport-copies-increase-btn"
+                        disabled={photosCopiesCount >= maxCopiesOnPaper}
+                        onClick={() => setPhotosCopiesCount(prev => Math.min(maxCopiesOnPaper, prev + 1))}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                          photosCopiesCount >= maxCopiesOnPaper
+                            ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
+                            : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
+                        }`}
+                        title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Preset quick counts */}
+                  <div className="flex items-center gap-1.5 justify-end">
+                    <span className="text-[10px] text-slate-400 mr-auto font-medium">Quick:</span>
+                    {[2, 4, 6, 8, maxCopiesOnPaper].filter((c, idx, arr) => c <= maxCopiesOnPaper && arr.indexOf(c) === idx).map(count => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setPhotosCopiesCount(count)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                          photosCopiesCount === count
+                            ? 'border-blue-500 bg-blue-500 text-white'
+                            : theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {count === maxCopiesOnPaper ? `Max(${count})` : count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Copies selection panel - custom grid options */}

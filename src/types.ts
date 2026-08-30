@@ -13,7 +13,36 @@ export interface PassportSizePreset {
   aspectRatio: number; // width / height
 }
 
-export type SheetSizeId = 'single' | 'size_4x6' | 'size_a4';
+export type SheetSizeId = 
+  | 'size_4x6' 
+  | 'size_a4' 
+  | 'size_5x7' 
+  | 'size_a6' 
+  | 'size_a5' 
+  | 'size_b5' 
+  | 'size_b6' 
+  | 'size_3_5x5' 
+  | 'size_5x8' 
+  | 'size_8x10' 
+  | 'size_16_9_wide' 
+  | 'size_100x148' 
+  | 'env_10' 
+  | 'env_dl' 
+  | 'env_c6' 
+  | 'size_letter' 
+  | 'size_8_5x13' 
+  | 'size_indian_legal' 
+  | 'size_legal' 
+  | 'size_a3' 
+  | 'size_a3_plus' 
+  | 'size_a2' 
+  | 'size_b4' 
+  | 'size_b3' 
+  | 'size_8k' 
+  | 'size_16k' 
+  | 'size_user_defined' 
+  | 'single'
+  | string;
 
 export interface SheetSizePreset {
   id: SheetSizeId;
@@ -21,8 +50,9 @@ export interface SheetSizePreset {
   nameHi: string;
   widthMm: number;
   heightMm: number;
-  photosCount: number;
-  cols: number;
+  photosCount?: number;
+  cols?: number;
+  category?: string;
 }
 
 export type DocumentTypeId = 'aadhaar' | 'pan' | 'janaadhaar' | 'voterid' | 'dl';
