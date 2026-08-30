@@ -289,41 +289,41 @@ interface PassportSectionProps {
 }
 
 const PASSPORT_PRESETS: PassportSizePreset[] = [
-  { id: 'eu_uk', nameEn: 'Standard Passport (35 x 45 mm)', nameHi: 'पासपोर्ट मानक (35 x 45 मिमी)', widthMm: 35, heightMm: 45, aspectRatio: 35 / 45 },
-  { id: 'india_us', nameEn: 'US Square / OCI Standard (2" x 2")', nameHi: 'यूएस / ओसीआई वर्ग मानक (2" x 2")', widthMm: 51, heightMm: 51, aspectRatio: 1 },
-  { id: 'oci_visa', nameEn: 'OCI Visa / Custom (35 x 35 mm)', nameHi: 'ओसीआई वीजा / कस्टम (35 x 35 मिमी)', widthMm: 35, heightMm: 35, aspectRatio: 1 },
-  { id: 'stamp', nameEn: 'Stamp Size (20 x 25 mm)', nameHi: 'स्टाम्प आकार (20 x 25 मिमी)', widthMm: 20, heightMm: 25, aspectRatio: 20 / 25 },
+  { id: 'eu_uk', nameEn: 'Passport (35 x 45 mm)', nameHi: 'पासपोर्ट (35 x 45 mm)', widthMm: 35, heightMm: 45, aspectRatio: 35 / 45 },
+  { id: 'india_us', nameEn: 'US/Visa (51 x 51 mm / 2"x2")', nameHi: 'यूएस/वीजा (51 x 51 mm)', widthMm: 51, heightMm: 51, aspectRatio: 1 },
+  { id: 'oci_visa', nameEn: 'OCI/Visa (35 x 35 mm)', nameHi: 'OCI/वीजा (35 x 35 mm)', widthMm: 35, heightMm: 35, aspectRatio: 1 },
+  { id: 'stamp', nameEn: 'Stamp (20 x 25 mm)', nameHi: 'स्टाम्प (20 x 25 mm)', widthMm: 20, heightMm: 25, aspectRatio: 20 / 25 },
 ];
 
 const SHEET_SIZE_PRESETS: SheetSizePreset[] = [
-  { id: 'size_4x6', nameEn: '10 x 15 cm (4 x 6 in)', nameHi: '10 x 15 सेमी (4 x 6 इंच फोटो पेपर)', widthMm: 101.6, heightMm: 152.4, category: 'Photo Paper' },
-  { id: 'size_a4', nameEn: 'A4 210 x 297 mm', nameHi: 'A4 210 x 297 मिमी (मानक शीट)', widthMm: 210, heightMm: 297, category: 'Standard Paper' },
-  { id: 'size_5x7', nameEn: '13 x 18 cm (5 x 7 in)', nameHi: '13 x 18 सेमी (5 x 7 इंच)', widthMm: 127, heightMm: 178, category: 'Photo Paper' },
-  { id: 'size_a6', nameEn: 'A6 105 x 148 mm', nameHi: 'A6 105 x 148 मिमी', widthMm: 105, heightMm: 148, category: 'Standard Paper' },
-  { id: 'size_a5', nameEn: 'A5 148 x 210 mm', nameHi: 'A5 148 x 210 मिमी', widthMm: 148, heightMm: 210, category: 'Standard Paper' },
-  { id: 'size_b5', nameEn: 'B5 182 x 257 mm', nameHi: 'B5 182 x 257 मिमी', widthMm: 182, heightMm: 257, category: 'Standard Paper' },
-  { id: 'size_b6', nameEn: 'B6 128 x 182 mm', nameHi: 'B6 128 x 182 मिमी', widthMm: 128, heightMm: 182, category: 'Standard Paper' },
-  { id: 'size_3_5x5', nameEn: '9 x 13 cm (3.5 x 5 in)', nameHi: '9 x 13 सेमी (3.5 x 5 इंच)', widthMm: 89, heightMm: 127, category: 'Photo Paper' },
-  { id: 'size_5x8', nameEn: '5 x 8 in (127 x 203 mm)', nameHi: '5 x 8 इंच (127 x 203 मिमी)', widthMm: 127, heightMm: 203, category: 'Photo Paper' },
-  { id: 'size_8x10', nameEn: '20 x 25 cm (8 x 10 in)', nameHi: '20 x 25 सेमी (8 x 10 इंच)', widthMm: 203.2, heightMm: 254, category: 'Photo Paper' },
-  { id: 'size_16_9_wide', nameEn: '16:9 wide (4 x 7.11 in)', nameHi: '16:9 वाइड (102 x 181 मिमी)', widthMm: 101.6, heightMm: 180.6, category: 'Photo Paper' },
-  { id: 'size_100x148', nameEn: '100 x 148 mm', nameHi: '100 x 148 मिमी (पोस्टकार्ड)', widthMm: 100, heightMm: 148, category: 'Photo Paper' },
-  { id: 'env_10', nameEn: 'Envelope #10 105 x 241 mm', nameHi: 'Envelope #10 (105 x 241 मिमी)', widthMm: 105, heightMm: 241, category: 'Envelope' },
-  { id: 'env_dl', nameEn: 'Envelope DL 110 x 220 mm', nameHi: 'Envelope DL (110 x 220 मिमी)', widthMm: 110, heightMm: 220, category: 'Envelope' },
-  { id: 'env_c6', nameEn: 'Envelope C6 114 x 162 mm', nameHi: 'Envelope C6 (114 x 162 मिमी)', widthMm: 114, heightMm: 162, category: 'Envelope' },
-  { id: 'size_letter', nameEn: 'Letter 8.5 x 11 in (216 x 279 mm)', nameHi: 'Letter 8.5 x 11 in (216 x 279 मिमी)', widthMm: 215.9, heightMm: 279.4, category: 'Standard Paper' },
-  { id: 'size_8_5x13', nameEn: '8.5 x 13 in', nameHi: '8.5 x 13 in (फोलियो / F4)', widthMm: 215.9, heightMm: 330.2, category: 'Standard Paper' },
-  { id: 'size_indian_legal', nameEn: 'Indian-Legal 215 x 345 mm', nameHi: 'Indian-Legal 215 x 345 मिमी', widthMm: 215, heightMm: 345, category: 'Legal / Official' },
-  { id: 'size_legal', nameEn: 'Legal 8.5 x 14 in (216 x 356 mm)', nameHi: 'Legal 8.5 x 14 in (216 x 356 मिमी)', widthMm: 215.9, heightMm: 355.6, category: 'Legal / Official' },
-  { id: 'size_a3', nameEn: 'A3 297 x 420 mm', nameHi: 'A3 297 x 420 मिमी', widthMm: 297, heightMm: 420, category: 'Large Format' },
-  { id: 'size_a3_plus', nameEn: 'A3+ 329 x 483 mm', nameHi: 'A3+ 329 x 483 मिमी (Super A3)', widthMm: 329, heightMm: 483, category: 'Large Format' },
-  { id: 'size_a2', nameEn: 'A2 420 x 594 mm', nameHi: 'A2 420 x 594 मिमी', widthMm: 420, heightMm: 594, category: 'Large Format' },
-  { id: 'size_b4', nameEn: 'B4 257 x 364 mm', nameHi: 'B4 257 x 364 मिमी', widthMm: 257, heightMm: 364, category: 'Large Format' },
-  { id: 'size_b3', nameEn: 'B3 364 x 515 mm', nameHi: 'B3 364 x 515 मिमी', widthMm: 364, heightMm: 515, category: 'Large Format' },
-  { id: 'size_8k', nameEn: '8K 270 x 390 mm', nameHi: '8K 270 x 390 मिमी', widthMm: 270, heightMm: 390, category: 'Special' },
-  { id: 'size_16k', nameEn: '16K 195 x 270 mm', nameHi: '16K 195 x 270 मिमी', widthMm: 195, heightMm: 270, category: 'Special' },
-  { id: 'size_user_defined', nameEn: 'User-Defined (Custom mm)', nameHi: 'User-Defined (कस्टम mm)', widthMm: 100, heightMm: 150, category: 'Custom' },
-  { id: 'single', nameEn: 'Single Photo (Individual)', nameHi: 'एकल उच्च-गुणवत्ता फोटो', widthMm: 0, heightMm: 0, category: 'Single' },
+  { id: 'size_4x6', nameEn: '4 x 6" (10x15 cm)', nameHi: '4x6" (10x15 cm)', widthMm: 101.6, heightMm: 152.4, category: 'Photo Paper' },
+  { id: 'size_a4', nameEn: 'A4 (210 x 297 mm)', nameHi: 'A4 (210x297 mm)', widthMm: 210, heightMm: 297, category: 'Standard Paper' },
+  { id: 'size_5x7', nameEn: '5 x 7" (13x18 cm)', nameHi: '5x7" (13x18 cm)', widthMm: 127, heightMm: 178, category: 'Photo Paper' },
+  { id: 'size_a6', nameEn: 'A6 (105 x 148 mm)', nameHi: 'A6 (105x148 mm)', widthMm: 105, heightMm: 148, category: 'Standard Paper' },
+  { id: 'size_a5', nameEn: 'A5 (148 x 210 mm)', nameHi: 'A5 (148x210 mm)', widthMm: 148, heightMm: 210, category: 'Standard Paper' },
+  { id: 'size_b5', nameEn: 'B5 (182 x 257 mm)', nameHi: 'B5 (182x257 mm)', widthMm: 182, heightMm: 257, category: 'Standard Paper' },
+  { id: 'size_b6', nameEn: 'B6 (128 x 182 mm)', nameHi: 'B6 (128x182 mm)', widthMm: 128, heightMm: 182, category: 'Standard Paper' },
+  { id: 'size_3_5x5', nameEn: '3.5 x 5" (9x13 cm)', nameHi: '3.5x5" (9x13 cm)', widthMm: 89, heightMm: 127, category: 'Photo Paper' },
+  { id: 'size_5x8', nameEn: '5 x 8" (127x203 mm)', nameHi: '5x8" (127x203 mm)', widthMm: 127, heightMm: 203, category: 'Photo Paper' },
+  { id: 'size_8x10', nameEn: '8 x 10" (20x25 cm)', nameHi: '8x10" (20x25 cm)', widthMm: 203.2, heightMm: 254, category: 'Photo Paper' },
+  { id: 'size_16_9_wide', nameEn: '16:9 Wide (102x181 mm)', nameHi: '16:9 Wide', widthMm: 101.6, heightMm: 180.6, category: 'Photo Paper' },
+  { id: 'size_100x148', nameEn: 'Postcard (100x148 mm)', nameHi: 'पोस्टकार्ड (100x148 mm)', widthMm: 100, heightMm: 148, category: 'Photo Paper' },
+  { id: 'env_10', nameEn: 'Envelope #10 (105x241 mm)', nameHi: 'Envelope #10', widthMm: 105, heightMm: 241, category: 'Envelope' },
+  { id: 'env_dl', nameEn: 'Envelope DL (110x220 mm)', nameHi: 'Envelope DL', widthMm: 110, heightMm: 220, category: 'Envelope' },
+  { id: 'env_c6', nameEn: 'Envelope C6 (114x162 mm)', nameHi: 'Envelope C6', widthMm: 114, heightMm: 162, category: 'Envelope' },
+  { id: 'size_letter', nameEn: 'Letter (8.5 x 11")', nameHi: 'Letter (8.5x11")', widthMm: 215.9, heightMm: 279.4, category: 'Standard Paper' },
+  { id: 'size_8_5x13', nameEn: 'Folio (8.5 x 13")', nameHi: 'Folio (8.5x13")', widthMm: 215.9, heightMm: 330.2, category: 'Standard Paper' },
+  { id: 'size_indian_legal', nameEn: 'Indian-Legal (215x345 mm)', nameHi: 'Indian-Legal', widthMm: 215, heightMm: 345, category: 'Legal / Official' },
+  { id: 'size_legal', nameEn: 'Legal (8.5 x 14")', nameHi: 'Legal (8.5x14")', widthMm: 215.9, heightMm: 355.6, category: 'Legal / Official' },
+  { id: 'size_a3', nameEn: 'A3 (297 x 420 mm)', nameHi: 'A3 (297x420 mm)', widthMm: 297, heightMm: 420, category: 'Large Format' },
+  { id: 'size_a3_plus', nameEn: 'A3+ (329 x 483 mm)', nameHi: 'A3+ (329x483 mm)', widthMm: 329, heightMm: 483, category: 'Large Format' },
+  { id: 'size_a2', nameEn: 'A2 (420 x 594 mm)', nameHi: 'A2 (420x594 mm)', widthMm: 420, heightMm: 594, category: 'Large Format' },
+  { id: 'size_b4', nameEn: 'B4 (257 x 364 mm)', nameHi: 'B4 (257x364 mm)', widthMm: 257, heightMm: 364, category: 'Large Format' },
+  { id: 'size_b3', nameEn: 'B3 (364 x 515 mm)', nameHi: 'B3 (364x515 mm)', widthMm: 364, heightMm: 515, category: 'Large Format' },
+  { id: 'size_8k', nameEn: '8K (270 x 390 mm)', nameHi: '8K (270x390 mm)', widthMm: 270, heightMm: 390, category: 'Special' },
+  { id: 'size_16k', nameEn: '16K (195 x 270 mm)', nameHi: '16K (195x270 mm)', widthMm: 195, heightMm: 270, category: 'Special' },
+  { id: 'size_user_defined', nameEn: 'Custom (mm)', nameHi: 'कस्टम (mm)', widthMm: 100, heightMm: 150, category: 'Custom' },
+  { id: 'single', nameEn: 'Single Photo', nameHi: 'सिंगल फोटो', widthMm: 0, heightMm: 0, category: 'Single' },
 ];
 
 export default function PassportSection({ language, theme }: PassportSectionProps) {
@@ -338,9 +338,6 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_4x6');
   const [customPaperWidthMm, setCustomPaperWidthMm] = useState<number>(100);
   const [customPaperHeightMm, setCustomPaperHeightMm] = useState<number>(150);
-
-  // Direct Print & Orientation Settings
-  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
   // Background selection
   const [bgColorType, setBgColorType] = useState<'white' | 'blue' | 'red' | 'transparent' | 'custom'>('white');
@@ -646,7 +643,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const selectedSizePreset = PASSPORT_PRESETS.find(p => p.id === sizePreset) || PASSPORT_PRESETS[0];
   const selectedSheetPreset = SHEET_SIZE_PRESETS.find(p => p.id === sheetSize) || SHEET_SIZE_PRESETS[0];
 
-  // Dynamically calculate maximum photos that fit on the selected paper without overflowing margins
+  // Dynamically calculate maximum photos that fit on the selected paper without overflowing margins (Landscape studio standard)
   const maxCopiesOnPaper = React.useMemo(() => {
     if (sheetSize === 'single') return 1;
     let wBase = selectedSheetPreset.widthMm || 101.6;
@@ -655,29 +652,27 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       wBase = customPaperWidthMm || 100;
       hBase = customPaperHeightMm || 150;
     }
-    const minDim = Math.min(wBase, hBase);
-    const maxDim = Math.max(wBase, hBase);
-    const pageW = printOrientation === 'portrait' ? minDim : maxDim;
-    const pageH = printOrientation === 'portrait' ? maxDim : minDim;
+    const pageW = Math.max(wBase, hBase);
+    const pageH = Math.min(wBase, hBase);
 
     const isSmallPhotoPaper = pageW <= 160 && pageH <= 210;
-    const marginMm = isSmallPhotoPaper ? 6 : 12;
-    const gapMm = isSmallPhotoPaper ? 3 : 4;
+    const gapMm = isSmallPhotoPaper ? 2 : 3.5;
+    const edgeMargin = isSmallPhotoPaper ? 2 : 8;
 
-    const maxCols = Math.max(1, Math.floor((pageW - marginMm) / (selectedSizePreset.widthMm + gapMm)));
-    const maxRows = Math.max(1, Math.floor((pageH - marginMm) / (selectedSizePreset.heightMm + gapMm)));
+    const maxCols = Math.max(1, Math.floor((pageW - (2 * edgeMargin) + gapMm) / (selectedSizePreset.widthMm + gapMm)));
+    const maxRows = Math.max(1, Math.floor((pageH - (2 * edgeMargin) + gapMm) / (selectedSizePreset.heightMm + gapMm)));
 
-    return Math.max(2, maxCols * maxRows);
-  }, [selectedSheetPreset, selectedSizePreset, printOrientation, sheetSize, customPaperWidthMm, customPaperHeightMm]);
+    return Math.max(1, maxCols * maxRows);
+  }, [selectedSheetPreset, selectedSizePreset, sheetSize, customPaperWidthMm, customPaperHeightMm]);
 
-  const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(6);
+  const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(8);
 
-  // Keep copies count strictly bounded between 2 and max paper capacity
+  // Keep copies count strictly bounded between 1 and max paper capacity
   useEffect(() => {
     if (photosCopiesCount > maxCopiesOnPaper) {
       setPhotosCopiesCount(maxCopiesOnPaper);
-    } else if (photosCopiesCount < 2) {
-      setPhotosCopiesCount(2);
+    } else if (photosCopiesCount < 1) {
+      setPhotosCopiesCount(1);
     }
   }, [maxCopiesOnPaper]);
 
@@ -1042,8 +1037,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     } else {
       const minDim = Math.min(baseWidthMm, baseHeightMm);
       const maxDim = Math.max(baseWidthMm, baseHeightMm);
-      pageWidthMm = printOrientation === 'portrait' ? minDim : maxDim;
-      pageHeightMm = printOrientation === 'portrait' ? maxDim : minDim;
+      pageWidthMm = maxDim;
+      pageHeightMm = minDim;
     }
 
     // Set 300 DPI high-res scale (1 inch = 25.4 mm)
@@ -1066,20 +1061,20 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const photoWidthPx = Math.round(selectedSizePreset.widthMm * dpm);
     const photoHeightPx = Math.round(selectedSizePreset.heightMm * dpm);
 
-    // Sheet layouts with smart adaptive padding
+    // Sheet layouts with smart adaptive padding (Landscape studio standard)
     const isSmallPhotoPaper = pageWidthMm <= 160 && pageHeightMm <= 210;
-    const gapMm = isSmallPhotoPaper ? 3 : 4;
-    const marginMm = isSmallPhotoPaper ? 6 : 12;
+    const gapMm = isSmallPhotoPaper ? 2 : 3.5;
+    const edgeMargin = isSmallPhotoPaper ? 2 : 8;
     const gapPx = Math.round(gapMm * dpm);
 
-    const maxCols = Math.max(1, Math.floor((pageWidthMm - marginMm) / (selectedSizePreset.widthMm + gapMm)));
-    const maxRows = Math.max(1, Math.floor((pageHeightMm - marginMm) / (selectedSizePreset.heightMm + gapMm)));
+    const maxCols = Math.max(1, Math.floor((pageWidthMm - (2 * edgeMargin) + gapMm) / (selectedSizePreset.widthMm + gapMm)));
+    const maxRows = Math.max(1, Math.floor((pageHeightMm - (2 * edgeMargin) + gapMm) / (selectedSizePreset.heightMm + gapMm)));
     const maxCapacity = maxCols * maxRows;
 
     let numPhotos = Math.max(1, Math.min(photosCopiesCount, maxCapacity));
 
     // Choose optimal columns to keep layout clean and within maxCols and maxRows
-    let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? 3 : 4);
+    let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? (maxCols >= 4 && numPhotos > 4 ? 4 : 3) : 4);
     if (Math.ceil(numPhotos / numCols) > maxRows) {
       numCols = Math.min(maxCols, Math.ceil(numPhotos / maxRows));
     }
@@ -1149,7 +1144,6 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     contrast, 
     borderWidth, 
     borderColor,
-    printOrientation,
     customPaperWidthMm,
     customPaperHeightMm,
     singleCanvasUpdated
@@ -1197,15 +1191,13 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       } else {
         const minDim = Math.min(baseWidthMm, baseHeightMm);
         const maxDim = Math.max(baseWidthMm, baseHeightMm);
-        widthMm = printOrientation === 'portrait' ? minDim : maxDim;
-        heightMm = printOrientation === 'portrait' ? maxDim : minDim;
+        widthMm = maxDim;
+        heightMm = minDim;
       }
-      
-      const orientation = printOrientation === 'portrait' ? 'portrait' : 'landscape';
 
-      // Initialize doc with precise physical formats
+      // Initialize doc with precise physical formats (Landscape for sheets)
       const doc = new jsPDF({
-        orientation: orientation as any,
+        orientation: isSingleRaw ? 'portrait' : 'landscape',
         unit: 'mm',
         format: [widthMm, heightMm]
       });
@@ -1220,16 +1212,16 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         const photoWidthMm = selectedSizePreset.widthMm;
         const photoHeightMm = selectedSizePreset.heightMm;
         const isSmallPhotoPaper = widthMm <= 160 && heightMm <= 210;
-        const gapMm = isSmallPhotoPaper ? 3 : 4;
-        const marginMm = isSmallPhotoPaper ? 6 : 12;
+        const gapMm = isSmallPhotoPaper ? 2 : 3.5;
+        const edgeMargin = isSmallPhotoPaper ? 2 : 8;
 
-        const maxCols = Math.max(1, Math.floor((widthMm - marginMm) / (photoWidthMm + gapMm)));
-        const maxRows = Math.max(1, Math.floor((heightMm - marginMm) / (photoHeightMm + gapMm)));
+        const maxCols = Math.max(1, Math.floor((widthMm - (2 * edgeMargin) + gapMm) / (photoWidthMm + gapMm)));
+        const maxRows = Math.max(1, Math.floor((heightMm - (2 * edgeMargin) + gapMm) / (photoHeightMm + gapMm)));
         const maxCapacity = maxCols * maxRows;
 
         let numPhotos = Math.max(1, Math.min(photosCopiesCount, maxCapacity));
 
-        let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? 3 : 4);
+        let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? (maxCols >= 4 && numPhotos > 4 ? 4 : 3) : 4);
         if (Math.ceil(numPhotos / numCols) > maxRows) {
           numCols = Math.min(maxCols, Math.ceil(numPhotos / maxRows));
         }
@@ -1313,8 +1305,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       } else {
         const minDim = Math.min(baseWidthMm, baseHeightMm);
         const maxDim = Math.max(baseWidthMm, baseHeightMm);
-        widthMm = printOrientation === 'portrait' ? minDim : maxDim;
-        heightMm = printOrientation === 'portrait' ? maxDim : minDim;
+        widthMm = maxDim;
+        heightMm = minDim;
       }
 
       styleEl.innerHTML = `
@@ -1368,7 +1360,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [originalImage, printOrientation, sheetSize, photosCopiesCount, sizePreset, customPaperWidthMm, customPaperHeightMm, singleCanvasUpdated]);
+  }, [originalImage, sheetSize, photosCopiesCount, sizePreset, customPaperWidthMm, customPaperHeightMm, singleCanvasUpdated]);
 
   // Browser BeforePrint fallback hook
   useEffect(() => {
@@ -1380,7 +1372,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
     };
-  }, [originalImage, printOrientation, sheetSize, customPaperWidthMm, customPaperHeightMm]);
+  }, [originalImage, sheetSize, customPaperWidthMm, customPaperHeightMm]);
 
   return (
     <div className="space-y-6">
@@ -1700,27 +1692,27 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
             } space-y-4`}>
               <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
-                  <Layout className="w-4 h-4 text-blue-500" />
+                <h3 className="font-bold text-xs tracking-tight flex items-center gap-1.5">
+                  <Layout className="w-3.5 h-3.5 text-blue-500" />
                   <span>Layout Specifications</span>
                 </h3>
-                <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-500">
-                  {selectedSheetPreset.id === 'single' ? 'Single Photo' : selectedSheetPreset.nameEn.split(' ')[0]}
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">
+                  {selectedSheetPreset.id === 'single' ? 'Single' : selectedSheetPreset.nameEn.split(' ')[0]}
                 </span>
               </div>
 
               {/* 1. Passport Photo Size Selection */}
               <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1.5 uppercase tracking-wide">
-                  {language === 'hi' ? 'पासपोर्ट फोटो आकार (Photo Size)' : 'Passport Photo Size'}
+                <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
+                  {language === 'hi' ? 'फोटो आकार (Photo Size)' : 'Passport Size'}
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-1">
                   {PASSPORT_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
                       type="button"
                       onClick={() => setSizePreset(preset.id)}
-                      className={`px-2.5 py-2 rounded-xl text-left text-xs border transition-all cursor-pointer ${
+                      className={`px-2 py-1.5 rounded-lg text-left border transition-all cursor-pointer ${
                         sizePreset === preset.id
                           ? 'border-blue-500 bg-blue-500/10 font-bold text-blue-500 ring-1 ring-blue-500'
                           : theme === 'dark'
@@ -1728,7 +1720,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                             : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-slate-50'
                       }`}
                     >
-                      <div className="font-semibold truncate text-[11px]">{preset.nameEn.split('(')[0]}</div>
+                      <div className="font-bold truncate text-[11px] leading-tight">{preset.nameEn.split('(')[0]}</div>
                       <div className="text-[10px] font-mono text-slate-400">
                         {preset.widthMm} x {preset.heightMm} mm
                       </div>
@@ -1738,10 +1730,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               </div>
 
               {/* 2. Document / Paper Size with Down-Arrow Dropdown */}
-              <div className="space-y-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
+              <div className="space-y-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
-                    {language === 'hi' ? 'डॉक्यूमेंट / शीट साइज (Document Size)' : 'Document / Paper Size'}
+                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                    {language === 'hi' ? 'शीट साइज (Sheet Size)' : 'Document / Paper Size'}
                   </label>
                   <span className="text-[10px] font-mono text-blue-500 font-bold">
                     {sheetSize === 'size_user_defined'
@@ -1762,9 +1754,13 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       setSheetSize(newSize);
                       if (newSize === 'single') {
                         setPhotosCopiesCount(1);
+                      } else if (newSize === 'size_4x6') {
+                        setPhotosCopiesCount(8);
+                      } else if (newSize === 'size_a4') {
+                        setPhotosCopiesCount(30);
                       }
                     }}
-                    className={`w-full appearance-none px-3.5 py-2.5 pr-10 rounded-xl text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`w-full appearance-none px-3 py-2 pr-8 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       theme === 'dark'
                         ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-600'
                         : 'bg-white border-slate-300 text-slate-800 hover:border-slate-400 shadow-sm'
@@ -1805,7 +1801,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         </option>
                       ))}
                     </optgroup>
-                    <optgroup label="📐 Large Formats & Special (A3, A2, B4, 8K, 16K)">
+                    <optgroup label="📐 Large Formats & Special">
                       {SHEET_SIZE_PRESETS.filter(p => p.category === 'Large Format' || p.category === 'Special').map((preset) => (
                         <option key={preset.id} value={preset.id}>
                           {preset.nameEn}
@@ -1819,8 +1815,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   </select>
 
                   {/* Down Arrow Indicator */}
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
-                    <ChevronDown className="w-4 h-4 text-blue-500" />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
+                    <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
                   </div>
                 </div>
 
@@ -1828,20 +1824,26 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <div className="grid grid-cols-4 gap-1 pt-0.5">
                   <button
                     type="button"
-                    onClick={() => setSheetSize('size_4x6')}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    onClick={() => {
+                      setSheetSize('size_4x6');
+                      setPhotosCopiesCount(8);
+                    }}
+                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
                       sheetSize === 'size_4x6'
                         ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
-                    title="10 x 15 cm (4 x 6 in)"
+                    title="10 x 15 cm (4 x 6 in) - 8 Photos Studio Standard"
                   >
                     10x15 (4x6")
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSheetSize('size_a4')}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    onClick={() => {
+                      setSheetSize('size_a4');
+                      setPhotosCopiesCount(30);
+                    }}
+                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
                       sheetSize === 'size_a4'
                         ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1852,8 +1854,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSheetSize('size_5x7')}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    onClick={() => {
+                      setSheetSize('size_5x7');
+                      setPhotosCopiesCount(10);
+                    }}
+                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
                       sheetSize === 'size_5x7'
                         ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1868,7 +1873,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       setSheetSize('single');
                       setPhotosCopiesCount(1);
                     }}
-                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
                       sheetSize === 'single'
                         ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -1881,75 +1886,40 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
                 {/* User-Defined Custom Millimeter inputs */}
                 {sheetSize === 'size_user_defined' && (
-                  <div className={`p-2.5 rounded-xl border space-y-2 animate-fadeIn ${
+                  <div className={`p-2 rounded-lg border space-y-1.5 animate-fadeIn ${
                     theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <div className="text-[11px] font-bold text-blue-500 flex items-center justify-between">
-                      <span>Custom Dimensions</span>
-                      <span className="font-mono text-[10px]">Max Fit: {maxCopiesOnPaper}</span>
+                    <div className="text-[10px] font-bold text-blue-500 flex items-center justify-between">
+                      <span>Custom Size</span>
+                      <span className="font-mono text-[10px]">Max: {maxCopiesOnPaper}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <div>
-                        <span className="text-[10px] text-slate-400 font-semibold block mb-0.5">Width (mm)</span>
+                        <span className="text-[9px] text-slate-400 font-semibold block mb-0.5">Width (mm)</span>
                         <input
                           type="number"
                           min={50}
                           max={600}
                           value={customPaperWidthMm}
                           onChange={(e) => setCustomPaperWidthMm(Math.max(30, Number(e.target.value) || 100))}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border ${
                             theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
                         />
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 font-semibold block mb-0.5">Height (mm)</span>
+                        <span className="text-[9px] text-slate-400 font-semibold block mb-0.5">Height (mm)</span>
                         <input
                           type="number"
                           min={50}
                           max={900}
                           value={customPaperHeightMm}
                           onChange={(e) => setCustomPaperHeightMm(Math.max(30, Number(e.target.value) || 150))}
-                          className={`w-full px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border ${
                             theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
                         />
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Orientation Selector */}
-                {sheetSize !== 'single' && (
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold text-slate-400">
-                      {language === 'hi' ? 'दिशा (Orientation)' : 'Orientation'}
-                    </span>
-                    <div className={`flex p-0.5 rounded-lg border gap-0.5 ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
-                    }`}>
-                      <button
-                        type="button"
-                        onClick={() => setPrintOrientation('portrait')}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
-                          printOrientation === 'portrait'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-inherit'
-                        }`}
-                      >
-                        Portrait
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPrintOrientation('landscape')}
-                        className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
-                          printOrientation === 'landscape'
-                            ? 'bg-blue-600 text-white shadow-sm'
-                            : 'text-slate-400 hover:text-inherit'
-                        }`}
-                      >
-                        Landscape
-                      </button>
                     </div>
                   </div>
                 )}
@@ -1957,27 +1927,27 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
               {/* 3. Copies Selection Panel - Compact Interactive Stepper */}
               {sheetSize !== 'single' && (
-                <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-2">
-                  <div className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
+                <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-1.5">
+                  <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border ${
                     theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className="flex flex-col">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         {language === 'hi' ? 'प्रतियाँ (Copies)' : 'Copies Count'}
                       </span>
-                      <span className="text-[10px] text-slate-500 font-medium">
-                        Fit Capacity: Max {maxCopiesOnPaper}
+                      <span className="text-[9px] text-blue-500 font-medium font-mono">
+                        Max Capacity: {maxCopiesOnPaper}
                       </span>
                     </div>
 
                     {/* Stepper (- [count] +) */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         id="passport-copies-decrease-btn"
                         disabled={photosCopiesCount <= 1}
                         onClick={() => setPhotosCopiesCount(prev => Math.max(1, prev - 1))}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
                           photosCopiesCount <= 1
                             ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
                             : theme === 'dark'
@@ -1986,11 +1956,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         }`}
                         title={language === 'hi' ? 'कम करें (-1)' : 'Decrease (-1)'}
                       >
-                        <Minus className="w-4 h-4" />
+                        <Minus className="w-3.5 h-3.5" />
                       </button>
 
-                      <div className="min-w-[36px] text-center">
-                        <span className="text-base font-black font-mono text-blue-500">
+                      <div className="min-w-[30px] text-center">
+                        <span className="text-sm font-black font-mono text-blue-500">
                           {photosCopiesCount}
                         </span>
                       </div>
@@ -2000,27 +1970,27 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         id="passport-copies-increase-btn"
                         disabled={photosCopiesCount >= maxCopiesOnPaper}
                         onClick={() => setPhotosCopiesCount(prev => Math.min(maxCopiesOnPaper, prev + 1))}
-                        className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
                           photosCopiesCount >= maxCopiesOnPaper
                             ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
                             : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
                         }`}
                         title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
                       >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
                   {/* Preset quick counts */}
-                  <div className="flex items-center gap-1.5 justify-end">
-                    <span className="text-[10px] text-slate-400 mr-auto font-medium">Quick:</span>
+                  <div className="flex items-center gap-1 justify-end">
+                    <span className="text-[9px] text-slate-400 mr-auto font-medium">Quick:</span>
                     {[2, 4, 6, 8, maxCopiesOnPaper].filter((c, idx, arr) => c <= maxCopiesOnPaper && arr.indexOf(c) === idx).map(count => (
                       <button
                         key={count}
                         type="button"
                         onClick={() => setPhotosCopiesCount(count)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all cursor-pointer ${
                           photosCopiesCount === count
                             ? 'border-blue-500 bg-blue-500 text-white'
                             : theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
