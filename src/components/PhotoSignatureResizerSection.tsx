@@ -163,7 +163,7 @@ export default function PhotoSignatureResizerSection({
         // If signature mode, prefer PNG default to preserve transparency, otherwise JPG
         const defaultFileType: OutputFileType = toolMode === 'signature' ? 'PNG' : 'JPG';
         setFileType(defaultFileType);
-        setUseTargetKB(false);
+        setUseTargetKB(true);
         setTargetKB(toolMode === 'signature' ? 20 : 50);
         setTargetKBError(null);
       };
@@ -297,8 +297,8 @@ export default function PhotoSignatureResizerSection({
       setTargetKB('');
       setTargetKBError(
         language === 'hi'
-          ? 'कृपया 10 KB और 200 KB के बीच का टारगेट साइज दर्ज करें।'
-          : 'Please select a target size between 10 KB and 200 KB.'
+          ? 'कृपया 10 KB और 200 KB के बीच का साइज चुनें।'
+          : 'Please choose a target size between 10 KB and 200 KB.'
       );
       return;
     }
@@ -311,12 +311,18 @@ export default function PhotoSignatureResizerSection({
     if (val < 10 || val > 200) {
       setTargetKBError(
         language === 'hi'
-          ? 'कृपया 10 KB और 200 KB के बीच का टारगेट साइज दर्ज करें।'
-          : 'Please select a target size between 10 KB and 200 KB.'
+          ? 'कृपया 10 KB और 200 KB के बीच का साइज चुनें।'
+          : 'Please choose a target size between 10 KB and 200 KB.'
       );
     } else {
       setTargetKBError(null);
     }
+  };
+
+  const handleTargetKBSliderChange = (val: number) => {
+    setUseTargetKB(true);
+    setTargetKB(val);
+    setTargetKBError(null);
   };
 
   const handleQuickKBClick = (kb: number) => {
@@ -325,14 +331,14 @@ export default function PhotoSignatureResizerSection({
     setTargetKBError(null);
   };
 
-  // Core Client-Side Image Resizing & Compression Engine
+  // Core High-Fidelity Client-Side Image Resizing & Compression Engine
   const performResize = useCallback(async () => {
     if (!sourceImageRef.current || width <= 0 || height <= 0) return;
     setIsProcessing(true);
 
     const img = sourceImageRef.current;
-    let targetW = Math.max(1, width);
-    let targetH = Math.max(1, height);
+    const baseW = Math.max(1, width);
+    const baseH = Math.max(1, height);
 
     // Mime Type configuration
     let mimeType = 'image/jpeg';
@@ -340,19 +346,8 @@ export default function PhotoSignatureResizerSection({
     else if (fileType === 'WEBP') mimeType = 'image/webp';
 
     const canvas = document.createElement('canvas');
-    canvas.width = targetW;
-    canvas.height = targetH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      setIsProcessing(false);
-      return;
-    }
 
-    // Enable high quality image scaling
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    // Helper to render on canvas
+    // High quality canvas drawing helper
     const drawToCanvas = (c: HTMLCanvasElement, w: number, h: number) => {
       c.width = w;
       c.height = h;
@@ -366,14 +361,12 @@ export default function PhotoSignatureResizerSection({
         context.fillStyle = '#FFFFFF';
         context.fillRect(0, 0, w, h);
       } else {
-        // PNG and WEBP preserve transparency!
+        // PNG and WEBP preserve transparency
         context.clearRect(0, 0, w, h);
       }
 
       context.drawImage(img, 0, 0, w, h);
     };
-
-    drawToCanvas(canvas, targetW, targetH);
 
     // Helper promise for canvas.toBlob
     const getBlob = (c: HTMLCanvasElement, mime: string, q: number): Promise<Blob | null> => {
@@ -384,81 +377,165 @@ export default function PhotoSignatureResizerSection({
 
     try {
       let finalBlob: Blob | null = null;
-      let finalW = targetW;
-      let finalH = targetH;
+      let finalW = baseW;
+      let finalH = baseH;
 
-      // MODE 1: Target File Size in KB Optimization
+      // MODE 1: Target File Size in KB Optimization (10 KB - 200 KB)
       if (useTargetKB && typeof targetKB === 'number' && targetKB >= 10 && targetKB <= 200) {
         const targetBytes = targetKB * 1024;
 
         if (fileType === 'PNG') {
-          // PNG is lossless; to reduce size to target KB, scale dimensions intelligently if too large
-          let currentBlob = await getBlob(canvas, mimeType, 1.0);
-          let currentW = targetW;
-          let currentH = targetH;
-          let attempts = 0;
-
-          while (currentBlob && currentBlob.size > targetBytes && attempts < 5 && currentW > 100 && currentH > 100) {
-            attempts++;
-            const scale = Math.max(0.65, Math.sqrt(targetBytes / currentBlob.size) * 0.95);
-            currentW = Math.max(50, Math.round(currentW * scale));
-            currentH = Math.max(50, Math.round(currentH * scale));
-            drawToCanvas(canvas, currentW, currentH);
-            currentBlob = await getBlob(canvas, mimeType, 1.0);
-          }
-          finalBlob = currentBlob;
-          finalW = currentW;
-          finalH = currentH;
-        } else {
-          // JPG / WEBP: Binary search on Quality (0.05 to 0.95)
-          let lowQ = 0.05;
-          let highQ = 0.98;
+          // PNG is lossless (Signatures & Logos): Find the optimal crisp scale
+          const scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25];
           let bestBlob: Blob | null = null;
-          let bestDiff = Infinity;
+          let bestW = baseW;
+          let bestH = baseH;
 
-          for (let iter = 0; iter < 8; iter++) {
-            const midQ = (lowQ + highQ) / 2;
-            const blob = await getBlob(canvas, mimeType, midQ);
-            if (!blob) break;
-
-            const diff = Math.abs(blob.size - targetBytes);
-            if (diff < bestDiff) {
-              bestDiff = diff;
-              bestBlob = blob;
+          for (const s of scales) {
+            const curW = Math.max(80, Math.round(baseW * s));
+            const curH = Math.max(40, Math.round(baseH * s));
+            drawToCanvas(canvas, curW, curH);
+            const b = await getBlob(canvas, mimeType, 1.0);
+            if (b) {
+              bestBlob = b;
+              bestW = curW;
+              bestH = curH;
+              if (b.size <= targetBytes) {
+                break; // Found the largest resolution that fits under targetBytes
+              }
             }
-
-            if (blob.size > targetBytes) {
-              highQ = midQ;
-            } else {
-              lowQ = midQ;
-            }
-          }
-
-          // If even at lowest quality, blob exceeds target size by more than 15%, scale dimensions down
-          if (bestBlob && bestBlob.size > targetBytes * 1.15) {
-            let curW = targetW;
-            let curH = targetH;
-            let attempts = 0;
-            while (bestBlob && bestBlob.size > targetBytes && attempts < 4 && curW > 100) {
-              attempts++;
-              const scale = Math.max(0.7, Math.sqrt(targetBytes / bestBlob.size) * 0.95);
-              curW = Math.max(60, Math.round(curW * scale));
-              curH = Math.max(60, Math.round(curH * scale));
-              drawToCanvas(canvas, curW, curH);
-
-              // re-evaluate quality at new dimensions
-              bestBlob = await getBlob(canvas, mimeType, 0.4);
-            }
-            finalW = curW;
-            finalH = curH;
           }
 
           finalBlob = bestBlob;
+          finalW = bestW;
+          finalH = bestH;
+        } else {
+          // JPG & WEBP: High-Fidelity Multi-Scale & Adaptive Quality Engine
+          // We test descending resolution scales with high visual quality (never drop JPEG quality below 0.60 to prevent block artifacts/fatna!)
+          const scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3];
+          
+          let selectedBlob: Blob | null = null;
+          let selectedW = baseW;
+          let selectedH = baseH;
+
+          // If user locked specific pixels in 'pixels' mode, test at baseW & baseH first
+          if (resizeMode === 'pixels' && (width !== originalWidth || height !== originalHeight)) {
+            drawToCanvas(canvas, baseW, baseH);
+            // Binary search quality in [0.55, 0.98]
+            let lowQ = 0.55;
+            let highQ = 0.98;
+            let bestBlob: Blob | null = null;
+
+            for (let iter = 0; iter < 7; iter++) {
+              const midQ = (lowQ + highQ) / 2;
+              const blob = await getBlob(canvas, mimeType, midQ);
+              if (!blob) break;
+              if (blob.size <= targetBytes) {
+                bestBlob = blob;
+                lowQ = midQ; // try to get higher quality while staying under target
+              } else {
+                highQ = midQ;
+              }
+            }
+
+            if (bestBlob && bestBlob.size <= targetBytes) {
+              selectedBlob = bestBlob;
+              selectedW = baseW;
+              selectedH = baseH;
+            }
+          }
+
+          // If not yet satisfied, evaluate scale matrix with high perceptual quality
+          if (!selectedBlob) {
+            for (const s of scales) {
+              const curW = Math.max(160, Math.round(baseW * s));
+              const curH = Math.max(160, Math.round(baseH * s));
+              drawToCanvas(canvas, curW, curH);
+
+              // 1. Quick probe at high quality (0.82)
+              let blobHigh = await getBlob(canvas, mimeType, 0.82);
+              if (blobHigh && blobHigh.size <= targetBytes) {
+                // We can even optimize up towards 0.95
+                let lQ = 0.80;
+                let hQ = 0.97;
+                let bestFit = blobHigh;
+                for (let i = 0; i < 5; i++) {
+                  const mQ = (lQ + hQ) / 2;
+                  const b = await getBlob(canvas, mimeType, mQ);
+                  if (b && b.size <= targetBytes) {
+                    bestFit = b;
+                    lQ = mQ;
+                  } else {
+                    hQ = mQ;
+                  }
+                }
+                selectedBlob = bestFit;
+                selectedW = curW;
+                selectedH = curH;
+                break; // Found top resolution that stays crisp at high quality
+              }
+
+              // 2. Probe at medium-high quality (0.65 to 0.80)
+              let blobMed = await getBlob(canvas, mimeType, 0.68);
+              if (blobMed && blobMed.size <= targetBytes) {
+                let lQ = 0.65;
+                let hQ = 0.82;
+                let bestFit = blobMed;
+                for (let i = 0; i < 5; i++) {
+                  const mQ = (lQ + hQ) / 2;
+                  const b = await getBlob(canvas, mimeType, mQ);
+                  if (b && b.size <= targetBytes) {
+                    bestFit = b;
+                    lQ = mQ;
+                  } else {
+                    hQ = mQ;
+                  }
+                }
+                selectedBlob = bestFit;
+                selectedW = curW;
+                selectedH = curH;
+                break;
+              }
+            }
+          }
+
+          // Fallback if very strict target (e.g. 10 KB on large photo): Maintain minimum dimension & crisp smoothing
+          if (!selectedBlob) {
+            const minW = Math.max(200, Math.round(baseW * 0.25));
+            const minH = Math.max(200, Math.round(baseH * 0.25));
+            drawToCanvas(canvas, minW, minH);
+
+            let lQ = 0.50;
+            let hQ = 0.85;
+            let bestFit: Blob | null = null;
+            for (let i = 0; i < 6; i++) {
+              const mQ = (lQ + hQ) / 2;
+              const b = await getBlob(canvas, mimeType, mQ);
+              if (b) {
+                bestFit = b;
+                if (b.size <= targetBytes) {
+                  lQ = mQ;
+                } else {
+                  hQ = mQ;
+                }
+              }
+            }
+            selectedBlob = bestFit;
+            selectedW = minW;
+            selectedH = minH;
+          }
+
+          finalBlob = selectedBlob;
+          finalW = selectedW;
+          finalH = selectedH;
         }
       } else {
-        // MODE 2: Manual Quality Mode
+        // MODE 2: Manual Quality Mode (Uses exact canvas width/height)
+        drawToCanvas(canvas, baseW, baseH);
         const qNorm = Math.max(0.1, Math.min(1.0, quality / 100));
         finalBlob = await getBlob(canvas, mimeType, qNorm);
+        finalW = baseW;
+        finalH = baseH;
       }
 
       if (finalBlob) {
@@ -477,7 +554,7 @@ export default function PhotoSignatureResizerSection({
     } finally {
       setIsProcessing(false);
     }
-  }, [width, height, fileType, quality, useTargetKB, targetKB, resizedImageUrl]);
+  }, [width, height, fileType, quality, useTargetKB, targetKB, resizedImageUrl, resizeMode, originalWidth, originalHeight]);
 
   // Debounced auto-recalculate when editor parameters change
   useEffect(() => {
@@ -1051,18 +1128,28 @@ export default function PhotoSignatureResizerSection({
               </div>
 
               {/* 5. Target File Size (KB optimization 10 - 200 KB) */}
-              <div className={`p-4 rounded-2xl border space-y-3 transition-all ${
+              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 transition-all ${
                 useTargetKB
-                  ? 'border-blue-500/50 bg-blue-500/5 ring-1 ring-blue-500/20'
+                  ? 'border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20'
                   : theme === 'dark'
                   ? 'bg-slate-950/60 border-slate-800'
                   : 'bg-slate-50/80 border-slate-200'
               }`}>
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                    <span>Target File Size (KB)</span>
-                    <span className="text-[10px] font-normal text-slate-500">(10 – 200 KB)</span>
-                  </label>
+                  <div>
+                    <label className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Target File Size</span>
+                      <span className="text-[11px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                        10 KB – 200 KB
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {language === 'hi' 
+                        ? 'हाई-क्वालिटी कम्प्रेशन: फोटो फटेगी नहीं और सटीक KB में सेव होगी' 
+                        : 'High-fidelity compression: crisp photo without tearing or pixelation'}
+                    </p>
+                  </div>
 
                   <button
                     type="button"
@@ -1075,61 +1162,82 @@ export default function PhotoSignatureResizerSection({
                         setTargetKB(50);
                       }
                     }}
-                    className={`text-[11px] font-bold px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
                       useTargetKB
-                        ? 'bg-blue-600 text-white border-blue-500'
-                        : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                        : theme === 'dark'
+                        ? 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                        : 'bg-white text-slate-700 border-slate-300 hover:text-slate-900'
                     }`}
                   >
-                    {useTargetKB ? 'Active' : 'Enable KB Target'}
+                    {useTargetKB ? '✓ Active' : 'Enable KB'}
                   </button>
                 </div>
 
-                {/* Target KB input */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-500">Target Size:</span>
-                  <div className="relative w-28">
-                    <input
-                      type="number"
-                      min="10"
-                      max="200"
-                      value={targetKB}
-                      onChange={(e) => handleTargetKBInput(e.target.value)}
-                      placeholder="50"
-                      className={`w-full px-3 py-1.5 rounded-lg text-sm font-mono font-bold border outline-none ${
-                        targetKBError
-                          ? 'border-rose-500 bg-rose-500/10 text-rose-500'
-                          : theme === 'dark'
-                          ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500'
-                          : 'bg-white border-slate-300 text-slate-900 focus:border-blue-500'
-                      }`}
-                    />
+                {/* Dedicated 10 KB to 200 KB Range Slider */}
+                <div className="space-y-2 pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Slide to Adjust KB:
+                    </span>
+                    <span className="text-sm font-mono font-bold text-blue-500 bg-blue-500/15 px-3 py-1 rounded-lg border border-blue-500/30 flex items-center gap-1.5 shadow-xs">
+                      <span>Target:</span>
+                      <span className="text-base text-blue-600 dark:text-blue-400">{typeof targetKB === 'number' ? targetKB : 50} KB</span>
+                    </span>
                   </div>
-                  <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">KB</span>
+
+                  {/* Range Slider restricted strictly between 10 KB and 200 KB */}
+                  <input
+                    type="range"
+                    min="10"
+                    max="200"
+                    step="1"
+                    value={typeof targetKB === 'number' ? targetKB : 50}
+                    onChange={(e) => handleTargetKBSliderChange(parseInt(e.target.value, 10))}
+                    className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none"
+                  />
+
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400">
+                    <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">10 KB (Min)</span>
+                    <span className="text-emerald-500 font-semibold text-[10px]">Crisp Multi-Pass Smoothing</span>
+                    <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">200 KB (Max)</span>
+                  </div>
                 </div>
 
-                {/* Validation Message */}
-                {targetKBError && (
-                  <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                    <span>{targetKBError}</span>
-                  </p>
-                )}
+                {/* Direct Number Input & Quick Presets */}
+                <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500">Custom Size:</span>
+                    <div className="relative w-24">
+                      <input
+                        type="number"
+                        min="10"
+                        max="200"
+                        value={targetKB}
+                        onChange={(e) => handleTargetKBInput(e.target.value)}
+                        placeholder="50"
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-sm font-mono font-bold border outline-none ${
+                          targetKBError
+                            ? 'border-rose-500 bg-rose-500/10 text-rose-500'
+                            : theme === 'dark'
+                            ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500'
+                            : 'bg-white border-slate-300 text-slate-900 focus:border-blue-500'
+                        }`}
+                      />
+                    </div>
+                    <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300">KB</span>
+                  </div>
 
-                {/* Quick KB Buttons */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                    Quick Presets:
-                  </span>
+                  {/* Quick KB Preset Buttons */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {QUICK_KB_PRESETS.map((kb) => (
                       <button
                         key={kb}
                         type="button"
                         onClick={() => handleQuickKBClick(kb)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-bold border transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
                           useTargetKB && targetKB === kb
-                            ? 'bg-blue-600 border-blue-500 text-white shadow-xs'
+                            ? 'bg-blue-600 border-blue-500 text-white shadow-xs scale-105'
                             : theme === 'dark'
                             ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
                             : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
@@ -1140,6 +1248,14 @@ export default function PhotoSignatureResizerSection({
                     ))}
                   </div>
                 </div>
+
+                {/* Validation Message */}
+                {targetKBError && (
+                  <p className="text-xs font-medium text-rose-500 flex items-center gap-1 bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{targetKBError}</span>
+                  </p>
+                )}
               </div>
 
             </div>

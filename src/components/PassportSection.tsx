@@ -938,7 +938,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
     setBgRemovalError(false);
     setIsRemovingBg(true);
-    setAiStep('U²-NetP AI Model starting...');
+    setAiStep(language === 'hi' ? 'शुरू हो रहा है...' : 'Loading...');
     latestRequestedSrcRef.current = src;
     pendingRequestsCountRef.current++;
 
@@ -956,28 +956,30 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           return;
         }
 
-        setAiStep('Loading U²-NetP ONNX Session...');
+        setAiStep(language === 'hi' ? 'बैकग्राउंड हटाया जा रहा है...' : 'Processing...');
 
         try {
           const overallStart = performance.now();
-          console.log(`[U2-NetP PIPELINE] Started at ${new Date().toLocaleTimeString()} with config:`, U2NETP_CONFIG);
 
           // Fetch image and build file blob
           const fetchStart = performance.now();
           const response = await fetch(src);
           const inputBlob = await response.blob();
-          console.log(`[U2-NetP PIPELINE] Image Blob: ${(inputBlob.size / 1024).toFixed(1)} KB (prepared in ${(performance.now() - fetchStart).toFixed(1)}ms)`);
           
           const worker = getWorker();
-          if (!worker) throw new Error('U²-NetP Worker could not be initialized');
+          if (!worker) throw new Error('Worker could not be initialized');
 
           const aiInferenceStart = performance.now();
           const resultBlob = await new Promise<Blob>((resolve, reject) => {
             const handleMessage = (e: MessageEvent) => {
               if (e.data.type === 'progress') {
                 if (src !== latestRequestedSrcRef.current) return;
-                const { step, percent } = e.data;
-                setAiStep(`${step || 'Processing'} (${percent || 0}%)`);
+                const { percent } = e.data;
+                setAiStep(
+                  language === 'hi' 
+                    ? `प्रोसेसिंग... (${percent || 0}%)` 
+                    : `Loading... (${percent || 0}%)`
+                );
               } else if (e.data.type === 'success') {
                 worker.removeEventListener('message', handleMessage);
                 resolve(e.data.blob);
@@ -993,10 +995,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             });
           });
 
-          const aiElapsed = ((performance.now() - aiInferenceStart) / 1000).toFixed(2);
-          console.log(`[U2-NetP PIPELINE] U²-NetP ONNX background removal finished in ${aiElapsed}s`);
-
-          setAiStep('Polishing Portrait... (Auto-Brightness & Skin Smoothing)');
+          setAiStep(language === 'hi' ? 'फोटो परिष्कृत की जा रही है...' : 'Optimizing photo...');
           const polishStart = performance.now();
           const enhancedBlob = await enhancePassportPhoto(resultBlob);
           const polishElapsed = (performance.now() - polishStart).toFixed(1);
@@ -1822,10 +1821,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               }`}>
                 <div className="flex items-center justify-center gap-2">
                   <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
-                  <span className="text-sm font-bold text-blue-500">{aiStep}</span>
+                  <span className="text-sm font-bold text-blue-500">{aiStep || (language === 'hi' ? 'लोड हो रहा है...' : 'Loading...')}</span>
                 </div>
                 <p className="text-[10px] text-slate-400 max-w-sm mx-auto">
-                  Neural model file (~4.4 MB) is loading. Once initialized, background removal and cropping execute 100% locally.
+                  {language === 'hi'
+                    ? 'कृपया प्रतीक्षा करें, फोटो प्रोसेस की जा रही है (100% सुरक्षित एवं निजी)...'
+                    : 'Please wait, processing image securely in your browser...'}
                 </p>
               </div>
             )}

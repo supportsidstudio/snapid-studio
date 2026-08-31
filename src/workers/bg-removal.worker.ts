@@ -236,16 +236,16 @@ self.onmessage = async (e: MessageEvent) => {
   } else if (type === 'removeBackground') {
     try {
       const startTime = performance.now();
-      self.postMessage({ type: 'progress', step: 'Loading U²-NetP Model', percent: 25 });
+      self.postMessage({ type: 'progress', step: 'Loading...', percent: 25 });
 
       // Get or load cached session
       const activeSession = await getSession();
 
-      self.postMessage({ type: 'progress', step: 'Preprocessing (320×320 Tensor)', percent: 50 });
+      self.postMessage({ type: 'progress', step: 'Processing...', percent: 50 });
       const imageBitmap = await createImageBitmap(blob);
       const { tensor, origWidth, origHeight } = preprocessImage(imageBitmap, 320, 320);
 
-      self.postMessage({ type: 'progress', step: 'Running U²-NetP AI Inference', percent: 75 });
+      self.postMessage({ type: 'progress', step: 'Removing background...', percent: 75 });
       const inputName = activeSession.inputNames[0] || 'input.1';
       const outputName = activeSession.outputNames[0] || '1959';
 
@@ -254,7 +254,7 @@ self.onmessage = async (e: MessageEvent) => {
       const inferenceElapsed = (performance.now() - inferenceStart).toFixed(1);
       console.log(`[U2NetP Worker] Inference completed in ${inferenceElapsed}ms`);
 
-      self.postMessage({ type: 'progress', step: 'Extracting Alpha Mask at Full Resolution', percent: 90 });
+      self.postMessage({ type: 'progress', step: 'Finishing...', percent: 90 });
       const outputTensor = results[outputName];
       const d0Data = outputTensor.data as Float32Array;
 
