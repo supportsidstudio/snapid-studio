@@ -11,6 +11,10 @@ import {
   ChevronRight,
   Eye,
   RotateCw,
+  RotateCcw,
+  Sun,
+  Contrast,
+  ZoomIn,
   Sliders,
   Sparkles,
   Layout,
@@ -1725,6 +1729,20 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     }
   };
 
+  const resetActiveAdjustments = () => {
+    if (activeSide === 'front') {
+      setFrontZoom(1);
+      setFrontRot(0);
+      setFrontBright(100);
+      setFrontContrast(100);
+    } else {
+      setBackZoom(1);
+      setBackRot(0);
+      setBackBright(100);
+      setBackContrast(100);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Title */}
@@ -2391,27 +2409,52 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           />
 
           {/* Panel: Image crop adjustments (Brightness/contrast, crop factors) */}
-          <div className={`p-5 rounded-2xl border ${
+          <div className={`p-4 sm:p-5 rounded-2xl border ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-          } space-y-4`}>
-            <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-blue-500" />
-              <span>Crop & Image adjustments</span>
-            </h3>
+          } space-y-3.5`}>
+            <div className="flex items-center justify-between border-b pb-2.5">
+              <h3 className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5">
+                <Sliders className="w-4 h-4 text-blue-500" />
+                <span>Crop & Image adjustments</span>
+              </h3>
+
+              {((activeSide === 'front' && frontImage) || (activeSide === 'back' && backImage)) && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                    {activeSide} Side
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetActiveAdjustments}
+                    title={language === 'hi' ? 'रीसेट करें' : 'Reset to default'}
+                    className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                      theme === 'dark'
+                        ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                    }`}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Reset</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Check if image loads */}
             {((activeSide === 'front' && frontImage) || (activeSide === 'back' && backImage)) ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between text-xs font-semibold bg-blue-500/5 px-2.5 py-1 rounded">
-                  <span className="text-blue-500">Currently Modifying:</span>
-                  <span className="uppercase text-blue-500 font-bold">{activeSide} Side</span>
-                </div>
-
-                {/* Adjustments */}
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.zoomLabel}</span>
-                    <span className="font-mono text-slate-400">{currentZoomState.toFixed(2)}x</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* 1. Zoom */}
+                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                      <ZoomIn className="w-3.5 h-3.5 text-blue-500" />
+                      <span>{t.zoomLabel}</span>
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                      {currentZoomState.toFixed(2)}x
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -2420,14 +2463,27 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     step="0.05"
                     value={currentZoomState}
                     onChange={(e) => updateActiveAdjustments('zoom', parseFloat(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
                   />
+                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                    <span>0.5x</span>
+                    <span>1.0x</span>
+                    <span>3.0x</span>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.rotateLabel}</span>
-                    <span className="font-mono text-slate-400">{currentRotState}°</span>
+                {/* 2. Rotation */}
+                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                      <RotateCw className="w-3.5 h-3.5 text-blue-500" />
+                      <span>{t.rotateLabel}</span>
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                      {currentRotState}°
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -2436,14 +2492,27 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     step="1"
                     value={currentRotState}
                     onChange={(e) => updateActiveAdjustments('rot', parseInt(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
                   />
+                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                    <span>-180°</span>
+                    <span>0°</span>
+                    <span>+180°</span>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.brightnessLabel}</span>
-                    <span className="font-mono text-slate-400">{currentBrightState}%</span>
+                {/* 3. Brightness */}
+                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{t.brightnessLabel}</span>
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                      {currentBrightState}%
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -2452,14 +2521,27 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     step="1"
                     value={currentBrightState}
                     onChange={(e) => updateActiveAdjustments('bright', parseInt(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 focus:outline-none"
                   />
+                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                    <span>50%</span>
+                    <span>100%</span>
+                    <span>160%</span>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between text-xs mb-1.5 font-medium">
-                    <span className="text-slate-400">{t.contrastLabel}</span>
-                    <span className="font-mono text-slate-400">{currentContrastState}%</span>
+                {/* 4. Contrast */}
+                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
+                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                      <Contrast className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>{t.contrastLabel}</span>
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
+                      {currentContrastState}%
+                    </span>
                   </div>
                   <input
                     type="range"
@@ -2468,8 +2550,13 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     step="1"
                     value={currentContrastState}
                     onChange={(e) => updateActiveAdjustments('contrast', parseInt(e.target.value))}
-                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none"
                   />
+                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                    <span>50%</span>
+                    <span>100%</span>
+                    <span>160%</span>
+                  </div>
                 </div>
               </div>
             ) : (
