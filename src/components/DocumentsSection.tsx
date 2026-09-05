@@ -14,12 +14,12 @@ import {
   RotateCcw,
   Sun,
   Contrast,
-  ZoomIn,
   Sliders,
   Sparkles,
   Layout,
   FileDown,
-  Move
+  Move,
+  Crop
 } from 'lucide-react';
 import { 
   AppLanguage, 
@@ -68,10 +68,13 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [cropModalSide, setCropModalSide] = useState<'front' | 'back'>('front');
   const [cropBox, setCropBox] = useState({ x: 10, y: 10, w: 80, h: 50 });
+  const [modalRotation, setModalRotation] = useState<number>(0);
+  const [aspectRatioLocked, setAspectRatioLocked] = useState<boolean>(false);
   const [dragAction, setDragAction] = useState<string | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, box: { x: 0, y: 0, w: 0, h: 0 } });
 
   const displayContainerRef = useRef<HTMLDivElement>(null);
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Active side focal adjust: 'front' | 'back'
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
@@ -822,13 +825,24 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           // Run AI-inspired card boundary automatic detection and crop!
           const analysis = await detectDocumentAndCrop(dataUrl, selectedDocPreset.aspectRatio);
           
+          let boxX = 5;
+          let boxY = 5;
+          let boxW = 90;
+          let boxH = 90;
+          if (analysis.originalWidth > 0 && analysis.originalHeight > 0) {
+            boxX = Math.max(0, Math.min(95, (analysis.cropX / analysis.originalWidth) * 100));
+            boxY = Math.max(0, Math.min(95, (analysis.cropY / analysis.originalHeight) * 100));
+            boxW = Math.max(5, Math.min(100 - boxX, (analysis.cropWidth / analysis.originalWidth) * 100));
+            boxH = Math.max(5, Math.min(100 - boxY, (analysis.cropHeight / analysis.originalHeight) * 100));
+          }
+          
+          setCropBox({ x: boxX, y: boxY, w: boxW, h: boxH });
+          setModalRotation(0);
+
           if (!analysis.failed) {
-            // STEP 1-8 are logged inside detectDocumentAndCrop
-            
-            // Show the debug overlay with the red rectangle for 1500ms
             if (side === 'front') {
-              setFrontImage(analysis.debugDataUrl);
               setFrontOriginal(dataUrl);
+              setFrontImage(analysis.croppedDataUrl);
               setFrontZoom(1.0);
               setFrontPanX(0);
               setFrontPanY(0);
@@ -837,8 +851,8 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               setFrontContrast(100);
               setActiveSide('front');
             } else {
-              setBackImage(analysis.debugDataUrl);
               setBackOriginal(dataUrl);
+              setBackImage(analysis.croppedDataUrl);
               setBackZoom(1.0);
               setBackPanX(0);
               setBackPanY(0);
@@ -847,25 +861,14 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               setBackContrast(100);
               setActiveSide('back');
             }
-            
-            // Wait 1.5 seconds so user can see the red box in the interactive preview
-            await new Promise(r => setTimeout(r, 1500));
-            
-            // Apply the actual cropped image
-            if (side === 'front') {
-              setFrontImage(analysis.croppedDataUrl);
-            } else {
-              setBackImage(analysis.croppedDataUrl);
-            }
-            console.log("STEP 9: frontImage/backImage/panImage updated");
             setPreviewTab('individual');
           } else {
-            // If failed, fall back to full image as normal
+            // If detection failed or boundary unclear
             setDetectionFailed(true);
             setDetectionFailedSide(side);
             if (side === 'front') {
-              setFrontImage(dataUrl);
               setFrontOriginal(dataUrl);
+              setFrontImage(dataUrl);
               setFrontZoom(1.0);
               setFrontPanX(0);
               setFrontPanY(0);
@@ -874,8 +877,8 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               setFrontContrast(100);
               setActiveSide('front');
             } else {
-              setBackImage(dataUrl);
               setBackOriginal(dataUrl);
+              setBackImage(dataUrl);
               setBackZoom(1.0);
               setBackPanX(0);
               setBackPanY(0);
@@ -884,9 +887,13 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               setBackContrast(100);
               setActiveSide('back');
             }
-            console.log("STEP 9: frontImage/backImage/panImage updated (using fallback)");
             setPreviewTab('individual');
           }
+
+          // Immediately open the 8-directional crop modal fitted to document boundary!
+          setCropModalSide(side);
+          setCropModalOpen(true);
+
           setIsDetectingFront(false);
           setIsDetectingBack(false);
           resolveResolve();
@@ -915,6 +922,11 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             setBackContrast(100);
             setActiveSide('back');
           }
+          setCropBox({ x: 5, y: 5, w: 90, h: 90 });
+          setModalRotation(0);
+          setCropModalSide(side);
+          setCropModalOpen(true);
+
           setIsDetectingFront(false);
           setIsDetectingBack(false);
           resolveResolve();
@@ -1100,78 +1112,107 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     setDragAction(null);
   };
 
-  // Rotates high-resolution source uncropped image physically by 90 deg.
-  const rotateOriginalImage90 = () => {
+  // Re-draw crop modal canvas whenever modal is open, rotation changes, or image changes
+  useEffect(() => {
+    if (!cropModalOpen) return;
+    const canvas = cropCanvasRef.current;
     const origSrc = cropModalSide === 'front' ? frontOriginal : backOriginal;
-    if (!origSrc) return;
+    if (!canvas || !origSrc) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     const img = new Image();
-    img.src = origSrc;
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.height;
-      canvas.height = img.width;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((90 * Math.PI) / 180);
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        const rotatedData = canvas.toDataURL('image/png');
-        if (cropModalSide === 'front') {
-          setFrontOriginal(rotatedData);
-          setFrontImage(rotatedData);
-        } else {
-          setBackOriginal(rotatedData);
-          setBackImage(rotatedData);
-        }
-      }
+      const rad = (modalRotation * Math.PI) / 180;
+      const cos = Math.abs(Math.cos(rad));
+      const sin = Math.abs(Math.sin(rad));
+      const baseW = Math.round(img.naturalWidth * cos + img.naturalHeight * sin);
+      const baseH = Math.round(img.naturalWidth * sin + img.naturalHeight * cos);
+      const rotW = Math.max(10, baseW);
+      const rotH = Math.max(10, baseH);
+
+      canvas.width = rotW;
+      canvas.height = rotH;
+
+      ctx.clearRect(0, 0, rotW, rotH);
+      ctx.save();
+      ctx.translate(rotW / 2, rotH / 2);
+      ctx.rotate(rad);
+      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      ctx.restore();
     };
     img.src = origSrc;
+  }, [cropModalOpen, cropModalSide, frontOriginal, backOriginal, modalRotation]);
+
+  // Rotates modal image smoothly
+  const rotateModalBy = (deg: number) => {
+    if (deg === 0) {
+      setModalRotation(0);
+      return;
+    }
+    setModalRotation((prev) => {
+      let next = prev + deg;
+      while (next > 180) next -= 360;
+      while (next < -180) next += 360;
+      return next;
+    });
   };
 
-  // Extract crop rectangle from original high resolution source
-  const applyManualCrop = () => {
+  // Re-run document edge detection inside the crop modal
+  const reDetectInModal = async () => {
     const origSrc = cropModalSide === 'front' ? frontOriginal : backOriginal;
     if (!origSrc) return;
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const rx = cropBox.x / 100;
-      const ry = cropBox.y / 100;
-      const rw = cropBox.w / 100;
-      const rh = cropBox.h / 100;
-
-      const pxX = rx * img.naturalWidth;
-      const pxY = ry * img.naturalHeight;
-      const pxW = rw * img.naturalWidth;
-      const pxH = rh * img.naturalHeight;
-
-      canvas.width = pxW;
-      canvas.height = pxH;
-
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, pxW, pxH);
-        ctx.drawImage(img, pxX, pxY, pxW, pxH, 0, 0, pxW, pxH);
-        const croppedDUrl = canvas.toDataURL('image/png');
-        
-        if (cropModalSide === 'front') {
-          setFrontImage(croppedDUrl);
-          setFrontZoom(1.0);
-          setFrontPanX(0);
-          setFrontPanY(0);
-          setFrontRot(0);
-        } else {
-          setBackImage(croppedDUrl);
-          setBackZoom(1.0);
-          setBackPanX(0);
-          setBackPanY(0);
-          setBackRot(0);
-        }
-        setCropModalOpen(false);
+    try {
+      const analysis = await detectDocumentAndCrop(origSrc, selectedDocPreset.aspectRatio);
+      if (analysis.originalWidth > 0 && analysis.originalHeight > 0) {
+        const boxX = Math.max(0, Math.min(95, (analysis.cropX / analysis.originalWidth) * 100));
+        const boxY = Math.max(0, Math.min(95, (analysis.cropY / analysis.originalHeight) * 100));
+        const boxW = Math.max(5, Math.min(100 - boxX, (analysis.cropWidth / analysis.originalWidth) * 100));
+        const boxH = Math.max(5, Math.min(100 - boxY, (analysis.cropHeight / analysis.originalHeight) * 100));
+        setCropBox({ x: boxX, y: boxY, w: boxW, h: boxH });
       }
-    };
-    img.src = origSrc;
+    } catch (e) {
+      console.warn("Re-detection failed", e);
+    }
+  };
+
+  // Extract crop rectangle from the rotated canvas in high resolution
+  const applyManualCrop = () => {
+    const canvas = cropCanvasRef.current;
+    if (!canvas) return;
+
+    const rx = (cropBox.x / 100) * canvas.width;
+    const ry = (cropBox.y / 100) * canvas.height;
+    const rw = (cropBox.w / 100) * canvas.width;
+    const rh = (cropBox.h / 100) * canvas.height;
+
+    const outCanvas = document.createElement('canvas');
+    outCanvas.width = Math.max(1, Math.round(rw));
+    outCanvas.height = Math.max(1, Math.round(rh));
+
+    const ctx = outCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
+      ctx.drawImage(canvas, rx, ry, rw, rh, 0, 0, outCanvas.width, outCanvas.height);
+      const croppedDUrl = outCanvas.toDataURL('image/png');
+      
+      if (cropModalSide === 'front') {
+        setFrontImage(croppedDUrl);
+        setFrontZoom(1.0);
+        setFrontPanX(0);
+        setFrontPanY(0);
+        setFrontRot(0);
+      } else {
+        setBackImage(croppedDUrl);
+        setBackZoom(1.0);
+        setBackPanX(0);
+        setBackPanY(0);
+        setBackRot(0);
+      }
+      setCropModalOpen(false);
+    }
   };
 
   // Render Front Canvas
@@ -1973,7 +2014,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3 mt-4">
                     <div className="flex flex-wrap justify-center sm:justify-start gap-2 sm:gap-4 text-[10px] font-mono text-slate-550 bg-slate-500/5 px-3 py-2 rounded-xl w-full sm:w-auto">
                       <span>Target: {selectedDocPreset.widthMm}x{selectedDocPreset.heightMm}mm</span>
-                      <span>Zoom: {currentZoomState.toFixed(2)}x</span>
                       <span>Rot: {currentRotState}°</span>
                     </div>
                     <button
@@ -2408,164 +2448,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             className="hidden"
           />
 
-          {/* Panel: Image crop adjustments (Brightness/contrast, crop factors) */}
-          <div className={`p-4 sm:p-5 rounded-2xl border ${
-            theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-          } space-y-3.5`}>
-            <div className="flex items-center justify-between border-b pb-2.5">
-              <h3 className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5">
-                <Sliders className="w-4 h-4 text-blue-500" />
-                <span>Crop & Image adjustments</span>
-              </h3>
-
-              {((activeSide === 'front' && frontImage) || (activeSide === 'back' && backImage)) && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-                    {activeSide} Side
-                  </span>
-                  <button
-                    type="button"
-                    onClick={resetActiveAdjustments}
-                    title={language === 'hi' ? 'रीसेट करें' : 'Reset to default'}
-                    className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
-                      theme === 'dark'
-                        ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300'
-                    }`}
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Reset</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Check if image loads */}
-            {((activeSide === 'front' && frontImage) || (activeSide === 'back' && backImage)) ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {/* 1. Zoom */}
-                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
-                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                      <ZoomIn className="w-3.5 h-3.5 text-blue-500" />
-                      <span>{t.zoomLabel}</span>
-                    </span>
-                    <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
-                      {currentZoomState.toFixed(2)}x
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="3.0"
-                    step="0.05"
-                    value={currentZoomState}
-                    onChange={(e) => updateActiveAdjustments('zoom', parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
-                  />
-                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
-                    <span>0.5x</span>
-                    <span>1.0x</span>
-                    <span>3.0x</span>
-                  </div>
-                </div>
-
-                {/* 2. Rotation */}
-                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
-                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                      <RotateCw className="w-3.5 h-3.5 text-blue-500" />
-                      <span>{t.rotateLabel}</span>
-                    </span>
-                    <span className="text-[11px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
-                      {currentRotState}°
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="-180"
-                    max="180"
-                    step="1"
-                    value={currentRotState}
-                    onChange={(e) => updateActiveAdjustments('rot', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 focus:outline-none"
-                  />
-                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
-                    <span>-180°</span>
-                    <span>0°</span>
-                    <span>+180°</span>
-                  </div>
-                </div>
-
-                {/* 3. Brightness */}
-                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
-                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                      <Sun className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{t.brightnessLabel}</span>
-                    </span>
-                    <span className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                      {currentBrightState}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="50"
-                    max="160"
-                    step="1"
-                    value={currentBrightState}
-                    onChange={(e) => updateActiveAdjustments('bright', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500 focus:outline-none"
-                  />
-                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
-                    <span>50%</span>
-                    <span>100%</span>
-                    <span>160%</span>
-                  </div>
-                </div>
-
-                {/* 4. Contrast */}
-                <div className={`p-2.5 rounded-xl border space-y-1.5 ${
-                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200/80'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                      <Contrast className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>{t.contrastLabel}</span>
-                    </span>
-                    <span className="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                      {currentContrastState}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="50"
-                    max="160"
-                    step="1"
-                    value={currentContrastState}
-                    onChange={(e) => updateActiveAdjustments('contrast', parseInt(e.target.value))}
-                    className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none"
-                  />
-                  <div className="flex justify-between text-[9px] font-mono text-slate-400">
-                    <span>50%</span>
-                    <span>100%</span>
-                    <span>160%</span>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 text-center py-4">
-                Upload image first to unlock alignment parameters.
-              </p>
-            )}
-          </div>
-
           {/* Panel: Document assembly configuration template */}
           <div className={`p-5 rounded-2xl border ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
@@ -2689,7 +2571,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       {/* Precision Crop Modal Overlay */}
       {cropModalOpen && cropImageSrc && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm select-none"
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-sm select-none overflow-y-auto"
           onMouseMove={handleBoxDragMove}
           onMouseUp={handleBoxDragEnd}
           onMouseLeave={handleBoxDragEnd}
@@ -2697,59 +2579,102 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           onTouchEnd={handleBoxDragEnd}
         >
           <div 
-            className={`w-full max-w-3xl rounded-2xl border ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-850 shadow-black' : 'bg-slate-900 border-slate-800 shadow-2xl'
-            } p-5 flex flex-col space-y-4 text-white`}
+            className={`w-full max-w-4xl rounded-2xl border ${
+              theme === 'dark' ? 'bg-slate-950 border-slate-800 shadow-black' : 'bg-slate-900 border-slate-750 shadow-2xl'
+            } p-4 sm:p-5 flex flex-col space-y-3.5 text-white my-auto`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <h3 className="text-sm font-black tracking-tight flex items-center gap-2 text-emerald-400">
-                  <Sliders className="w-4 h-4" />
-                  <span>Manual Precision Crop Station (मैनुअल क्रॉप स्टेशन) - {cropModalSide === 'front' ? 'FRONT' : 'BACK'}</span>
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <h3 className="text-sm sm:text-base font-black tracking-tight text-emerald-400">
+                    {language === 'hi' ? 'दस्तावेज़ क्रॉप एवं रोटेशन स्टेशन' : 'Document Crop & Smooth Rotate Station'}
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">
+                    {cropModalSide === 'front' ? 'Front Side' : 'Back Side'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 mt-0.5">
                   {language === 'hi' 
-                    ? 'कोनों को खींचें और दस्तावेज़ के चारों ओर फिट करें। 90° रोटेशन का भी उपयोग कर सकते हैं।' 
-                    : 'Drag corners of the green box to frame the document side. Aspect ratio is locked to the preset.'}
+                    ? '8 दिशाओं (कोने और साइड) से बॉक्स को खींचकर सही करें। नीचे दिए गए स्लाइडर से मनचाहे एंगल पर रोटेट करें।' 
+                    : 'Adjust crop boundary from all 8 directions. Use the smooth slider bar to rotate to any precise angle.'}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setCropModalOpen(false)}
-                className="p-1.5 px-3 rounded-lg text-[10px] uppercase font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-750"
+                className="p-1.5 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-700"
               >
                 ✕ Close
               </button>
             </div>
 
+            {/* Quick Action Toolbar: Auto-Detect, Fit Full, Card Ratio */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 text-xs">
+              <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{language === 'hi' ? 'त्वरित क्रॉप टूल:' : 'Quick Crop Tools:'}</span>
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={reDetectInModal}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Auto detect document boundaries"
+                >
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  <span>{language === 'hi' ? 'ऑटो डिटेक्ट (Auto Detect)' : 'Auto Detect Edges'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const canvas = cropCanvasRef.current;
+                    if (canvas) {
+                      const containerRatio = canvas.width / canvas.height;
+                      const targetRatio = selectedDocPreset.widthMm / selectedDocPreset.heightMm;
+                      let w = 85;
+                      let h = (w / targetRatio) * containerRatio;
+                      if (h > 85) {
+                        h = 85;
+                        w = (h * targetRatio) / containerRatio;
+                      }
+                      setCropBox({
+                        x: (100 - w) / 2,
+                        y: (100 - h) / 2,
+                        w,
+                        h
+                      });
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Reset to standard ID Card aspect ratio"
+                >
+                  <Crop className="w-3 h-3 text-blue-400" />
+                  <span>{language === 'hi' ? 'कार्ड अनुपात (85.6x54mm)' : 'Card Ratio Preset'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCropBox({ x: 2, y: 2, w: 96, h: 96 })}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Fit entire image"
+                >
+                  <Maximize2 className="w-3 h-3 text-slate-400" />
+                  <span>{language === 'hi' ? 'पूरा फोटो (Full Image)' : 'Full Image'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Stage Container */}
-            <div className="flex-1 flex items-center justify-center bg-slate-950 p-2 rounded-xl relative border border-slate-850 select-none overflow-hidden min-h-[300px]">
+            <div className="flex-1 flex items-center justify-center bg-slate-950 p-2 sm:p-3 rounded-xl relative border border-slate-850 select-none overflow-hidden min-h-[280px] max-h-[50vh]">
               <div 
                 ref={displayContainerRef}
-                className="relative max-w-full max-h-[50vh] flex items-center justify-center select-none"
+                className="relative max-w-full max-h-[46vh] flex items-center justify-center select-none"
               >
-                <img 
-                  src={cropImageSrc} 
-                  onLoad={(e) => {
-                    const imgEl = e.currentTarget;
-                    const containerRatio = imgEl.naturalWidth / imgEl.naturalHeight;
-                    const targetRatio = selectedDocPreset.widthMm / selectedDocPreset.heightMm;
-                    let w = 80;
-                    let h = (w / targetRatio) * containerRatio;
-                    if (h > 80) {
-                      h = 80;
-                      w = (h * targetRatio) / containerRatio;
-                    }
-                    setCropBox({
-                      x: (100 - w) / 2,
-                      y: (100 - h) / 2,
-                      w,
-                      h
-                    });
-                  }}
-                  className="max-w-full max-h-[48vh] block object-contain select-none pointer-events-none opacity-90"
+                <canvas 
+                  ref={cropCanvasRef}
+                  className="max-w-full max-h-[46vh] block object-contain select-none shadow-2xl rounded"
                 />
 
                 {/* Crop overlay box bounds */}
@@ -2761,143 +2686,221 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                       width: `${cropBox.w}%`,
                       height: `${cropBox.h}%`,
                     }}
-                    className="absolute border-2 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.3)] z-20 transition-all duration-75 select-none"
+                    className="absolute border-2 border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.4)] z-20 transition-all duration-75 select-none"
                   >
                     {/* Centered panning handle */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('move', e)}
                       onTouchStart={(e) => startBoxDragTouch('move', e)}
-                      className="absolute inset-0 cursor-move bg-emerald-500/5 select-none z-10"
-                    />
+                      className="absolute inset-0 cursor-move bg-emerald-500/10 select-none z-10 flex items-center justify-center"
+                    >
+                      <span className="text-[10px] font-mono font-bold text-emerald-300 bg-slate-950/80 px-2 py-0.5 rounded border border-emerald-500/40 pointer-events-none opacity-80 group-hover:opacity-100">
+                        ✥ {language === 'hi' ? 'खींचकर ले जाएं' : 'Drag to Move'}
+                      </span>
+                    </div>
 
-                    {/* Thin crosshair lines inside */}
-                    <div className="absolute inset-0 border border-emerald-400/20 pointer-events-none" />
+                    {/* 3x3 Rule of Thirds Grid */}
+                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 pointer-events-none">
+                      <div className="border-r border-b border-emerald-400/20" />
+                      <div className="border-r border-b border-emerald-400/20" />
+                      <div className="border-b border-emerald-400/20" />
+                      <div className="border-r border-b border-emerald-400/20" />
+                      <div className="border-r border-b border-emerald-400/20" />
+                      <div className="border-b border-emerald-400/20" />
+                      <div className="border-r border-emerald-400/20" />
+                      <div className="border-r border-emerald-400/20" />
+                      <div />
+                    </div>
 
-                    {/* Resize handles - 4 Corners + 4 Edge Centers (8 points total) */}
-                    {/* NW - Top Left */}
+                    {/* Resize handles - 4 Corners + 4 Edge Centers (8 directions) */}
+                    {/* 1. NW - Top Left */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-nw', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-nw', e)}
-                      className="absolute -top-3 -left-3 w-7 h-7 flex items-center justify-center cursor-nwse-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Top-Left"
+                      className="absolute -top-3.5 -left-3.5 w-8 h-8 flex items-center justify-center cursor-nwse-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Top-Left (उत्तर-पश्चिम)"
                     >
-                      <div className="w-3.5 h-3.5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-4 h-4 bg-emerald-400 border-2 border-white rounded-full shadow-lg group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* NE - Top Right */}
+                    {/* 2. NE - Top Right */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-ne', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-ne', e)}
-                      className="absolute -top-3 -right-3 w-7 h-7 flex items-center justify-center cursor-nesw-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Top-Right"
+                      className="absolute -top-3.5 -right-3.5 w-8 h-8 flex items-center justify-center cursor-nesw-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Top-Right (उत्तर-पूर्व)"
                     >
-                      <div className="w-3.5 h-3.5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-4 h-4 bg-emerald-400 border-2 border-white rounded-full shadow-lg group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* SE - Bottom Right */}
+                    {/* 3. SE - Bottom Right */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-se', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-se', e)}
-                      className="absolute -bottom-3 -right-3 w-7 h-7 flex items-center justify-center cursor-nwse-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Bottom-Right"
+                      className="absolute -bottom-3.5 -right-3.5 w-8 h-8 flex items-center justify-center cursor-nwse-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Bottom-Right (दक्षिण-पूर्व)"
                     >
-                      <div className="w-3.5 h-3.5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-4 h-4 bg-emerald-400 border-2 border-white rounded-full shadow-lg group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* SW - Bottom Left */}
+                    {/* 4. SW - Bottom Left */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-sw', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-sw', e)}
-                      className="absolute -bottom-3 -left-3 w-7 h-7 flex items-center justify-center cursor-nesw-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Bottom-Left"
+                      className="absolute -bottom-3.5 -left-3.5 w-8 h-8 flex items-center justify-center cursor-nesw-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Bottom-Left (दक्षिण-पश्चिम)"
                     >
-                      <div className="w-3.5 h-3.5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-4 h-4 bg-emerald-400 border-2 border-white rounded-full shadow-lg group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* N - Top / Up */}
+                    {/* 5. N - Top Side */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-n', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-n', e)}
-                      className="absolute -top-3 left-1/2 -translate-x-1/2 w-8 h-7 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Top"
+                      className="absolute -top-3 left-1/2 -translate-x-1/2 w-10 h-7 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Top (ऊपर)"
                     >
-                      <div className="w-5 h-2.5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-6 h-3 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* S - Bottom / Down */}
+                    {/* 6. S - Bottom Side */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-s', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-s', e)}
-                      className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-8 h-7 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Bottom"
+                      className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-10 h-7 flex items-center justify-center cursor-ns-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Bottom (नीचे)"
                     >
-                      <div className="w-5 h-2.5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-6 h-3 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* W - Left */}
+                    {/* 7. W - Left Side */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-w', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-w', e)}
-                      className="absolute top-1/2 -left-3 -translate-y-1/2 w-7 h-8 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Left"
+                      className="absolute top-1/2 -left-3 -translate-y-1/2 w-7 h-10 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Left (बाएं)"
                     >
-                      <div className="w-2.5 h-5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-3 h-6 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
 
-                    {/* E - Right */}
+                    {/* 8. E - Right Side */}
                     <div 
                       onMouseDown={(e) => startBoxDrag('resize-e', e)}
                       onTouchStart={(e) => startBoxDragTouch('resize-e', e)}
-                      className="absolute top-1/2 -right-3 -translate-y-1/2 w-7 h-8 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
-                      title="Resize Right"
+                      className="absolute top-1/2 -right-3 -translate-y-1/2 w-7 h-10 flex items-center justify-center cursor-ew-resize select-none pointer-events-auto z-30 group"
+                      title="Resize Right (दाएं)"
                     >
-                      <div className="w-2.5 h-5 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
+                      <div className="w-3 h-6 bg-emerald-400 border-2 border-white rounded-full shadow-md group-hover:scale-125 group-active:scale-95 transition-all" />
                     </div>
                   </div>
                 )}
 
-                {/* Outer mask overlays */}
+                {/* Outer dark mask overlays */}
                 {cropBox && (
                   <div className="absolute inset-0 pointer-events-none z-10">
-                    <div className="absolute top-0 left-0 right-0 bg-slate-950/70" style={{ height: `${cropBox.y}%` }} />
-                    <div className="absolute bottom-0 left-0 right-0 bg-slate-950/70" style={{ top: `${cropBox.y + cropBox.h}%` }} />
-                    <div className="absolute left-0 bg-slate-950/70" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, width: `${cropBox.x}%` }} />
-                    <div className="absolute right-0 bg-slate-950/70" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, left: `${cropBox.x + cropBox.w}%` }} />
+                    <div className="absolute top-0 left-0 right-0 bg-slate-950/75" style={{ height: `${cropBox.y}%` }} />
+                    <div className="absolute bottom-0 left-0 right-0 bg-slate-950/75" style={{ top: `${cropBox.y + cropBox.h}%` }} />
+                    <div className="absolute left-0 bg-slate-950/75" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, width: `${cropBox.x}%` }} />
+                    <div className="absolute right-0 bg-slate-950/75" style={{ top: `${cropBox.y}%`, height: `${cropBox.h}%`, left: `${cropBox.x + cropBox.w}%` }} />
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Under-Modal Controls bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-slate-800 pt-4">
-              <div className="flex gap-2">
-                {/* 90 Rotation button */}
-                <button
-                  type="button"
-                  onClick={rotateOriginalImage90}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-850 hover:bg-slate-800 transition-all flex items-center gap-2 cursor-pointer border border-slate-750"
-                >
-                  <RotateCw className="w-3.5 h-3.5 text-blue-400 shrink-0" />
-                  <span>{language === 'hi' ? '90° रोटेट' : 'Rotate 90°'}</span>
-                </button>
+            {/* Compact Rotation Controls */}
+            <div className="bg-slate-900/95 p-3.5 rounded-xl border border-slate-800 space-y-3">
+              {/* Smooth Rotation Slider & Fine adjustment buttons */}
+              <div className="space-y-2 bg-slate-950/60 p-3 rounded-lg border border-slate-800/60">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                    <RotateCw className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{language === 'hi' ? 'रोटेशन (Rotation / एंगल):' : 'Rotation / Straighten:'}</span>
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono font-black text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                      {modalRotation > 0 ? `+${modalRotation.toFixed(1)}` : modalRotation.toFixed(1)}°
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setModalRotation(0)}
+                      className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                      title="Straighten to 0°"
+                    >
+                      0°
+                    </button>
+                  </div>
+                </div>
+
+                <input
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="0.5"
+                  value={modalRotation}
+                  onChange={(e) => setModalRotation(parseFloat(e.target.value))}
+                  className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400 focus:outline-none"
+                />
+
+                <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => rotateModalBy(-90)}
+                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    title="-90°"
+                  >
+                    -90°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rotateModalBy(-1)}
+                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    title="-1°"
+                  >
+                    -1°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rotateModalBy(1)}
+                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    title="+1°"
+                  >
+                    +1°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rotateModalBy(90)}
+                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    title="+90°"
+                  >
+                    +90°
+                  </button>
+                </div>
               </div>
 
-              <div className="flex gap-2 justify-end">
-                <button
-                  type="button"
-                  onClick={() => setCropModalOpen(false)}
-                  className="px-4.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-750 transition-all cursor-pointer border border-slate-750"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={applyManualCrop}
-                  className="px-5 py-2.5 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-550 transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/40 text-white"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>{language === 'hi' ? 'क्रॉप सेव करें' : 'Apply Crop & Save'}</span>
-                </button>
+              {/* Action Buttons & Guidance */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+                <span className="text-[11px] text-slate-400">
+                  {language === 'hi' 
+                    ? 'दस्तावेज़ को 8 कोनों व हैंडल से सटीक घेरें, रोटेशन सेट करके लागू करें।' 
+                    : 'Frame document with 8-point handles, adjust angle, then save.'}
+                </span>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => setCropModalOpen(false)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={applyManualCrop}
+                    className="px-4 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/40"
+                  >
+                    <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
+                    <span>{language === 'hi' ? 'क्रॉप लागू करें (Apply Crop)' : 'Apply Crop & Save'}</span>
+                  </button>
+                </div>
               </div>
             </div>
 

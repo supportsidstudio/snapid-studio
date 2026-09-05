@@ -1170,7 +1170,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                     onClick={() => onChangeTab && onChangeTab('passport')}
                     className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
                   >
-                    Passport Size Photo AI Maker
+                    Passport Size Photo Maker
                   </button>
                   <p className="text-[11px] text-slate-400 mt-0.5">Crop 35x45mm, 2x2\" and 3.5x4.5cm photos. Remove backgrounds using on-device machine learning.</p>
                 </div>

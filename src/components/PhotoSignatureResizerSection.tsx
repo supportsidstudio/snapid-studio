@@ -166,6 +166,7 @@ export default function PhotoSignatureResizerSection({
         setUseTargetKB(true);
         setTargetKB(toolMode === 'signature' ? 20 : 50);
         setTargetKBError(null);
+        setIsEditorOpen(true);
       };
       img.onerror = () => {
         setErrorMessage(
@@ -215,7 +216,7 @@ export default function PhotoSignatureResizerSection({
     }
   };
 
-  // Reset entire component
+  // Reset entire component back to upload dropzone
   const handleReset = () => {
     setUploadedFile(null);
     setImageSrc(null);
@@ -237,11 +238,21 @@ export default function PhotoSignatureResizerSection({
     }
   };
 
-  // Cancel resize editor (returns to preview screen)
-  const handleCancelEditor = () => {
-    setIsEditorOpen(false);
-    setErrorMessage(null);
-    setTargetKBError(null);
+  // Reset settings back to default values for the current image
+  const handleResetSettings = () => {
+    if (originalWidth > 0 && originalHeight > 0) {
+      setWidth(originalWidth);
+      setHeight(originalHeight);
+      setNewWidth(originalWidth);
+      setNewHeight(originalHeight);
+      setPercentage(100);
+      setQuality(75);
+      const defaultFileType: OutputFileType = toolMode === 'signature' ? 'PNG' : 'JPG';
+      setFileType(defaultFileType);
+      setUseTargetKB(true);
+      setTargetKB(toolMode === 'signature' ? 20 : 50);
+      setTargetKBError(null);
+    }
   };
 
   // Tool Mode switch (Photo vs Signature)
@@ -678,191 +689,79 @@ export default function PhotoSignatureResizerSection({
       />
 
       {/* ========================================================
-          SCREEN 1: INITIAL UPLOAD OR UPLOADED PREVIEW (When Editor Closed)
+          INITIAL UPLOAD (When no image is uploaded)
          ======================================================== */}
-      {!isEditorOpen && (
-        <div className="space-y-6">
-          {!imageSrc ? (
-            /* Dropzone / Upload Box */
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className={`border-2 border-dashed rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-200 relative overflow-hidden group ${
-                isDragging
-                  ? 'border-blue-500 bg-blue-500/10 scale-[0.99]'
-                  : theme === 'dark'
-                  ? 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 hover:border-slate-700'
-                  : 'border-slate-300 bg-white hover:bg-slate-50 hover:border-blue-400 shadow-sm'
-              }`}
-            >
-              <div className="max-w-md mx-auto flex flex-col items-center">
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 duration-200 ${
-                  theme === 'dark' 
-                    ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20' 
-                    : 'bg-blue-50 text-blue-600 border border-blue-100'
-                }`}>
-                  {toolMode === 'signature' ? (
-                    <PenTool className="w-8 h-8" />
-                  ) : (
-                    <Upload className="w-8 h-8" />
-                  )}
-                </div>
-
-                <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 dark:text-white">
-                  {language === 'hi' 
-                    ? `${toolMode === 'signature' ? 'हस्ताक्षर' : 'फोटो'} अपलोड करें` 
-                    : `Upload ${toolMode === 'signature' ? 'Signature' : 'Photo or Signature'}`}
-                </h3>
-
-                <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2">
-                  {language === 'hi'
-                    ? 'यहाँ अपनी इमेज ड्रैग और ड्रॉप करें या ब्राउज़ करने के लिए क्लिक करें'
-                    : 'Drag & Drop your image here or Click to Browse'}
-                </p>
-
-                <div className="mt-5 flex items-center gap-2 text-[11px] font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-700/60">
-                  <span>Supported formats:</span>
-                  <span className="font-bold text-blue-500">JPG, JPEG, PNG, WEBP</span>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* Uploaded Image Overview Card */
-            <div className={`rounded-3xl border p-6 sm:p-8 transition-all ${
+      {!imageSrc ? (
+        /* Dropzone / Upload Box */
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-200 relative overflow-hidden group ${
+            isDragging
+              ? 'border-blue-500 bg-blue-500/10 scale-[0.99]'
+              : theme === 'dark'
+              ? 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 hover:border-slate-700'
+              : 'border-slate-300 bg-white hover:bg-slate-50 hover:border-blue-400 shadow-sm'
+          }`}
+        >
+          <div className="max-w-md mx-auto flex flex-col items-center">
+            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 duration-200 ${
               theme === 'dark' 
-                ? 'bg-slate-900/60 border-slate-800 shadow-xl' 
-                : 'bg-white border-slate-200 shadow-sm'
+                ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20' 
+                : 'bg-blue-50 text-blue-600 border border-blue-100'
             }`}>
-              <div className="flex flex-col lg:flex-row items-center gap-8">
-                {/* Image Preview Box */}
-                <div className="w-full lg:w-72 shrink-0 flex flex-col items-center">
-                  <div className={`w-full aspect-[4/3] max-h-64 rounded-2xl border overflow-hidden relative flex items-center justify-center p-3 ${
-                    theme === 'dark' 
-                      ? 'bg-slate-950 border-slate-800' 
-                      : 'bg-slate-100/70 border-slate-200'
-                  }`}>
-                    {/* Checkerboard background for transparent signature visualization */}
-                    <div 
-                      className="absolute inset-0 opacity-15"
-                      style={{
-                        backgroundImage: `radial-gradient(#888 1px, transparent 1px)`,
-                        backgroundSize: '12px 12px'
-                      }}
-                    />
-                    <img
-                      src={imageSrc}
-                      alt="Uploaded preview"
-                      className="max-h-full max-w-full object-contain rounded-lg shadow-sm relative z-10"
-                    />
-                  </div>
-                </div>
-
-                {/* Metadata & Details */}
-                <div className="flex-1 w-full space-y-5">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase font-bold text-blue-500 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20">
-                      Uploaded File
-                    </span>
-                    <h3 className="text-xl font-bold font-display text-slate-900 dark:text-white mt-2 truncate" title={fileName}>
-                      {fileName}
-                    </h3>
-                  </div>
-
-                  {/* Metadata Chips Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    <div className={`p-3 rounded-xl border ${
-                      theme === 'dark' ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Dimensions</span>
-                      <span className="text-sm font-bold font-mono text-slate-900 dark:text-slate-100">
-                        {originalWidth} × {originalHeight} px
-                      </span>
-                    </div>
-
-                    <div className={`p-3 rounded-xl border ${
-                      theme === 'dark' ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">Original File Size</span>
-                      <span className="text-sm font-bold font-mono text-blue-500">
-                        {formatFileSize(originalFileSize)}
-                      </span>
-                    </div>
-
-                    <div className={`p-3 rounded-xl border ${
-                      theme === 'dark' ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'
-                    }`}>
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 block font-medium">File Format</span>
-                      <span className="text-sm font-bold font-mono text-slate-900 dark:text-slate-100">
-                        {originalFileType}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Actions Row */}
-                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEditorOpen(true);
-                        // Trigger initial resize preview
-                        setTimeout(() => performResize(), 50);
-                      }}
-                      className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
-                    >
-                      <Sliders className="w-4 h-4" />
-                      <span>{language === 'hi' ? 'इमेज रीसाइज करें (Resize Image)' : 'Resize Image'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className={`px-4 py-3 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer ${
-                        theme === 'dark' 
-                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700' 
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                      }`}
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>{language === 'hi' ? 'फोटो बदलें' : 'Change Image'}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleReset}
-                      className="px-4 py-3 rounded-xl text-xs font-semibold text-rose-500 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors cursor-pointer"
-                    >
-                      <span>{language === 'hi' ? 'हटाएं (Remove)' : 'Remove'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {toolMode === 'signature' ? (
+                <PenTool className="w-8 h-8" />
+              ) : (
+                <Upload className="w-8 h-8" />
+              )}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* ========================================================
-          SCREEN 2: DEDICATED RESIZE EDITOR / PANEL (Opens in-place)
-         ======================================================== */}
-      {isEditorOpen && imageSrc && (
+            <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 dark:text-white">
+              {language === 'hi' 
+                ? `${toolMode === 'signature' ? 'हस्ताक्षर' : 'फोटो'} अपलोड करें` 
+                : `Upload ${toolMode === 'signature' ? 'Signature' : 'Photo or Signature'}`}
+            </h3>
+
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2">
+              {language === 'hi'
+                ? 'यहाँ अपनी इमेज ड्रैग और ड्रॉप करें या ब्राउज़ करने के लिए क्लिक करें'
+                : 'Drag & Drop your image here or Click to Browse'}
+            </p>
+
+            <div className="mt-5 flex items-center gap-2 text-[11px] font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-700/60">
+              <span>Supported formats:</span>
+              <span className="font-bold text-blue-500">JPG, JPEG, PNG, WEBP</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* ========================================================
+            DEDICATED RESIZE EDITOR / PANEL (Opens immediately on upload)
+           ======================================================== */
         <div className={`rounded-3xl border p-5 sm:p-8 space-y-6 transition-all animate-fade-in ${
           theme === 'dark' 
             ? 'bg-slate-900/90 border-slate-800 shadow-2xl' 
             : 'bg-white border-slate-200 shadow-lg'
         }`}>
           {/* Top Panel Header */}
-          <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/20">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/20 shrink-0 mt-0.5 sm:mt-0">
                 <Sliders className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 dark:text-white">
-                  {language === 'hi' ? 'रीसाइज एडिटर (Resize)' : 'Resize'}
-                </h3>
-                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 dark:text-white">
+                    {language === 'hi' ? 'रीसाइज एडिटर (Resize Image)' : 'Resize Image'}
+                  </h3>
+                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 max-w-[200px] truncate" title={fileName}>
+                    {fileName}
+                  </span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   {language === 'hi'
                     ? 'पिक्सेल, प्रतिशत, क्वालिटी और लक्ष्य फाइल साइज (KB) सेट करें'
                     : 'Set dimensions, percentage, quality, and target KB'}
@@ -870,10 +769,25 @@ export default function PhotoSignatureResizerSection({
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Quick Action Toolbar */}
+            <div className="flex items-center gap-2 self-end md:self-center">
               <button
                 type="button"
-                onClick={handleReset}
+                onClick={() => fileInputRef.current?.click()}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                }`}
+                title="Change Image"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>{language === 'hi' ? 'फोटो बदलें' : 'Change Image'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetSettings}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer ${
                   theme === 'dark'
                     ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
@@ -881,15 +795,14 @@ export default function PhotoSignatureResizerSection({
                 }`}
                 title="Reset all settings to original image"
               >
-                <RefreshCw className="w-3.5 h-3.5" />
                 <span>{language === 'hi' ? 'रीसेट' : 'Reset'}</span>
               </button>
 
               <button
                 type="button"
-                onClick={handleCancelEditor}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 transition-colors cursor-pointer"
-                title="Close Editor"
+                onClick={handleReset}
+                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                title={language === 'hi' ? 'हटाएं' : 'Remove Image'}
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1357,7 +1270,7 @@ export default function PhotoSignatureResizerSection({
                 </div>
               </div>
 
-              {/* Bottom Action Buttons: Save/Download & Cancel */}
+              {/* Bottom Action Buttons: Save/Download */}
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
                 {downloadSuccess && (
                   <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-semibold flex items-center gap-2 animate-fade-in">
@@ -1368,29 +1281,15 @@ export default function PhotoSignatureResizerSection({
                   </div>
                 )}
 
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCancelEditor}
-                    className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold border transition-colors cursor-pointer text-center ${
-                      theme === 'dark'
-                        ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
-                    }`}
-                  >
-                    {language === 'hi' ? 'रद्द करें (Cancel)' : 'Cancel'}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleDownload}
-                    disabled={isProcessing || !resizedBlob}
-                    className="flex-2 py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>{language === 'hi' ? 'सेव / डाउनलोड करें (Download)' : 'Save / Download'}</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={isProcessing || !resizedBlob}
+                  className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{language === 'hi' ? 'सेव / डाउनलोड करें (Download)' : 'Save / Download'}</span>
+                </button>
               </div>
 
             </div>

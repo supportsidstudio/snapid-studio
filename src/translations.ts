@@ -23,7 +23,7 @@ export const translations = {
     // Home dashboard
     welcomeTitle: 'Premium ID Layout Studio',
     welcomeDesc: 'Create ready-to-print, precisely sized passport photos, state-standard documents, and custom resized photos in seconds.',
-    cardPassportTitle: 'Passport Size Photo AI',
+    cardPassportTitle: 'Passport Size',
     cardPassportDesc: 'Extract backgrounds using local, browser-safe AI. Crop, rotate, set background colors (white, blue, red), and generate automatic print layouts (A4, 4x6, or single).',
     cardDocsTitle: 'Standard Indian Documents',
     cardDocsDesc: 'Prep, crop, and side-by-side format Aadhaar, PAN Card, Voter ID, Driving Licence, and Jan Aadhaar for high-resolution print in PNG & PDF.',
@@ -169,7 +169,7 @@ export const translations = {
     // Home dashboard
     welcomeTitle: 'प्रीमियम आईडी लेआउट स्टूडियो',
     welcomeDesc: 'एडवांस्ड, हाई-फिडेलिटी लेआउट के साथ कुछ ही सेकंड में प्रिंट-के-लिए-तैयार सटीक आकार वाले पासपोर्ट फोटो, दस्तावेज़ और रिसाइज्ड फोटो बनाएं।',
-    cardPassportTitle: 'पासपोर्ट साइज फोटो एआई',
+    cardPassportTitle: 'पासपोर्ट साइज',
     cardPassportDesc: 'लोकल एआई की मदद से सुरक्षित तरीके से बैकग्राउंड हटाएं। क्रॉप करें, घुमाएं, बैकग्राउंड का रंग (सफेद, नीला, लाल) बदलें और ऑटोमैटिक प्रिंट लेआउट (A4, 4x6 या सिंगल) तैयार करें।',
     cardDocsTitle: 'भारतीय दस्तावेज़ कनवर्टर',
     cardDocsDesc: 'आधार कार्ड, पैन कार्ड, वोटर आईडी, ड्राइविंग लाइसेंस और जन आधार को उच्च-गुणवत्ता (300 DPI) वाले PNG और PDF प्रिंट डिजाइन में क्रॉप और असेंबल करें।',
