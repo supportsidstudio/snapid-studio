@@ -5,6 +5,8 @@ import DocumentsSection from './components/DocumentsSection';
 import PhotoSignatureResizerSection from './components/PhotoSignatureResizerSection';
 import HelpAboutLegal from './components/HelpAboutLegal';
 import ContactSection from './components/ContactSection';
+import FeedbackWidget from './components/FeedbackWidget';
+import UserFeedbackSection from './components/UserFeedbackSection';
 import { AppTab, AppTheme, AppLanguage } from './types';
 import { translations } from './translations';
 import { 
@@ -94,6 +96,8 @@ export default function App() {
         );
       case 'contact':
         return <ContactSection language={language} theme={theme} />;
+      case 'feedback':
+        return <UserFeedbackSection language={language} theme={theme} />;
       default:
         return renderHomeDashboard();
     }
@@ -338,6 +342,9 @@ export default function App() {
           </footer>
         </div>
       </main>
+
+      {/* Floating 3D Feedback System */}
+      <FeedbackWidget theme={theme} language={language} />
 
     </div>
   );

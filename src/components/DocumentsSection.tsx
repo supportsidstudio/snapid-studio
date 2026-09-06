@@ -122,35 +122,46 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       setCvState('ready');
       return;
     }
-    const existing = document.getElementById('opencv-cdn-script');
-    if (existing) {
-      const interval = setInterval(() => {
-        if ((window as any).cv && (window as any).cv.Mat) {
-          setCvState('ready');
-          clearInterval(interval);
-        }
-      }, 100);
-      return;
-    }
-    setCvState('loading');
-    const script = document.createElement('script');
-    script.id = 'opencv-cdn-script';
-    script.src = 'https://docs.opencv.org/4.5.5/opencv.js';
-    script.async = true;
-    script.onload = () => {
-      const interval = setInterval(() => {
-        if ((window as any).cv && (window as any).cv.Mat) {
-          console.log('OpenCV.js initialized successfully.');
-          setCvState('ready');
-          clearInterval(interval);
-        }
-      }, 100);
+
+    // Defer loading OpenCV asynchronously on idle/timeout so tab switching remains 100% instant and lag-free
+    let intervalId: any = null;
+    const idleTimer = setTimeout(() => {
+      if ((window as any).cv && (window as any).cv.Mat) {
+        setCvState('ready');
+        return;
+      }
+      const existing = document.getElementById('opencv-cdn-script');
+      if (existing) {
+        intervalId = setInterval(() => {
+          if ((window as any).cv && (window as any).cv.Mat) {
+            setCvState('ready');
+            if (intervalId) clearInterval(intervalId);
+          }
+        }, 500);
+        return;
+      }
+      const script = document.createElement('script');
+      script.id = 'opencv-cdn-script';
+      script.src = 'https://docs.opencv.org/4.5.5/opencv.js';
+      script.async = true;
+      script.onload = () => {
+        intervalId = setInterval(() => {
+          if ((window as any).cv && (window as any).cv.Mat) {
+            setCvState('ready');
+            if (intervalId) clearInterval(intervalId);
+          }
+        }, 500);
+      };
+      script.onerror = () => {
+        setCvState('failed');
+      };
+      document.body.appendChild(script);
+    }, 2500);
+
+    return () => {
+      clearTimeout(idleTimer);
+      if (intervalId) clearInterval(intervalId);
     };
-    script.onerror = () => {
-      console.warn('OpenCV load failed, falling back to pure-JS locator');
-      setCvState('failed');
-    };
-    document.body.appendChild(script);
   }, []);
 
   // Drag-and-drop hover state tracking
@@ -1350,6 +1361,11 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
 
   // Render Final Print Assembly Sheet on dynamic viewport canvas
   useEffect(() => {
+    // Avoid expensive 2480x3508 canvas allocation & rendering on mount when user is on individual tab with no images
+    if (previewTab !== 'assembly' && !frontImage && !backImage) {
+      return;
+    }
+
     const canvas = assemblyCanvasRef.current;
     if (!canvas) return;
 
@@ -1484,30 +1500,41 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       }
     }
 
-    // Pre-sync print buffer into DOM ahead of time for instant 1st-try Ctrl+P printing
-    try {
-      const dataUrl = canvas.toDataURL('image/png');
-      let printContainer = document.getElementById('snapid-global-print-area');
-      if (!printContainer) {
-        printContainer = document.createElement('div');
-        printContainer.id = 'snapid-global-print-area';
-        printContainer.style.display = 'none';
-        document.body.appendChild(printContainer);
+    // Pre-sync print buffer into DOM ahead of time for instant 1st-try Ctrl+P printing (only when images exist, deferred to idle)
+    if (frontImage || backImage) {
+      const syncTask = () => {
+        try {
+          if (!assemblyCanvasRef.current) return;
+          const dataUrl = assemblyCanvasRef.current.toDataURL('image/png');
+          let printContainer = document.getElementById('snapid-global-print-area');
+          if (!printContainer) {
+            printContainer = document.createElement('div');
+            printContainer.id = 'snapid-global-print-area';
+            printContainer.style.display = 'none';
+            document.body.appendChild(printContainer);
+          } else {
+            printContainer.style.display = 'none';
+          }
+          let img = printContainer.querySelector('img') as HTMLImageElement | null;
+          if (!img) {
+            img = document.createElement('img');
+            img.alt = 'Document Print Sheet';
+            printContainer.appendChild(img);
+          }
+          img.src = dataUrl;
+          if (img.decode) {
+            img.decode().catch(() => {});
+          }
+        } catch {
+          // ignore
+        }
+      };
+
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(syncTask, { timeout: 1200 });
       } else {
-        printContainer.style.display = 'none';
+        setTimeout(syncTask, 150);
       }
-      let img = printContainer.querySelector('img') as HTMLImageElement | null;
-      if (!img) {
-        img = document.createElement('img');
-        img.alt = 'Document Print Sheet';
-        printContainer.appendChild(img);
-      }
-      img.src = dataUrl;
-      if (img.decode) {
-        img.decode().catch(() => {});
-      }
-    } catch {
-      // ignore
     }
   }, [
     activeDocType,

@@ -14,7 +14,8 @@ import {
   Languages,
   Mail,
   BookOpen,
-  Map
+  Map,
+  MessageSquareHeart
 } from 'lucide-react';
 import { AppTab, AppTheme, AppLanguage } from '../types';
 import { translations } from '../translations';
@@ -51,6 +52,7 @@ export default function Sidebar({
     { id: 'legal' as AppTab, label: t.navLegal, icon: Shield },
     { id: 'contact' as AppTab, label: t.navContact, icon: Mail },
     { id: 'sitemap' as AppTab, label: (t as any).navSitemap || 'Sitemap', icon: Map },
+    { id: 'feedback' as AppTab, label: (t as any).navFeedback || 'User Feedback', icon: MessageSquareHeart },
   ];
 
   const handleMenuClick = (tabId: AppTab) => {

@@ -1032,7 +1032,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const getBackgroundColor = () => {
     switch (bgColorType) {
       case 'white': return '#ffffff';
-      case 'blue': return '#00a4e4';
+      case 'blue': return '#004494';
       case 'red': return '#d21034';
       case 'transparent': return 'transparent';
       case 'custom': return customBgColor;
@@ -2208,7 +2208,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
                   }`}
                 >
-                  <div className="w-3 h-3 rounded-full bg-[#00a4e4] border border-blue-400" />
+                  <div className="w-3 h-3 rounded-full bg-[#004494] border border-blue-600" />
                   <span>Blue</span>
                 </button>
               </div>

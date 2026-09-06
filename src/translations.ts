@@ -19,6 +19,7 @@ export const translations = {
     navContact: 'Contact Us',
     navBlog: 'Blog & Guides',
     navSitemap: 'Sitemap',
+    navFeedback: 'User Feedback',
 
     // Home dashboard
     welcomeTitle: 'Premium ID Layout Studio',
@@ -165,6 +166,7 @@ export const translations = {
     navContact: 'संपर्क करें',
     navBlog: 'ब्लॉग और गाइड',
     navSitemap: 'साइटमैप',
+    navFeedback: 'उपयोगकर्ता फीडबैक',
 
     // Home dashboard
     welcomeTitle: 'प्रीमियम आईडी लेआउट स्टूडियो',
