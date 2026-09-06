@@ -19,7 +19,11 @@ import {
   Layout,
   FileDown,
   Move,
-  Crop
+  Crop,
+  CheckCircle2,
+  Trash2,
+  FileImage,
+  ArrowUpCircle
 } from 'lucide-react';
 import { 
   AppLanguage, 
@@ -942,6 +946,24 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     });
   };
 
+  const handleRemoveImage = (side: 'front' | 'back') => {
+    if (side === 'front') {
+      setFrontImage(null);
+      setFrontOriginal(null);
+      setFrontRot(0);
+      setFrontZoom(1.0);
+      setFrontPanX(0);
+      setFrontPanY(0);
+    } else {
+      setBackImage(null);
+      setBackOriginal(null);
+      setBackRot(0);
+      setBackZoom(1.0);
+      setBackPanX(0);
+      setBackPanY(0);
+    }
+  };
+
   // Drag Panning and rotating handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     if (previewTab === 'assembly') return;
@@ -1808,13 +1830,14 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             <button
               key={doc.id}
               onClick={() => setActiveDocType(doc.id)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer max-w-full truncate ${
                 activeDocType === doc.id
                   ? 'border-blue-500 bg-blue-500/10 text-blue-500 shadow-sm'
                   : theme === 'dark' 
                     ? 'border-slate-800 hover:border-slate-750 text-slate-400 hover:text-white bg-slate-900/30'
                     : 'border-slate-200 hover:border-slate-300 text-slate-650 hover:text-slate-900 bg-slate-50'
               }`}
+              title={language === 'hi' ? doc.nameHi : doc.nameEn}
             >
               {language === 'hi' ? doc.nameHi : doc.nameEn}
             </button>
@@ -2092,13 +2115,34 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         <div className="xl:col-span-4 space-y-6">
           
           {/* Panel: Upload front / back panels */}
-          <div className={`p-5 rounded-2xl border ${
-            theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-          } space-y-4`}>
-            <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
-              <Upload className="w-4 h-4 text-blue-500" />
-              <span>Scanned Images Upload</span>
-            </h3>
+          <div className={`p-5 sm:p-6 rounded-3xl border transition-all duration-300 ${
+            theme === 'dark' 
+              ? 'bg-slate-950/90 border-slate-800 shadow-2xl shadow-blue-950/20' 
+              : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/60'
+          } space-y-5`}>
+            
+            {/* Header with Shining Badge */}
+            <div className="flex items-center justify-between border-b pb-3 border-slate-200 dark:border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base tracking-tight leading-none text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>{language === 'hi' ? 'दस्तावेज़ स्कैन अपलोड' : 'Scanned Images Upload'}</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                    {language === 'hi' 
+                      ? 'फ्रंट व बैक दोनों भाग यहाँ अपलोड करें (ऑटो-क्रॉप सक्रिय)' 
+                      : 'Upload Front & Back document scans'}
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
+                <Sparkles className="w-3 h-3 text-blue-500 animate-pulse" />
+                <span>AI Auto-Crop</span>
+              </span>
+            </div>
 
             {/* Front upload zone */}
             <div className="space-y-4">
@@ -2121,50 +2165,82 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     handleDrop('front', e.dataTransfer.files[0]);
                   }
                 }}
-                className={`transition-all duration-200 rounded-2xl ${
+                className={`transition-all duration-300 rounded-2xl ${
                   isDragOverFront
-                    ? 'ring-2 ring-blue-500 ring-offset-2 scale-[1.01]'
+                    ? 'ring-4 ring-blue-500 ring-offset-2 scale-[1.02]'
                     : ''
                 }`}
               >
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  {t.uploadFrontLabel} (Auto-Crop Active)
-                </span>
+                {/* Step Header Bar */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-600 text-white shadow-xs">
+                      Step 1
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {language === 'hi' ? 'सामने का भाग (Front Side)' : 'Front Side Image'}
+                    </span>
+                  </div>
+                  {frontImage && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Loaded ✓</span>
+                    </span>
+                  )}
+                </div>
                 
                 {isDetectingFront ? (
-                  <div className={`border-2 border-dashed rounded-xl p-6 text-center block bg-blue-500/5 ${
-                    theme === 'dark' ? 'border-blue-500/40' : 'border-blue-500/30'
-                  } animate-pulse`}>
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <span className="text-[10px] font-extrabold text-blue-500 block uppercase tracking-widest animate-pulse">
-                      AI Auto-Detecting & Cropping...
+                  <div className={`border-2 border-dashed rounded-2xl p-7 text-center block bg-blue-500/5 ${
+                    theme === 'dark' ? 'border-blue-500/50 animate-pulse-glow-dark' : 'border-blue-500/40 animate-pulse-glow-light'
+                  }`}>
+                    <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                    <span className="text-xs font-extrabold text-blue-600 dark:text-blue-400 block uppercase tracking-wider animate-pulse">
+                      {language === 'hi' ? 'AI दस्तावेज़ पहचान व ऑटो-क्रॉपिंग चालू है...' : 'AI Auto-Detecting & Cropping...'}
+                    </span>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      {language === 'hi' ? 'कृपया कुछ सेकंड प्रतीक्षा करें' : 'Please wait a moment'}
                     </span>
                   </div>
                 ) : frontImage ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 rounded-xl border border-dashed border-slate-850 bg-slate-900/10">
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-8 rounded bg-slate-50 border border-slate-305 overflow-hidden shadow-xs">
-                          <img src={frontImage} className="w-full h-full object-cover" />
+                  /* Loaded state card */
+                  <div className={`p-3.5 rounded-2xl border transition-all ${
+                    theme === 'dark'
+                      ? 'bg-slate-900/80 border-slate-800 shadow-md shadow-black/20'
+                      : 'bg-slate-50/90 border-slate-200 shadow-md shadow-slate-200/50'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-14 h-10 rounded-lg bg-slate-900 border border-slate-700/60 overflow-hidden shadow-sm shrink-0 flex items-center justify-center relative">
+                          <img src={frontImage} className="w-full h-full object-cover" alt="Front Preview" />
+                          <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
                         </div>
-                        <div>
-                          <span className="text-xs font-semibold block leading-tight">Front Image loaded</span>
-                          <span className="text-[10px] font-medium text-emerald-500">Auto-crop applied ✓</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block truncate" title={language === 'hi' ? 'फ्रंट इमेज तैयार है' : 'Front Image Ready'}>
+                            {language === 'hi' ? 'फ्रंट इमेज तैयार है' : 'Front Image Ready'}
+                          </span>
+                          <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 truncate">
+                            <span>Auto-crop applied ✓</span>
+                          </span>
                         </div>
                       </div>
-                      <div className="flex gap-1.5 items-center">
+
+                      {/* Action buttons */}
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end sm:self-center">
                         <button
                           type="button"
                           onClick={() => {
                             setCropModalSide('front');
                             setCropModalOpen(true);
                           }}
-                          className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/15 cursor-pointer px-2 py-1 rounded transition-colors"
+                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap"
+                          title="Manual Crop"
                         >
-                          Crop (क्रॉप)
+                          <Crop className="w-3 h-3 shrink-0" />
+                          <span>{language === 'hi' ? 'क्रॉप' : 'Crop'}</span>
                         </button>
-                        <label className="text-[10px] uppercase font-bold text-blue-500 bg-blue-500/10 hover:bg-blue-500/15 cursor-pointer px-2 py-1 rounded transition-colors block">
-                          {t.changeImage}
+                        <label className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-blue-500/20 flex items-center gap-1 whitespace-nowrap">
+                          <RefreshCw className="w-3 h-3 shrink-0" />
+                          <span>{language === 'hi' ? 'बदलें' : 'Change'}</span>
                           <input 
                             type="file" 
                             accept="image/*" 
@@ -2177,24 +2253,52 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                             className="hidden" 
                           />
                         </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('front')}
+                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 cursor-pointer p-1.5 rounded-lg transition-all border border-rose-500/20 shrink-0"
+                          title="Remove Front Image"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <label className={`border-2 border-dashed rounded-xl p-4 text-center block cursor-pointer transition-all ${
+                  /* Glowing Empty Upload Zone */
+                  <label className={`relative overflow-hidden group border-2 rounded-2xl p-6 sm:p-7 text-center block cursor-pointer transition-all duration-300 ${
                     isDragOverFront
-                      ? 'border-blue-500 bg-blue-500/5'
+                      ? 'border-blue-500 bg-blue-500/10 scale-[1.02]'
                       : theme === 'dark' 
-                        ? 'border-slate-800 bg-slate-900/20 hover:border-slate-750 hover:bg-slate-900/40' 
-                        : 'border-slate-200 bg-slate-50 hover:border-slate-350 hover:bg-slate-100/50'
+                        ? 'border-blue-500/70 bg-gradient-to-br from-slate-900/90 via-blue-950/25 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:shadow-[0_0_36px_rgba(59,130,246,0.5)]' 
+                        : 'border-blue-400/90 bg-gradient-to-br from-blue-50/90 via-sky-50/50 to-indigo-50/40 shadow-[0_6px_25px_rgba(37,99,235,0.18)] hover:border-blue-600 hover:shadow-[0_8px_32px_rgba(37,99,235,0.32)]'
                   }`}>
-                    <Upload className="w-4 h-4 text-blue-500 mx-auto mb-1.5 animate-bounce" />
-                    <span className="text-[11px] font-bold text-slate-300 block mb-0.5">
-                      Drop front side image here
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-medium block">
-                      or click to upload Aadhaar/PAN Front
-                    </span>
+                    <div className="relative z-10 flex flex-col items-center justify-center space-y-2.5">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/35 group-hover:scale-110 transition-transform duration-300">
+                        <Upload className="w-6 h-6 animate-bounce" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-extrabold text-slate-900 dark:text-white block group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                          {language === 'hi' 
+                            ? 'यहाँ फ्रंट इमेज ड्रॉप करें या क्लिक करें' 
+                            : 'Upload Front Side Image'}
+                        </span>
+                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium block mt-0.5">
+                          {language === 'hi'
+                            ? 'आधार / पैन कार्ड / पहचान पत्र का सामने का भाग'
+                            : 'Click or drop Aadhaar / PAN / Voter ID Front'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                          ⚡ Auto-Crop AI
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500">
+                          JPG, PNG, WEBP
+                        </span>
+                      </div>
+                    </div>
+                    
                     <input 
                       type="file" 
                       accept="image/*" 
@@ -2230,50 +2334,82 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     handleDrop('back', e.dataTransfer.files[0]);
                   }
                 }}
-                className={`transition-all duration-200 rounded-2xl ${
+                className={`transition-all duration-300 rounded-2xl ${
                   isDragOverBack
-                    ? 'ring-2 ring-blue-500 ring-offset-2 scale-[1.01]'
+                    ? 'ring-4 ring-indigo-500 ring-offset-2 scale-[1.02]'
                     : ''
                 }`}
               >
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  {t.uploadBackLabel} (Auto-Crop Active)
-                </span>
+                {/* Step Header Bar */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-600 text-white shadow-xs">
+                      Step 2
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                      {language === 'hi' ? 'पीछे का भाग (Back Side)' : 'Back Side Image'}
+                    </span>
+                  </div>
+                  {backImage && (
+                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>Loaded ✓</span>
+                    </span>
+                  )}
+                </div>
                 
                 {isDetectingBack ? (
-                  <div className={`border-2 border-dashed rounded-xl p-6 text-center block bg-blue-500/5 ${
-                    theme === 'dark' ? 'border-blue-500/40' : 'border-blue-500/30'
-                  } animate-pulse`}>
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-                    <span className="text-[10px] font-extrabold text-blue-500 block uppercase tracking-widest animate-pulse">
-                      AI Auto-Detecting & Cropping...
+                  <div className={`border-2 border-dashed rounded-2xl p-7 text-center block bg-indigo-500/5 ${
+                    theme === 'dark' ? 'border-indigo-500/50 animate-pulse-glow-dark' : 'border-indigo-500/40 animate-pulse-glow-light'
+                  }`}>
+                    <div className="w-8 h-8 border-3 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                    <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 block uppercase tracking-wider animate-pulse">
+                      {language === 'hi' ? 'AI दस्तावेज़ पहचान व ऑटो-क्रॉपिंग चालू है...' : 'AI Auto-Detecting & Cropping...'}
+                    </span>
+                    <span className="text-[11px] text-slate-500 mt-1 block">
+                      {language === 'hi' ? 'कृपया कुछ सेकंड प्रतीक्षा करें' : 'Please wait a moment'}
                     </span>
                   </div>
                 ) : backImage ? (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between p-2 rounded-xl border border-dashed border-slate-850 bg-slate-900/10">
-                      <div className="flex items-center gap-2">
-                        <div className="w-10 h-8 rounded bg-slate-50 border border-slate-305 overflow-hidden shadow-xs">
-                          <img src={backImage} className="w-full h-full object-cover" />
+                  /* Loaded state card */
+                  <div className={`p-3.5 rounded-2xl border transition-all ${
+                    theme === 'dark'
+                      ? 'bg-slate-900/80 border-slate-800 shadow-md shadow-black/20'
+                      : 'bg-slate-50/90 border-slate-200 shadow-md shadow-slate-200/50'
+                  }`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="w-14 h-10 rounded-lg bg-slate-900 border border-slate-700/60 overflow-hidden shadow-sm shrink-0 flex items-center justify-center relative">
+                          <img src={backImage} className="w-full h-full object-cover" alt="Back Preview" />
+                          <div className="absolute inset-0 bg-indigo-500/10 pointer-events-none" />
                         </div>
-                        <div>
-                          <span className="text-xs font-semibold block leading-tight">Back Image loaded</span>
-                          <span className="text-[10px] font-medium text-emerald-500">Auto-crop applied ✓</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 block truncate" title={language === 'hi' ? 'बैक इमेज तैयार है' : 'Back Image Ready'}>
+                            {language === 'hi' ? 'बैक इमेज तैयार है' : 'Back Image Ready'}
+                          </span>
+                          <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1 truncate">
+                            <span>Auto-crop applied ✓</span>
+                          </span>
                         </div>
                       </div>
-                      <div className="flex gap-1.5 items-center">
+
+                      {/* Action buttons */}
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0 self-end sm:self-center">
                         <button
                           type="button"
                           onClick={() => {
                             setCropModalSide('back');
                             setCropModalOpen(true);
                           }}
-                          className="text-[10px] uppercase font-bold text-emerald-500 bg-emerald-500/10 hover:bg-emerald-500/15 cursor-pointer px-2 py-1 rounded transition-colors"
+                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap"
+                          title="Manual Crop"
                         >
-                          Crop (क्रॉप)
+                          <Crop className="w-3 h-3 shrink-0" />
+                          <span>{language === 'hi' ? 'क्रॉप' : 'Crop'}</span>
                         </button>
-                        <label className="text-[10px] uppercase font-bold text-blue-500 bg-blue-500/10 hover:bg-blue-500/15 cursor-pointer px-2 py-1 rounded transition-colors block">
-                          {t.changeImage}
+                        <label className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-indigo-500/20 flex items-center gap-1 whitespace-nowrap">
+                          <RefreshCw className="w-3 h-3 shrink-0" />
+                          <span>{language === 'hi' ? 'बदलें' : 'Change'}</span>
                           <input 
                             type="file" 
                             accept="image/*" 
@@ -2286,24 +2422,52 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                             className="hidden" 
                           />
                         </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage('back')}
+                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 cursor-pointer p-1.5 rounded-lg transition-all border border-rose-500/20 shrink-0"
+                          title="Remove Back Image"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  <label className={`border-2 border-dashed rounded-xl p-4 text-center block cursor-pointer transition-all ${
+                  /* Glowing Empty Upload Zone */
+                  <label className={`relative overflow-hidden group border-2 rounded-2xl p-6 sm:p-7 text-center block cursor-pointer transition-all duration-300 ${
                     isDragOverBack
-                      ? 'border-blue-500 bg-blue-500/5'
+                      ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
                       : theme === 'dark' 
-                        ? 'border-slate-800 bg-slate-900/20 hover:border-slate-750 hover:bg-slate-900/40' 
-                        : 'border-slate-200 bg-slate-50 hover:border-slate-350 hover:bg-slate-100/50'
+                        ? 'border-indigo-500/70 bg-gradient-to-br from-slate-900/90 via-indigo-950/25 to-slate-900/90 shadow-[0_0_24px_rgba(99,102,241,0.25)] hover:border-indigo-400 hover:shadow-[0_0_36px_rgba(99,102,241,0.5)]' 
+                        : 'border-indigo-400/90 bg-gradient-to-br from-indigo-50/90 via-purple-50/40 to-blue-50/40 shadow-[0_6px_25px_rgba(99,102,241,0.18)] hover:border-indigo-600 hover:shadow-[0_8px_32px_rgba(99,102,241,0.32)]'
                   }`}>
-                    <Upload className="w-4 h-4 text-blue-500 mx-auto mb-1.5 animate-bounce" />
-                    <span className="text-[11px] font-bold text-slate-300 block mb-0.5">
-                      Drop back side image here
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-medium block">
-                      or click to upload Aadhaar/PAN Back
-                    </span>
+                    <div className="relative z-10 flex flex-col items-center justify-center space-y-2.5">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/35 group-hover:scale-110 transition-transform duration-300">
+                        <Upload className="w-6 h-6 animate-bounce" />
+                      </div>
+                      <div>
+                        <span className="text-sm font-extrabold text-slate-900 dark:text-white block group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          {language === 'hi' 
+                            ? 'यहाँ बैक इमेज ड्रॉप करें या क्लिक करें' 
+                            : 'Upload Back Side Image'}
+                        </span>
+                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium block mt-0.5">
+                          {language === 'hi'
+                            ? 'आधार / पैन कार्ड / पहचान पत्र का पीछे का भाग'
+                            : 'Click or drop Aadhaar / PAN / Voter ID Back'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                          ⚡ Auto-Crop AI
+                        </span>
+                        <span className="text-[10px] font-medium text-slate-500">
+                          JPG, PNG, WEBP
+                        </span>
+                      </div>
+                    </div>
+                    
                     <input 
                       type="file" 
                       accept="image/*" 

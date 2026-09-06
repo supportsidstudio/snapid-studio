@@ -1537,79 +1537,90 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       </div>
 
       {!originalImage ? (
-        /* Empty upload area with full responsive style */
+        /* Empty upload area with subtle premium glowing style */
         <div 
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          className={`border-2 border-dashed rounded-2xl p-6 sm:p-12 text-center transition-all ${
+          className={`relative overflow-hidden group border-2 rounded-3xl p-8 sm:p-14 text-center transition-all duration-300 ${
             isDragOver 
-              ? 'border-blue-500 bg-blue-500/5 glow-blue-500/10' 
+              ? 'border-blue-500 bg-blue-500/10 scale-[1.01] shadow-[0_0_30px_rgba(59,130,246,0.3)]' 
               : theme === 'dark'
-                ? 'border-slate-800 bg-slate-900/10 hover:border-slate-750 hover:bg-slate-900/20'
-                : 'border-slate-200 bg-slate-50/50 hover:border-slate-350 hover:bg-slate-50'
+                ? 'border-blue-500/50 bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.18)] hover:border-blue-400 hover:shadow-[0_0_32px_rgba(59,130,246,0.32)]'
+                : 'border-blue-300/80 bg-gradient-to-br from-blue-50/80 via-sky-50/40 to-indigo-50/30 shadow-[0_4px_22px_rgba(37,99,235,0.12)] hover:border-blue-500 hover:shadow-[0_6px_28px_rgba(37,99,235,0.22)]'
           }`}
         >
-          <div className={`mx-auto w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center mb-4 ${
-            theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-white border border-slate-200 shadow-xs'
-          }`}>
-            <Upload className="w-5.5 h-5.5 text-slate-400" />
-          </div>
-          <h3 className="font-semibold text-base sm:text-lg">{t.photoUploadLabel}</h3>
-          <p className="text-[11px] sm:text-xs text-slate-400 max-w-sm mx-auto mt-2 mb-6">
-            {t.photoUploadSubText}
-          </p>
-
-          {isMobile ? (
-            <div className="flex flex-col gap-3.5 w-full max-w-[280px] mx-auto">
-              <button
-                onClick={() => cameraInputRef.current?.click()}
-                className="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm shadow-md cursor-pointer transition-colors"
-              >
-                <Camera className="w-4 h-4 shrink-0" />
-                <span>Open Camera</span>
-              </button>
-              
-              <button
-                onClick={() => galleryInputRef.current?.click()}
-                className={`w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl font-bold text-sm border shadow-xs cursor-pointer transition-all ${
-                  theme === 'dark' 
-                    ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-200' 
-                    : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
-                <span>Choose from Gallery</span>
-              </button>
-
-              <input 
-                ref={cameraInputRef}
-                type="file" 
-                accept="image/*" 
-                capture="environment"
-                onChange={handlePhotoUpload} 
-                className="hidden" 
-              />
-              <input 
-                ref={galleryInputRef}
-                type="file" 
-                accept="image/*" 
-                onChange={handlePhotoUpload} 
-                className="hidden" 
-              />
+          <div className="relative z-10 max-w-md mx-auto flex flex-col items-center">
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4 group-hover:scale-110 transition-transform duration-300">
+              <Upload className="w-6 h-6 sm:w-7 sm:h-7 animate-bounce" />
             </div>
-          ) : (
-            <label className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-medium text-xs sm:text-sm shadow-md cursor-pointer transition-colors">
-              <Maximize2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>Select Local Photo</span>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handlePhotoUpload} 
-                className="hidden" 
-              />
-            </label>
-          )}
+            <h3 className="font-extrabold text-base sm:text-xl text-slate-900 dark:text-white tracking-tight">
+              {t.photoUploadLabel}
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-2 mb-6">
+              {t.photoUploadSubText}
+            </p>
+
+            {isMobile ? (
+              <div className="flex flex-col gap-3.5 w-full max-w-[280px] mx-auto">
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm shadow-md cursor-pointer transition-colors"
+                >
+                  <Camera className="w-4 h-4 shrink-0" />
+                  <span>Open Camera</span>
+                </button>
+                
+                <button
+                  onClick={() => galleryInputRef.current?.click()}
+                  className={`w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl font-bold text-sm border shadow-xs cursor-pointer transition-all ${
+                    theme === 'dark' 
+                      ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-200' 
+                      : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                  <span>Choose from Gallery</span>
+                </button>
+
+                <input 
+                  ref={cameraInputRef}
+                  type="file" 
+                  accept="image/*" 
+                  capture="environment"
+                  onChange={handlePhotoUpload} 
+                  className="hidden" 
+                />
+                <input 
+                  ref={galleryInputRef}
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handlePhotoUpload} 
+                  className="hidden" 
+                />
+              </div>
+            ) : (
+              <label className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 cursor-pointer transition-all hover:scale-105 active:scale-95">
+                <Maximize2 className="w-4 h-4" />
+                <span>Select Local Photo</span>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handlePhotoUpload} 
+                  className="hidden" 
+                />
+              </label>
+            )}
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-slate-400 dark:text-slate-400">
+              <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                ⚡ 300 DPI Studio Quality
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-medium">
+                AI Auto Background Removal
+              </span>
+            </div>
+          </div>
         </div>
       ) : (
         /* Portrait loaded, show modular workspace */
@@ -1619,7 +1630,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           <div className="xl:col-span-8 flex flex-col gap-4">
             
             {/* Tab header buttons */}
-            <div className={`flex p-1 sm:p-1.5 rounded-xl border shrink-0 ${
+            <div className={`flex p-1 sm:p-1.5 rounded-xl border shrink-0 subtle-element-glow ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-slate-100 border-slate-200'
             }`}>
               <button
@@ -1627,8 +1638,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'adjust'
                     ? theme === 'dark'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'bg-white text-slate-900 shadow-sm'
+                      ? 'bg-slate-900 text-white shadow-md subtle-glow-active'
+                      : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
                     : 'text-slate-400 hover:text-inherit'
                 }`}
               >
@@ -1640,21 +1651,21 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold transition-all ${
                   activeTab === 'sheet'
                     ? theme === 'dark'
-                      ? 'bg-slate-900 text-white shadow-md'
-                      : 'bg-white text-slate-900 shadow-sm'
+                      ? 'bg-slate-900 text-white shadow-md subtle-glow-active'
+                      : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
                     : 'text-slate-400 hover:text-inherit'
                 }`}
               >
                 <Layout className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>
-                  <span className="hidden sm:inline">Print Layup Grid ({selectedSheetPreset.nameEn})</span>
+                  <span className="hidden sm:inline">Print Layup Grid ({selectedSheetPreset.nameEn.split('(')[0].trim()})</span>
                   <span className="sm:hidden">Print Grid</span>
                 </span>
               </button>
             </div>
 
             {/* Render selected canvas stage */}
-            <div className={`relative border rounded-2xl overflow-hidden min-h-[300px] sm:aspect-[4/3] w-full flex items-center justify-center p-3 sm:p-6 ${
+            <div className={`relative border rounded-2xl overflow-hidden min-h-[300px] sm:aspect-[4/3] w-full flex items-center justify-center p-3 sm:p-6 subtle-glow-card ${
               theme === 'dark' 
                 ? 'bg-slate-950 border-slate-900 shadow-2xl shadow-blue-550/5' 
                 : 'bg-stone-50 border-slate-200 shadow-md'
@@ -1666,7 +1677,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               >
                 {/* Before/After Segmented Selector */}
                 {removedBgImg && (
-                  <div className={`flex p-1 rounded-xl gap-1 mb-3 shrink-0 ${
+                  <div className={`flex p-1 rounded-xl gap-1 mb-3 shrink-0 subtle-element-glow ${
                     theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-slate-150 border border-slate-200'
                   }`}>
                     <button
@@ -1674,7 +1685,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       onClick={() => setShowBeforePreview(false)}
                       className={`px-2.5 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         !showBeforePreview
-                          ? theme === 'dark' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-900 shadow-sm'
+                          ? theme === 'dark' ? 'bg-blue-600 text-white shadow-md subtle-glow-active' : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
                           : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
                       }`}
                     >
@@ -1686,7 +1697,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       onClick={() => setShowBeforePreview(true)}
                       className={`px-2.5 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         showBeforePreview
-                          ? theme === 'dark' ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-900 shadow-sm'
+                          ? theme === 'dark' ? 'bg-slate-800 text-white shadow-md subtle-glow-active' : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
                           : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
                       }`}
                     >
@@ -1709,7 +1720,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   onMouseUp={handleMouseUpOrLeave}
                   onMouseLeave={handleMouseUpOrLeave}
                   style={{ aspectRatio: selectedSizePreset.aspectRatio }}
-                  className={`relative w-auto h-full max-h-[350px] shadow-xl overflow-hidden border border-dashed cursor-move select-none rounded-[1px] ${
+                  className={`relative w-auto h-full max-h-[350px] shadow-xl overflow-hidden border border-dashed cursor-move select-none rounded-[1px] subtle-element-glow ${
                     theme === 'dark' ? 'border-slate-700 bg-slate-90/80 shadow-black' : 'border-slate-300 bg-white shadow-slate-200'
                   }`}
                 >
@@ -1747,9 +1758,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     className="w-auto h-auto max-h-[340px] max-w-full block mx-auto object-contain bg-white shrink-0"
                   />
                 </div>
-                <div className="mt-3 flex items-center gap-3.5 text-xs text-slate-400 font-medium">
-                  <span>Layout Sheet: {selectedSheetPreset.nameEn} ({photosCopiesCount} Photos Grid)</span>
-                  <span>•</span>
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3.5 text-xs text-slate-400 font-medium text-center">
+                  <span className="truncate max-w-[260px] sm:max-w-none">Layout Sheet: {selectedSheetPreset.nameEn} ({photosCopiesCount} Photos Grid)</span>
+                  <span className="hidden sm:inline">•</span>
                   <span>300 DPI high resolution printing ready</span>
                 </div>
               </div>
@@ -1763,7 +1774,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   setOriginalImage(null);
                   setRemovedBgImg(null);
                 }}
-                className={`w-full sm:w-auto px-4.5 py-2.5 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                className={`w-full sm:w-auto px-4.5 py-2.5 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer subtle-glow-button ${
                   theme === 'dark'
                     ? 'border-slate-800 hover:bg-slate-900 text-slate-300'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-650'
@@ -1779,7 +1790,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   <button
                     onClick={() => runBackgroundRemoval()}
                     disabled={isRemovingBg}
-                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
                       isRemovingBg
                         ? 'bg-blue-600/20 text-blue-400 cursor-not-allowed'
                         : theme === 'dark'
@@ -1791,7 +1802,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     <span>{isRemovingBg ? 'Extracting...' : t.bgRemovalLabel}</span>
                   </button>
                 ) : (
-                  <div className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 font-bold px-3 py-2.5 rounded-xl">
+                  <div className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 font-bold px-3 py-2.5 rounded-xl subtle-element-glow">
                     <Check className="w-3.5 h-3.5" />
                     <span>AI Background Extracted</span>
                   </div>
@@ -1807,7 +1818,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   setActiveTab('sheet');
                   // Trigger a reflow redraw on standard canvas
                 }}
-                className="w-full px-4.5 py-3.5 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 shadow-lg shadow-blue-500/10 flex items-center justify-center gap-2 cursor-pointer transition-all border border-blue-500/20"
+                className="w-full px-4.5 py-3.5 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all border border-blue-500/30 subtle-glow-button"
               >
                 <Printer className="w-4 h-4 text-white" />
                 <span>{t.generatePrintSheet}</span>
@@ -1816,7 +1827,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
             {/* Mobile / Tablet detailed loading state */}
             {isRemovingBg && (
-              <div className={`p-4 rounded-xl border text-center space-y-2 animate-pulse ${
+              <div className={`p-4 rounded-xl border text-center space-y-2 animate-pulse subtle-glow-card ${
                 theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-blue-50/50 border-blue-100'
               }`}>
                 <div className="flex items-center justify-center gap-2">
@@ -1837,7 +1848,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           <div className="xl:col-span-4 space-y-6">
             
             {/* Panel Card: Target Spec & Document Sizes */}
-            <div className={`p-5 rounded-2xl border ${
+            <div className={`p-5 rounded-2xl border subtle-glow-card ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
             } space-y-4`}>
               <div className="flex items-center justify-between border-b pb-2">
@@ -1845,8 +1856,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   <Layout className="w-3.5 h-3.5 text-blue-500" />
                   <span>Layout Specifications</span>
                 </h3>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500">
-                  {selectedSheetPreset.id === 'single' ? 'Single' : selectedSheetPreset.nameEn.split(' ')[0]}
+                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 max-w-[120px] truncate subtle-element-glow" title={selectedSheetPreset.nameEn}>
+                  {selectedSheetPreset.id === 'single' ? 'Single' : selectedSheetPreset.nameEn.split('(')[0].trim()}
                 </span>
               </div>
 
@@ -1855,22 +1866,25 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
                   {language === 'hi' ? 'फोटो आकार (Photo Size)' : 'Passport Size'}
                 </label>
-                <div className="grid grid-cols-2 gap-1">
+                <div className="grid grid-cols-2 gap-1.5">
                   {PASSPORT_PRESETS.map((preset) => (
                     <button
                       key={preset.id}
                       type="button"
                       onClick={() => setSizePreset(preset.id)}
-                      className={`px-2 py-1.5 rounded-lg text-left border transition-all cursor-pointer ${
+                      className={`px-2 py-1.5 rounded-lg text-left border transition-all cursor-pointer min-w-0 subtle-glow-button ${
                         sizePreset === preset.id
-                          ? 'border-blue-500 bg-blue-500/10 font-bold text-blue-500 ring-1 ring-blue-500'
+                          ? 'border-blue-500 bg-blue-500/10 font-bold text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
                           : theme === 'dark'
-                            ? 'border-slate-800 hover:border-slate-700 text-slate-300 bg-slate-900/40'
+                            ? 'border-slate-800 hover:border-slate-750 text-slate-300 bg-slate-900/40'
                             : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-slate-50'
                       }`}
+                      title={language === 'hi' ? preset.nameHi : preset.nameEn}
                     >
-                      <div className="font-bold truncate text-[11px] leading-tight">{preset.nameEn.split('(')[0]}</div>
-                      <div className="text-[10px] font-mono text-slate-400">
+                      <div className="font-bold truncate text-[11px] leading-tight">
+                        {language === 'hi' ? preset.nameHi.split('(')[0] : preset.nameEn.split('(')[0]}
+                      </div>
+                      <div className="text-[10px] font-mono text-slate-400 truncate">
                         {preset.widthMm} x {preset.heightMm} mm
                       </div>
                     </button>
@@ -1909,7 +1923,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         setPhotosCopiesCount(30);
                       }
                     }}
-                    className={`w-full appearance-none px-3 py-2 pr-8 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`w-full appearance-none px-3 py-2 pr-8 rounded-lg text-xs font-bold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 subtle-element-glow ${
                       theme === 'dark'
                         ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-600'
                         : 'bg-white border-slate-300 text-slate-800 hover:border-slate-400 shadow-sm'
@@ -1970,16 +1984,16 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 </div>
 
                 {/* Quick Selection Chips */}
-                <div className="grid grid-cols-4 gap-1 pt-0.5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5">
                   <button
                     type="button"
                     onClick={() => {
                       setSheetSize('size_4x6');
                       setPhotosCopiesCount(8);
                     }}
-                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate subtle-glow-button ${
                       sheetSize === 'size_4x6'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                     title="10 x 15 cm (4 x 6 in) - 8 Photos Studio Standard"
@@ -1992,9 +2006,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       setSheetSize('size_a4');
                       setPhotosCopiesCount(30);
                     }}
-                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate subtle-glow-button ${
                       sheetSize === 'size_a4'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                     title="A4 Standard Sheet"
@@ -2007,9 +2021,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       setSheetSize('size_5x7');
                       setPhotosCopiesCount(10);
                     }}
-                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate subtle-glow-button ${
                       sheetSize === 'size_5x7'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                     title="13 x 18 cm (5 x 7 in)"
@@ -2022,9 +2036,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       setSheetSize('single');
                       setPhotosCopiesCount(1);
                     }}
-                    className={`px-1.5 py-1 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate ${
+                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center transition-all cursor-pointer truncate subtle-glow-button ${
                       sheetSize === 'single'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500'
+                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
                         : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                     title="Single Photo"
@@ -2035,7 +2049,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
                 {/* User-Defined Custom Millimeter inputs */}
                 {sheetSize === 'size_user_defined' && (
-                  <div className={`p-2 rounded-lg border space-y-1.5 animate-fadeIn ${
+                  <div className={`p-2 rounded-lg border space-y-1.5 animate-fadeIn subtle-element-glow ${
                     theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className="text-[10px] font-bold text-blue-500 flex items-center justify-between">
@@ -2051,7 +2065,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                           max={600}
                           value={customPaperWidthMm}
                           onChange={(e) => setCustomPaperWidthMm(Math.max(30, Number(e.target.value) || 100))}
-                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border ${
+                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border subtle-element-glow ${
                             theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
                         />
@@ -2064,7 +2078,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                           max={900}
                           value={customPaperHeightMm}
                           onChange={(e) => setCustomPaperHeightMm(Math.max(30, Number(e.target.value) || 150))}
-                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border ${
+                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border subtle-element-glow ${
                             theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
                           }`}
                         />
@@ -2077,7 +2091,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               {/* 3. Copies Selection Panel - Compact Interactive Stepper */}
               {sheetSize !== 'single' && (
                 <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-1.5">
-                  <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border ${
+                  <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border subtle-element-glow ${
                     theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className="flex flex-col">
@@ -2096,7 +2110,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         id="passport-copies-decrease-btn"
                         disabled={photosCopiesCount <= 1}
                         onClick={() => setPhotosCopiesCount(prev => Math.max(1, prev - 1))}
-                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button ${
                           photosCopiesCount <= 1
                             ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
                             : theme === 'dark'
@@ -2119,7 +2133,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         id="passport-copies-increase-btn"
                         disabled={photosCopiesCount >= maxCopiesOnPaper}
                         onClick={() => setPhotosCopiesCount(prev => Math.min(maxCopiesOnPaper, prev + 1))}
-                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none ${
+                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button ${
                           photosCopiesCount >= maxCopiesOnPaper
                             ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
                             : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
@@ -2139,9 +2153,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         key={count}
                         type="button"
                         onClick={() => setPhotosCopiesCount(count)}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all cursor-pointer ${
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all cursor-pointer subtle-glow-button ${
                           photosCopiesCount === count
-                            ? 'border-blue-500 bg-blue-500 text-white'
+                            ? 'border-blue-500 bg-blue-500 text-white subtle-glow-active'
                             : theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
@@ -2156,7 +2170,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             {/* Copies selection panel - custom grid options */}
 
             {/* Panel Card: Background Fill (Available only when AI extracted background) */}
-            <div className={`p-5 rounded-2xl border ${
+            <div className={`p-5 rounded-2xl border subtle-glow-card ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
             } space-y-4`}>
               <div className="flex items-center justify-between border-b pb-2">
@@ -2165,7 +2179,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   <span>{t.bgColorLabel}</span>
                 </h3>
                 {!removedBgImg && (
-                  <span className="text-[10px] font-mono text-amber-500 font-semibold uppercase leading-none bg-amber-500/10 border border-amber-500/10 px-1.5 py-0.5 rounded">
+                  <span className="text-[10px] font-mono text-amber-500 font-semibold uppercase leading-none bg-amber-500/10 border border-amber-500/10 px-1.5 py-0.5 rounded subtle-element-glow">
                     Requires AI Bg Removal
                   </span>
                 )}
@@ -2175,9 +2189,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={() => setBgColorType('white')}
-                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
                     bgColorType === 'white'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500'
+                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
                       : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
                   }`}
                 >
@@ -2188,9 +2202,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={() => setBgColorType('blue')}
-                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
                     bgColorType === 'blue'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500'
+                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
                       : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
                   }`}
                 >
@@ -2205,7 +2219,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   type="button"
                   id="passport-crop-action-btn"
                   onClick={openPhotoshopCropModal}
-                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm ${
+                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
                     theme === 'dark'
                       ? 'border-blue-500/60 bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 hover:border-blue-400 ring-1 ring-blue-500/40'
                       : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-500 shadow-xs'
@@ -2218,7 +2232,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             </div>
 
             {/* Panel Card: Crop Adjustments & Scaling */}
-            <div className={`p-4 sm:p-5 rounded-2xl border ${
+            <div className={`p-4 sm:p-5 rounded-2xl border subtle-glow-card ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
             } space-y-3.5`}>
               <div className="flex items-center justify-between border-b pb-2">
@@ -2266,7 +2280,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
                     {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
                       theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
                     }`}>
                       <input
@@ -2329,7 +2343,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
                     {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
                       theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
                     }`}>
                       <input
@@ -2392,14 +2406,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
                     {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
                       theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
                     }`}>
                       <input
                         type="number"
                         min="50"
                         max="180"
-                        step="1"
+                        step="5"
                         value={brightness}
                         onChange={(e) => {
                           const val = parseInt(e.target.value);
@@ -2455,14 +2469,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
                     />
                     {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 ${
+                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
                       theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
                     }`}>
                       <input
                         type="number"
                         min="50"
                         max="180"
-                        step="1"
+                        step="5"
                         value={contrast}
                         onChange={(e) => {
                           const val = parseInt(e.target.value);
@@ -2495,11 +2509,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     </div>
                   </div>
                 </div>
+
               </div>
             </div>
 
             {/* Panel Card: Borders and Outlines */}
-            <div className={`p-5 rounded-2xl border ${
+            <div className={`p-5 rounded-2xl border subtle-glow-card ${
               theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
             } space-y-4`}>
               <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
@@ -2513,9 +2528,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       key={val}
                       type="button"
                       onClick={() => setBorderWidth(val)}
-                      className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      className={`py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer subtle-glow-button ${
                         borderWidth === val
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-500 ring-1 ring-blue-500'
+                          ? 'border-blue-500 bg-blue-500/10 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
                           : theme === 'dark'
                             ? 'border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-750 hover:text-white'
                             : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-350 hover:text-slate-950'
@@ -2530,7 +2545,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
 
             {/* Downloads & Printing Block Drawer */}
-            <div className={`p-5 rounded-2xl border ${
+            <div className={`p-5 rounded-2xl border subtle-glow-card ${
               theme === 'dark' 
                 ? 'bg-slate-950 border-slate-900 shadow-xl' 
                 : 'bg-white border-slate-200 shadow-md'
@@ -2551,7 +2566,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={handleDirectPrint}
-                  className="w-full px-3 sm:px-4.5 py-3 rounded-xl font-extrabold text-[11px] sm:text-xs text-white bg-blue-600 hover:bg-blue-550 flex items-center justify-between group cursor-pointer transition-all border border-blue-500/10"
+                  className="w-full px-3 sm:px-4.5 py-3 rounded-xl font-extrabold text-[11px] sm:text-xs text-white bg-blue-600 hover:bg-blue-550 flex items-center justify-between group cursor-pointer transition-all border border-blue-500/20 subtle-glow-button"
                 >
                   <div className="flex items-center gap-2">
                     <Printer className="w-4 h-4 shrink-0 animate-pulse" />
@@ -2566,9 +2581,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={() => setActiveTab('sheet')}
-                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all ${
+                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all subtle-glow-button ${
                     activeTab === 'sheet'
-                      ? 'bg-blue-600/10 border-blue-500/20 text-blue-500'
+                      ? 'bg-blue-600/10 border-blue-500/20 text-blue-500 subtle-glow-active'
                       : theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
                   }`}
                 >
@@ -2583,7 +2598,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={sheetSize === 'single' ? downloadSinglePhoto : downloadSheetPng}
-                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all ${
+                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all subtle-glow-button ${
                     theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
                   }`}
                 >
@@ -2598,7 +2613,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={downloadSheetPdf}
-                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all ${
+                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all subtle-glow-button ${
                     theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-205 text-slate-800'
                   }`}
                 >

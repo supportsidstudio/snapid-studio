@@ -604,7 +604,7 @@ export default function PhotoSignatureResizerSection({
       className="space-y-6 scroll-mt-20 animate-fade-in"
     >
       {/* Section Header Card */}
-      <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden transition-all ${
+      <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden transition-all subtle-glow-card ${
         theme === 'dark'
           ? 'bg-gradient-to-r from-blue-950/25 via-slate-900/90 to-slate-950 border-slate-800/80 shadow-xl'
           : 'bg-gradient-to-r from-blue-50/70 via-white to-slate-50 border-slate-200 shadow-sm'
@@ -615,11 +615,11 @@ export default function PhotoSignatureResizerSection({
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="max-w-2xl">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 flex items-center gap-1.5">
+              <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20 flex items-center gap-1.5 subtle-element-glow">
                 <Sliders className="w-3.5 h-3.5" />
                 <span>Online Image Utility</span>
               </span>
-              <span className="text-[11px] font-semibold text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+              <span className="text-[11px] font-semibold text-emerald-500 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 subtle-element-glow">
                 100% Client-Side
               </span>
             </div>
@@ -634,15 +634,15 @@ export default function PhotoSignatureResizerSection({
           </div>
 
           {/* Mode Switcher: Photo / Signature */}
-          <div className={`p-1.5 rounded-2xl border flex items-center gap-1 shrink-0 ${
+          <div className={`p-1.5 rounded-2xl border flex items-center gap-1 shrink-0 subtle-glow-card ${
             theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'
           }`}>
             <button
               type="button"
               onClick={() => handleToolModeChange('photo')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer subtle-glow-button ${
                 toolMode === 'photo'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 subtle-glow-active'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -652,9 +652,9 @@ export default function PhotoSignatureResizerSection({
             <button
               type="button"
               onClick={() => handleToolModeChange('signature')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer subtle-glow-button ${
                 toolMode === 'signature'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 subtle-glow-active'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -692,30 +692,26 @@ export default function PhotoSignatureResizerSection({
           INITIAL UPLOAD (When no image is uploaded)
          ======================================================== */}
       {!imageSrc ? (
-        /* Dropzone / Upload Box */
+        /* Dropzone / Upload Box with Subtle Premium Glow */
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-200 relative overflow-hidden group ${
+          className={`relative overflow-hidden group border-2 rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-300 ${
             isDragging
-              ? 'border-blue-500 bg-blue-500/10 scale-[0.99]'
+              ? 'border-blue-500 bg-blue-500/10 scale-[0.99] shadow-[0_0_30px_rgba(59,130,246,0.3)]'
               : theme === 'dark'
-              ? 'border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 hover:border-slate-700'
-              : 'border-slate-300 bg-white hover:bg-slate-50 hover:border-blue-400 shadow-sm'
+              ? 'border-blue-500/50 bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.18)] hover:border-blue-400 hover:shadow-[0_0_32px_rgba(59,130,246,0.32)]'
+              : 'border-blue-300/80 bg-gradient-to-br from-blue-50/80 via-sky-50/40 to-indigo-50/30 shadow-[0_4px_22px_rgba(37,99,235,0.12)] hover:border-blue-500 hover:shadow-[0_6px_28px_rgba(37,99,235,0.22)]'
           }`}
         >
-          <div className="max-w-md mx-auto flex flex-col items-center">
-            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-transform group-hover:scale-110 duration-200 ${
-              theme === 'dark' 
-                ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20' 
-                : 'bg-blue-50 text-blue-600 border border-blue-100'
-            }`}>
+          <div className="relative z-10 max-w-md mx-auto flex flex-col items-center">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4 group-hover:scale-110 transition-transform duration-300">
               {toolMode === 'signature' ? (
                 <PenTool className="w-8 h-8" />
               ) : (
-                <Upload className="w-8 h-8" />
+                <Upload className="w-8 h-8 animate-bounce" />
               )}
             </div>
 
@@ -731,9 +727,13 @@ export default function PhotoSignatureResizerSection({
                 : 'Drag & Drop your image here or Click to Browse'}
             </p>
 
-            <div className="mt-5 flex items-center gap-2 text-[11px] font-mono text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/60 px-3.5 py-1.5 rounded-full border border-slate-200 dark:border-slate-700/60">
-              <span>Supported formats:</span>
-              <span className="font-bold text-blue-500">JPG, JPEG, PNG, WEBP</span>
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono">
+              <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                ⚡ 10 KB – 200 KB Ready
+              </span>
+              <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 font-medium">
+                JPG, JPEG, PNG, WEBP
+              </span>
             </div>
           </div>
         </div>
@@ -741,27 +741,32 @@ export default function PhotoSignatureResizerSection({
         /* ========================================================
             DEDICATED RESIZE EDITOR / PANEL (Opens immediately on upload)
            ======================================================== */
-        <div className={`rounded-3xl border p-5 sm:p-8 space-y-6 transition-all animate-fade-in ${
+        <div className={`rounded-3xl border p-5 sm:p-8 space-y-6 transition-all animate-fade-in subtle-glow-card ${
           theme === 'dark' 
-            ? 'bg-slate-900/90 border-slate-800 shadow-2xl' 
-            : 'bg-white border-slate-200 shadow-lg'
+            ? 'bg-slate-900/90 border-slate-800 shadow-2xl shadow-blue-950/20' 
+            : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/60'
         }`}>
           {/* Top Panel Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-            <div className="flex items-start sm:items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/20 shrink-0 mt-0.5 sm:mt-0">
+            <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-600/20 shrink-0 mt-0.5 sm:mt-0 subtle-glow-button">
                 <Sliders className="w-5 h-5" />
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 dark:text-white">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 min-w-0">
+                  <h3 className="text-lg sm:text-xl font-bold font-display text-slate-900 dark:text-white shrink-0">
                     {language === 'hi' ? 'रीसाइज एडिटर (Resize Image)' : 'Resize Image'}
                   </h3>
-                  <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 max-w-[200px] truncate" title={fileName}>
-                    {fileName}
-                  </span>
+                  {fileName && (
+                    <span 
+                      className="text-[11px] font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 max-w-[140px] sm:max-w-[220px] md:max-w-[280px] truncate block subtle-element-glow" 
+                      title={fileName}
+                    >
+                      {fileName}
+                    </span>
+                  )}
                 </div>
-                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                   {language === 'hi'
                     ? 'पिक्सेल, प्रतिशत, क्वालिटी और लक्ष्य फाइल साइज (KB) सेट करें'
                     : 'Set dimensions, percentage, quality, and target KB'}
@@ -770,11 +775,11 @@ export default function PhotoSignatureResizerSection({
             </div>
 
             {/* Quick Action Toolbar */}
-            <div className="flex items-center gap-2 self-end md:self-center">
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-center shrink-0">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer subtle-glow-button ${
                   theme === 'dark'
                     ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -788,7 +793,7 @@ export default function PhotoSignatureResizerSection({
               <button
                 type="button"
                 onClick={handleResetSettings}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer subtle-glow-button ${
                   theme === 'dark'
                     ? 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
@@ -801,7 +806,7 @@ export default function PhotoSignatureResizerSection({
               <button
                 type="button"
                 onClick={handleReset}
-                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors cursor-pointer subtle-glow-button"
                 title={language === 'hi' ? 'हटाएं' : 'Remove Image'}
               >
                 <X className="w-5 h-5" />
@@ -826,9 +831,9 @@ export default function PhotoSignatureResizerSection({
                     onClick={() => {
                       setResizeMode('pixels');
                     }}
-                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
                       resizeMode === 'pixels'
-                        ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30'
+                        ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
                         : theme === 'dark'
                         ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                         : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
@@ -847,9 +852,9 @@ export default function PhotoSignatureResizerSection({
                     onClick={() => {
                       setResizeMode('percentage');
                     }}
-                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
                       resizeMode === 'percentage'
-                        ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30'
+                        ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
                         : theme === 'dark'
                         ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                         : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
@@ -867,7 +872,7 @@ export default function PhotoSignatureResizerSection({
 
               {/* 2. Pixel Inputs OR Percentage Slider */}
               {resizeMode === 'pixels' ? (
-                <div className={`p-4 rounded-2xl border ${
+                <div className={`p-4 rounded-2xl border subtle-glow-card ${
                   theme === 'dark' ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50/80 border-slate-200'
                 }`}>
                   <div className="flex items-center gap-3">
@@ -882,7 +887,7 @@ export default function PhotoSignatureResizerSection({
                         max="10000"
                         value={width || ''}
                         onChange={(e) => handleWidthChange(e.target.value)}
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none transition-all ${
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none transition-all subtle-element-glow ${
                           theme === 'dark'
                             ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             : 'bg-white border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -895,9 +900,9 @@ export default function PhotoSignatureResizerSection({
                       <button
                         type="button"
                         onClick={() => setAspectRatioLocked(!aspectRatioLocked)}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer subtle-glow-button ${
                           aspectRatioLocked
-                            ? 'bg-blue-600/15 border-blue-500/40 text-blue-500 hover:bg-blue-600/25'
+                            ? 'bg-blue-600/15 border-blue-500/40 text-blue-500 hover:bg-blue-600/25 subtle-glow-active'
                             : theme === 'dark'
                             ? 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'
                             : 'bg-white border-slate-300 text-slate-500 hover:text-slate-700'
@@ -919,7 +924,7 @@ export default function PhotoSignatureResizerSection({
                         max="10000"
                         value={height || ''}
                         onChange={(e) => handleHeightChange(e.target.value)}
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none transition-all ${
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none transition-all subtle-element-glow ${
                           theme === 'dark'
                             ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             : 'bg-white border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -935,14 +940,14 @@ export default function PhotoSignatureResizerSection({
                 </div>
               ) : (
                 /* Percentage Mode controls */
-                <div className={`p-4 rounded-2xl border space-y-3 ${
+                <div className={`p-4 rounded-2xl border space-y-3 subtle-glow-card ${
                   theme === 'dark' ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50/80 border-slate-200'
                 }`}>
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                       Scale Percentage
                     </label>
-                    <span className="text-sm font-mono font-bold text-blue-500 bg-blue-500/10 px-2.5 py-0.5 rounded-md border border-blue-500/20">
+                    <span className="text-sm font-mono font-bold text-blue-500 bg-blue-500/10 px-2.5 py-0.5 rounded-md border border-blue-500/20 subtle-element-glow">
                       {percentage}%
                     </span>
                   </div>
@@ -954,7 +959,7 @@ export default function PhotoSignatureResizerSection({
                     step="1"
                     value={percentage}
                     onChange={(e) => handlePercentageChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600 subtle-element-glow"
                   />
 
                   <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 dark:text-slate-400">
@@ -966,7 +971,7 @@ export default function PhotoSignatureResizerSection({
               )}
 
               {/* 3. Quality Slider */}
-              <div className={`p-4 rounded-2xl border space-y-3 ${
+              <div className={`p-4 rounded-2xl border space-y-3 subtle-glow-card ${
                 theme === 'dark' ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50/80 border-slate-200'
               }`}>
                 <div className="flex items-center justify-between">
@@ -990,7 +995,7 @@ export default function PhotoSignatureResizerSection({
                     setUseTargetKB(false);
                     setQuality(parseInt(e.target.value, 10));
                   }}
-                  className={`w-full h-2 rounded-lg appearance-none cursor-pointer accent-blue-600 ${
+                  className={`w-full h-2 rounded-lg appearance-none cursor-pointer accent-blue-600 subtle-element-glow ${
                     useTargetKB ? 'opacity-40 cursor-not-allowed' : 'bg-slate-200 dark:bg-slate-800'
                   }`}
                 />
@@ -1015,9 +1020,9 @@ export default function PhotoSignatureResizerSection({
                       key={type}
                       type="button"
                       onClick={() => setFileType(type)}
-                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center gap-1 subtle-glow-button ${
                         fileType === type
-                          ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30'
+                          ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
                           : theme === 'dark'
                           ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
                           : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
@@ -1041,7 +1046,7 @@ export default function PhotoSignatureResizerSection({
               </div>
 
               {/* 5. Target File Size (KB optimization 10 - 200 KB) */}
-              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 transition-all ${
+              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 transition-all subtle-glow-card ${
                 useTargetKB
                   ? 'border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20'
                   : theme === 'dark'
@@ -1053,7 +1058,7 @@ export default function PhotoSignatureResizerSection({
                     <label className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-blue-500" />
                       <span>Target File Size</span>
-                      <span className="text-[11px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                      <span className="text-[11px] font-bold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20 subtle-element-glow">
                         10 KB – 200 KB
                       </span>
                     </label>
@@ -1075,9 +1080,9 @@ export default function PhotoSignatureResizerSection({
                         setTargetKB(50);
                       }
                     }}
-                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer subtle-glow-button ${
                       useTargetKB
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm subtle-glow-active'
                         : theme === 'dark'
                         ? 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
                         : 'bg-white text-slate-700 border-slate-300 hover:text-slate-900'
@@ -1093,7 +1098,7 @@ export default function PhotoSignatureResizerSection({
                     <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                       Slide to Adjust KB:
                     </span>
-                    <span className="text-sm font-mono font-bold text-blue-500 bg-blue-500/15 px-3 py-1 rounded-lg border border-blue-500/30 flex items-center gap-1.5 shadow-xs">
+                    <span className="text-sm font-mono font-bold text-blue-500 bg-blue-500/15 px-3 py-1 rounded-lg border border-blue-500/30 flex items-center gap-1.5 shadow-xs subtle-element-glow">
                       <span>Target:</span>
                       <span className="text-base text-blue-600 dark:text-blue-400">{typeof targetKB === 'number' ? targetKB : 50} KB</span>
                     </span>
@@ -1107,13 +1112,13 @@ export default function PhotoSignatureResizerSection({
                     step="1"
                     value={typeof targetKB === 'number' ? targetKB : 50}
                     onChange={(e) => handleTargetKBSliderChange(parseInt(e.target.value, 10))}
-                    className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none"
+                    className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-600 focus:outline-none subtle-element-glow"
                   />
 
                   <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400">
-                    <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">10 KB (Min)</span>
+                    <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 subtle-element-glow">10 KB (Min)</span>
                     <span className="text-emerald-500 font-semibold text-[10px]">Crisp Multi-Pass Smoothing</span>
-                    <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700">200 KB (Max)</span>
+                    <span className="bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 subtle-element-glow">200 KB (Max)</span>
                   </div>
                 </div>
 
@@ -1129,7 +1134,7 @@ export default function PhotoSignatureResizerSection({
                         value={targetKB}
                         onChange={(e) => handleTargetKBInput(e.target.value)}
                         placeholder="50"
-                        className={`w-full px-2.5 py-1.5 rounded-lg text-sm font-mono font-bold border outline-none ${
+                        className={`w-full px-2.5 py-1.5 rounded-lg text-sm font-mono font-bold border outline-none subtle-element-glow ${
                           targetKBError
                             ? 'border-rose-500 bg-rose-500/10 text-rose-500'
                             : theme === 'dark'
@@ -1148,9 +1153,9 @@ export default function PhotoSignatureResizerSection({
                         key={kb}
                         type="button"
                         onClick={() => handleQuickKBClick(kb)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer subtle-glow-button ${
                           useTargetKB && targetKB === kb
-                            ? 'bg-blue-600 border-blue-500 text-white shadow-xs scale-105'
+                            ? 'bg-blue-600 border-blue-500 text-white shadow-xs scale-105 subtle-glow-active'
                             : theme === 'dark'
                             ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
                             : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
@@ -1177,34 +1182,34 @@ export default function PhotoSignatureResizerSection({
             <div className="lg:col-span-5 flex flex-col justify-between space-y-6">
               
               {/* Live Info HUD: Current vs New Comparison */}
-              <div className={`p-4 rounded-2xl border space-y-3 ${
+              <div className={`p-4 rounded-2xl border space-y-3 subtle-glow-card ${
                 theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'
               }`}>
                 {/* Current Specs */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800/80">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-slate-400" />
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800/80">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-slate-400 shrink-0" />
                     <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Current:</span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
-                    <span>{originalWidth} × {originalHeight} px</span>
-                    <span>{formatFileSize(originalFileSize)}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px]">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-mono font-bold text-slate-700 dark:text-slate-300">
+                    <span className="whitespace-nowrap">{originalWidth} × {originalHeight} px</span>
+                    <span className="whitespace-nowrap">{formatFileSize(originalFileSize)}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 text-[10px] shrink-0">
                       {originalFileType}
                     </span>
                   </div>
                 </div>
 
                 {/* New Specs */}
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
                     <span className="text-xs font-bold text-emerald-500">New:</span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs font-mono font-bold text-slate-900 dark:text-white">
-                    <span>{newWidth} × {newHeight} px</span>
-                    <span className="text-blue-500">{formatFileSize(newFileSize)}</span>
-                    <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px]">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-mono font-bold text-slate-900 dark:text-white">
+                    <span className="whitespace-nowrap">{newWidth} × {newHeight} px</span>
+                    <span className="text-blue-500 whitespace-nowrap">{formatFileSize(newFileSize)}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 text-[10px] shrink-0 subtle-element-glow">
                       {fileType}
                     </span>
                   </div>
@@ -1214,7 +1219,7 @@ export default function PhotoSignatureResizerSection({
               {/* Original & Resized Preview Cards (Side-by-side or stacked on mobile) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1">
                 {/* Original Preview */}
-                <div className={`p-3 rounded-2xl border flex flex-col items-center justify-between ${
+                <div className={`p-3 rounded-2xl border flex flex-col items-center justify-between subtle-glow-card ${
                   theme === 'dark' ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50/80 border-slate-200'
                 }`}>
                   <div className="w-full flex items-center justify-between mb-2">
@@ -1238,7 +1243,7 @@ export default function PhotoSignatureResizerSection({
                 </div>
 
                 {/* Resized Result Preview */}
-                <div className={`p-3 rounded-2xl border flex flex-col items-center justify-between relative overflow-hidden ${
+                <div className={`p-3 rounded-2xl border flex flex-col items-center justify-between relative overflow-hidden subtle-glow-card ${
                   theme === 'dark' ? 'bg-slate-950/60 border-slate-800 ring-1 ring-blue-500/20' : 'bg-slate-50/80 border-slate-200 ring-1 ring-blue-500/20'
                 }`}>
                   <div className="w-full flex items-center justify-between mb-2">
@@ -1273,7 +1278,7 @@ export default function PhotoSignatureResizerSection({
               {/* Bottom Action Buttons: Save/Download */}
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
                 {downloadSuccess && (
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-semibold flex items-center gap-2 animate-fade-in">
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-semibold flex items-center gap-2 animate-fade-in subtle-glow-card">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>
                       {language === 'hi' ? 'इमेज सफलतापूर्वक डाउनलोड हो गई!' : 'Image downloaded successfully!'}
@@ -1285,7 +1290,7 @@ export default function PhotoSignatureResizerSection({
                   type="button"
                   onClick={handleDownload}
                   disabled={isProcessing || !resizedBlob}
-                  className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99]"
+                  className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] subtle-glow-button"
                 >
                   <Download className="w-4 h-4" />
                   <span>{language === 'hi' ? 'सेव / डाउनलोड करें (Download)' : 'Save / Download'}</span>
