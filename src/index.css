@@ -160,3 +160,11 @@ input[type="range"]::-moz-range-thumb {
     image-rendering: crisp-edges !important;
   }
 }
+
+/* Hide fixed floating elements (like Feedback pill) when modal/crop station is active */
+body.snapid-modal-open aside[aria-label="User Feedback"] {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}

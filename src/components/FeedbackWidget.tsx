@@ -52,6 +52,21 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
   const cardRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
+  // Modal active check: completely hide widget when any full-screen modal (e.g. photo crop station) is active
+  const [isModalActive, setIsModalActive] = useState(false);
+
+  useEffect(() => {
+    const checkModal = () => {
+      setIsModalActive(document.body.classList.contains('snapid-modal-open'));
+    };
+    checkModal();
+
+    const observer = new MutationObserver(checkModal);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
+
   // Listen for global open feedback modal event
   useEffect(() => {
     const handleOpenModal = () => {
@@ -90,19 +105,19 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
   const handleSelectRating = (stars: number) => {
     setRating(stars);
     setErrorMessage(null);
-    // Auto sync category if not manually overridden
+    // Auto sync category when star is clicked
     const matchedCategory = CATEGORIES.find(c => c.defaultStar === stars);
     if (matchedCategory) {
       setCategory(matchedCategory.id);
     }
   };
 
-  // Handle category selection
+  // Handle category selection (Emoji click)
   const handleSelectCategory = (cat: FeedbackCategory) => {
     setCategory(cat);
     setErrorMessage(null);
     const matched = CATEGORIES.find(c => c.id === cat);
-    if (matched && rating === 0) {
+    if (matched) {
       setRating(matched.defaultStar);
     }
   };
@@ -178,10 +193,14 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
 
   const isHindi = language === 'hi';
 
+  if (isModalActive) {
+    return null;
+  }
+
   return (
     <aside 
       aria-label="User Feedback"
-      className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-50 flex flex-col items-end pointer-events-auto"
+      className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-40 flex flex-col items-end pointer-events-auto"
     >
       {/* ========================================================
           FEEDBACK CARD (Animated Compact Popover with Ambient Glow)
@@ -266,11 +285,21 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                 
                 {/* 1. How was your experience? (1–5 Stars) */}
                 <div className="space-y-1.5 text-center">
-                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block text-left">
-                    {isHindi ? 'आपका अनुभव कैसा रहा?' : 'How was your experience?'}
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                      {isHindi ? 'आपका अनुभव कैसा रहा?' : 'How was your experience?'}
+                    </label>
+                    {rating > 0 && (
+                      <span className="text-[11px] font-extrabold text-amber-500 dark:text-amber-400 animate-fade-in flex items-center gap-1">
+                        <span>{rating} / 5</span>
+                        <span className="text-[10px] text-slate-400 font-normal">
+                          ({category ? (isHindi ? CATEGORIES.find(c => c.id === category)?.labelHi : category) : ''})
+                        </span>
+                      </span>
+                    )}
+                  </div>
 
-                  <div className="flex items-center justify-center gap-1.5 py-0.5">
+                  <div className="flex items-center justify-center gap-2 py-1">
                     {[1, 2, 3, 4, 5].map((star) => {
                       const isHighlighted = (hoverRating || rating) >= star;
                       return (
@@ -280,13 +309,13 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                           onMouseEnter={() => setHoverRating(star)}
                           onMouseLeave={() => setHoverRating(0)}
                           onClick={() => handleSelectRating(star)}
-                          className="p-1 transition-transform hover:scale-120 active:scale-95 cursor-pointer focus:outline-none"
+                          className="p-1 transition-transform hover:scale-125 active:scale-95 cursor-pointer focus:outline-none"
                           title={`${star} Star${star > 1 ? 's' : ''}`}
                         >
                           <Star
                             className={`w-6 h-6 sm:w-7 sm:h-7 transition-all duration-150 ${
                               isHighlighted
-                                ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]'
+                                ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.65)]'
                                 : theme === 'dark'
                                 ? 'text-slate-700 fill-slate-800 hover:text-amber-400/60'
                                 : 'text-slate-300 fill-slate-100 hover:text-amber-400/60'
@@ -298,13 +327,13 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                   </div>
                 </div>
 
-                {/* 2. What did you think? (Categories) */}
-                <div className="space-y-1">
+                {/* 2. What did you think? (Categories / Emojis) */}
+                <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block">
                     {isHindi ? 'आप क्या सोचते हैं?' : 'What did you think?'}
                   </label>
 
-                  <div className="grid grid-cols-3 gap-1">
+                  <div className="grid grid-cols-5 gap-1 sm:gap-1.5">
                     {CATEGORIES.map((cat) => {
                       const isCatSelected = category === cat.id;
                       return (
@@ -312,16 +341,24 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                           key={cat.id}
                           type="button"
                           onClick={() => handleSelectCategory(cat.id)}
-                          className={`py-1.5 px-1.5 rounded-lg text-[10px] font-bold border transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                          onMouseEnter={() => setHoverRating(cat.defaultStar)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          className={`py-1.5 px-0.5 rounded-xl text-center border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
                             isCatSelected
-                              ? 'bg-blue-600 text-white border-blue-500 ring-1 ring-blue-400/40 shadow-[0_0_8px_rgba(59,130,246,0.3)]'
+                              ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-400/40 shadow-[0_0_10px_rgba(59,130,246,0.35)] scale-102'
                               : theme === 'dark'
-                              ? 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-750 hover:text-white'
-                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                              ? 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-750 hover:text-white hover:border-slate-600'
+                              : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
                           }`}
+                          title={`${cat.defaultStar} Star - ${isHindi ? cat.labelHi : cat.labelEn}`}
                         >
-                          <span className="text-xs shrink-0">{cat.emoji}</span>
-                          <span className="truncate">{isHindi ? cat.labelHi : cat.labelEn}</span>
+                          <span className="text-xl leading-none">{cat.emoji}</span>
+                          <span className="text-[9.5px] font-bold leading-tight truncate max-w-full">
+                            {isHindi ? cat.labelHi : cat.labelEn}
+                          </span>
+                          <span className={`text-[9px] font-semibold ${isCatSelected ? 'text-blue-100' : 'text-amber-500/90'}`}>
+                            {cat.defaultStar}★
+                          </span>
                         </button>
                       );
                     })}

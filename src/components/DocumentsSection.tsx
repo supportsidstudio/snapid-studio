@@ -112,6 +112,18 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
   // UI Tabs
   const [previewTab, setPreviewTab] = useState<'individual' | 'assembly'>('individual');
 
+  // Sync body class to hide overlapping fixed floating widgets (Feedback, etc.) during cropping
+  useEffect(() => {
+    if (cropModalOpen) {
+      document.body.classList.add('snapid-modal-open');
+    } else {
+      document.body.classList.remove('snapid-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('snapid-modal-open');
+    };
+  }, [cropModalOpen]);
+
   // Edge-detection & Auto-crop loading states
   const [isDetectingFront, setIsDetectingFront] = useState(false);
   const [isDetectingBack, setIsDetectingBack] = useState(false);
@@ -2762,7 +2774,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       {/* Precision Crop Modal Overlay */}
       {cropModalOpen && cropImageSrc && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-sm select-none overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-sm select-none overflow-y-auto"
           onMouseMove={handleBoxDragMove}
           onMouseUp={handleBoxDragEnd}
           onMouseLeave={handleBoxDragEnd}

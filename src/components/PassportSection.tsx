@@ -400,6 +400,18 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   });
   const cropDisplayContainerRef = useRef<HTMLDivElement>(null);
 
+  // Sync body class to hide overlapping fixed floating widgets (Feedback, etc.) during cropping
+  useEffect(() => {
+    if (cropModalOpen) {
+      document.body.classList.add('snapid-modal-open');
+    } else {
+      document.body.classList.remove('snapid-modal-open');
+    }
+    return () => {
+      document.body.classList.remove('snapid-modal-open');
+    };
+  }, [cropModalOpen]);
+
   // Serial queue for local AI background removal (prevents concurrent execution of ONNX sessions)
   const bgRemovalChainRef = useRef<Promise<any>>(Promise.resolve());
   const latestRequestedSrcRef = useRef<string | null>(null);
@@ -2701,7 +2713,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       {/* Interactive Photo Crop Station */}
       {cropModalOpen && (rawSourceImage || originalImage) && (
         <div 
-          className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex flex-col justify-between text-white p-2.5 sm:p-4 select-none animate-fadeIn"
+          className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col justify-between text-white p-2.5 sm:p-4 select-none animate-fadeIn"
           onMouseMove={handleCropContainerMouseMove}
           onTouchMove={handleCropContainerTouchMove}
           onMouseUp={handleCropContainerMouseUp}
@@ -3101,11 +3113,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               </div>
 
               {/* Action Confirm / Cancel */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
                   type="button"
                   onClick={() => setCropModalOpen(false)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
+                  className="flex-1 sm:flex-initial text-center justify-center px-3.5 py-2.5 sm:py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer"
                 >
                   {language === 'hi' ? 'रद्द करें (Esc)' : 'Cancel (Esc)'}
                 </button>
@@ -3113,10 +3125,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={applyCrop}
-                  className="px-4.5 sm:px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-550 text-white shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                  className="flex-1 sm:flex-initial text-center justify-center px-4 sm:px-5 py-2.5 sm:py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30 flex items-center gap-1.5 transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
                 >
-                  <Check className="w-4 h-4" />
-                  <span>{language === 'hi' ? 'क्रॉप लागू करें (Commit Crop)' : 'Apply Crop (Enter)'}</span>
+                  <Check className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{language === 'hi' ? 'क्रॉप लागू करें (Apply)' : 'Apply Crop (Enter)'}</span>
                 </button>
               </div>
             </div>
