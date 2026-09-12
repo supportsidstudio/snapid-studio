@@ -21,6 +21,7 @@ import {
   Crop,
   ChevronUp,
   ChevronDown,
+  ArrowLeft,
   RotateCcw,
   FlipHorizontal,
   FlipVertical,
@@ -869,7 +870,38 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             resolve(e.target?.result as string);
             return;
           }
-          ctx.drawImage(img, 0, 0, width, height);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+
+          // If downsizing by more than 2x, do step-down halving for razor-sharp clarity
+          if (originalW > width * 2 || originalH > height * 2) {
+            let stepC = document.createElement('canvas');
+            stepC.width = originalW;
+            stepC.height = originalH;
+            let stepCtx = stepC.getContext('2d')!;
+            stepCtx.drawImage(img, 0, 0, originalW, originalH);
+            let sW = originalW;
+            let sH = originalH;
+
+            while (sW > width * 2 || sH > height * 2) {
+              const nW = Math.max(width, Math.floor(sW * 0.5));
+              const nH = Math.max(height, Math.floor(sH * 0.5));
+              const nCanvas = document.createElement('canvas');
+              nCanvas.width = nW;
+              nCanvas.height = nH;
+              const nCtx = nCanvas.getContext('2d')!;
+              nCtx.imageSmoothingEnabled = true;
+              nCtx.imageSmoothingQuality = 'high';
+              nCtx.drawImage(stepC, 0, 0, nW, nH);
+              stepC = nCanvas;
+              sW = nW;
+              sH = nH;
+            }
+            ctx.drawImage(stepC, 0, 0, width, height);
+          } else {
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+
           const dataUrl = canvas.toDataURL('image/jpeg', quality);
           const elapsed = (performance.now() - startTime).toFixed(1);
           console.log(`[RESIZE CONFIRMED] Original: ${originalW}x${originalH}px -> Resized: ${width}x${height}px (Max Dimension: ${maxDim}px) in ${elapsed}ms`);
@@ -1822,20 +1854,51 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               </div>
             </div>
 
-            {/* Generate Print Layout Button (CTA to go to Print layup sheet) */}
-            {activeTab === 'adjust' && (
+            {/* Side-by-Side: Print & Print Layout / Back to Edit (Always Visible) */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 w-full">
+              {/* 1. PRINT BUTTON */}
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('sheet');
-                  // Trigger a reflow redraw on standard canvas
-                }}
-                className="w-full px-4.5 py-3.5 rounded-xl font-extrabold text-sm text-white bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-95 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all border border-blue-500/30 subtle-glow-button"
+                id="snapid-passport-print-btn"
+                onClick={handleDirectPrint}
+                className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all border border-blue-500/20 subtle-glow-button active:scale-[0.98]"
               >
-                <Printer className="w-4 h-4 text-white" />
-                <span>{t.generatePrintSheet}</span>
+                <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
+                <span>Print</span>
               </button>
-            )}
+              
+              {/* 2. PRINT LAYOUT / BACK TO EDIT BUTTON */}
+              <button
+                type="button"
+                id="snapid-passport-tab-toggle-btn"
+                onClick={() => {
+                  if (activeTab === 'sheet') {
+                    setActiveTab('adjust');
+                  } else {
+                    setActiveTab('sheet');
+                  }
+                }}
+                className={`w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base border flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all subtle-glow-button active:scale-[0.98] ${
+                  activeTab === 'sheet'
+                    ? 'bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25'
+                    : theme === 'dark' 
+                      ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' 
+                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                }`}
+              >
+                {activeTab === 'sheet' ? (
+                  <>
+                    <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-400 shrink-0" />
+                    <span>{language === 'hi' ? 'वापस जाएं (Back)' : 'Back to Edit'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Layout className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-400 shrink-0" />
+                    <span>Print Layout</span>
+                  </>
+                )}
+              </button>
+            </div>
 
             {/* Mobile / Tablet detailed loading state */}
             {isRemovingBg && (
@@ -2574,39 +2637,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
               <div className="grid grid-cols-1 gap-2 pt-1">
                 
-                {/* 1. PRINT INSTANTLY (Direct Print A4 Layout) */}
-                <button
-                  type="button"
-                  onClick={handleDirectPrint}
-                  className="w-full px-3 sm:px-4.5 py-3 rounded-xl font-extrabold text-[11px] sm:text-xs text-white bg-blue-600 hover:bg-blue-550 flex items-center justify-between group cursor-pointer transition-all border border-blue-500/20 subtle-glow-button"
-                >
-                  <div className="flex items-center gap-2">
-                    <Printer className="w-4 h-4 shrink-0 animate-pulse" />
-                    <span>PRINT INSTANTLY <span className="hidden sm:inline">(No Download)</span></span>
-                  </div>
-                  <span className="bg-blue-700 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded text-blue-100 shrink-0">
-                    Direct Print
-                  </span>
-                </button>
-                
-                {/* 2. GENERATE LAYOUT GRID BUTTON */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('sheet')}
-                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer transition-all subtle-glow-button ${
-                    activeTab === 'sheet'
-                      ? 'bg-blue-600/10 border-blue-500/20 text-blue-500 subtle-glow-active'
-                      : theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Layout className="w-4 h-4 text-blue-400 shrink-0" />
-                    <span>Generate & View <span className="hidden sm:inline">Print </span>Layout</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform shrink-0" />
-                </button>
-
-                {/* 2. DOWNLOAD PNG */}
+                {/* 1. DOWNLOAD PNG */}
                 <button
                   type="button"
                   onClick={sheetSize === 'single' ? downloadSinglePhoto : downloadSheetPng}

@@ -77,6 +77,7 @@ export default function PhotoSignatureResizerSection({
   const [newHeight, setNewHeight] = useState<number>(0);
   const [newFileSize, setNewFileSize] = useState<number>(0);
   const [downloadSuccess, setDownloadSuccess] = useState<boolean>(false);
+  const [previewModalOpen, setPreviewModalOpen] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
@@ -342,44 +343,146 @@ export default function PhotoSignatureResizerSection({
     setTargetKBError(null);
   };
 
+  // Multi-Pass Step-Down Canvas Resampler with Edge-Clarity Preservation
+  // Prevents canvas bilinear decimation aliasing & eliminates pixelation / blurriness ("photo fatna")
+  const createCrispCanvas = (
+    source: HTMLImageElement | HTMLCanvasElement,
+    targetW: number,
+    targetH: number,
+    fillWhiteBg: boolean
+  ): HTMLCanvasElement => {
+    const origW = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
+    const origH = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
+
+    const destW = Math.max(1, Math.round(targetW));
+    const destH = Math.max(1, Math.round(targetH));
+
+    // If upscale or identical, single direct pass with high smoothing
+    if (destW >= origW && destH >= origH) {
+      const directCanvas = document.createElement('canvas');
+      directCanvas.width = destW;
+      directCanvas.height = destH;
+      const ctx = directCanvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        if (fillWhiteBg) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, destW, destH);
+        } else {
+          ctx.clearRect(0, 0, destW, destH);
+        }
+        ctx.drawImage(source, 0, 0, destW, destH);
+      }
+      return directCanvas;
+    }
+
+    // Step-Down Halving Loop (Mipmapping):
+    // Drawing down in halving steps allows the browser to calculate true pixel averages
+    // rather than skipping pixel rows/columns (which causes jagged aliasing and pixelated photos)
+    let curCanvas = document.createElement('canvas');
+    curCanvas.width = origW;
+    curCanvas.height = origH;
+    let curCtx = curCanvas.getContext('2d', { willReadFrequently: true })!;
+    if (fillWhiteBg) {
+      curCtx.fillStyle = '#FFFFFF';
+      curCtx.fillRect(0, 0, origW, origH);
+    } else {
+      curCtx.clearRect(0, 0, origW, origH);
+    }
+    curCtx.drawImage(source, 0, 0, origW, origH);
+
+    let curW = origW;
+    let curH = origH;
+
+    while (curW > destW * 2 || curH > destH * 2) {
+      const nextW = Math.max(destW, Math.floor(curW * 0.5));
+      const nextH = Math.max(destH, Math.floor(curH * 0.5));
+
+      const nextCanvas = document.createElement('canvas');
+      nextCanvas.width = nextW;
+      nextCanvas.height = nextH;
+      const nextCtx = nextCanvas.getContext('2d', { willReadFrequently: true })!;
+      nextCtx.imageSmoothingEnabled = true;
+      nextCtx.imageSmoothingQuality = 'high';
+
+      if (fillWhiteBg) {
+        nextCtx.fillStyle = '#FFFFFF';
+        nextCtx.fillRect(0, 0, nextW, nextH);
+      } else {
+        nextCtx.clearRect(0, 0, nextW, nextH);
+      }
+
+      nextCtx.drawImage(curCanvas, 0, 0, nextW, nextH);
+      curCanvas = nextCanvas;
+      curW = nextW;
+      curH = nextH;
+    }
+
+    // Final pass to exact dimensions
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = destW;
+    finalCanvas.height = destH;
+    const finalCtx = finalCanvas.getContext('2d', { willReadFrequently: true })!;
+    finalCtx.imageSmoothingEnabled = true;
+    finalCtx.imageSmoothingQuality = 'high';
+
+    if (fillWhiteBg) {
+      finalCtx.fillStyle = '#FFFFFF';
+      finalCtx.fillRect(0, 0, destW, destH);
+    } else {
+      finalCtx.clearRect(0, 0, destW, destH);
+    }
+
+    finalCtx.drawImage(curCanvas, 0, 0, destW, destH);
+
+    // Subtle edge micro-contrast sharpening pass so fine facial contours, eyes, text, and signatures stay razor-sharp
+    if (destW >= 60 && destH >= 60) {
+      try {
+        const imgData = finalCtx.getImageData(0, 0, destW, destH);
+        const data = imgData.data;
+        const copy = new Uint8ClampedArray(data);
+        const strength = 0.12; // Natural, artifact-free micro-sharpness
+
+        for (let y = 1; y < destH - 1; y++) {
+          const rowOffset = y * destW;
+          for (let x = 1; x < destW - 1; x++) {
+            const idx = (rowOffset + x) * 4;
+            for (let c = 0; c < 3; c++) {
+              const center = copy[idx + c];
+              const avgNeighbors = (
+                copy[((y - 1) * destW + x) * 4 + c] +
+                copy[((y + 1) * destW + x) * 4 + c] +
+                copy[(rowOffset + (x - 1)) * 4 + c] +
+                copy[(rowOffset + (x + 1)) * 4 + c]
+              ) * 0.25;
+              data[idx + c] = center + (center - avgNeighbors) * strength;
+            }
+          }
+        }
+        finalCtx.putImageData(imgData, 0, 0);
+      } catch {
+        // Fallback gracefully if pixel read is not permitted
+      }
+    }
+
+    return finalCanvas;
+  };
+
   // Core High-Fidelity Client-Side Image Resizing & Compression Engine
   const performResize = useCallback(async () => {
     if (!sourceImageRef.current || width <= 0 || height <= 0) return;
     setIsProcessing(true);
 
     const img = sourceImageRef.current;
-    const baseW = Math.max(1, width);
-    const baseH = Math.max(1, height);
+    const baseW = Math.max(1, Math.round(width));
+    const baseH = Math.max(1, Math.round(height));
 
     // Mime Type configuration
     let mimeType = 'image/jpeg';
     if (fileType === 'PNG') mimeType = 'image/png';
     else if (fileType === 'WEBP') mimeType = 'image/webp';
 
-    const canvas = document.createElement('canvas');
-
-    // High quality canvas drawing helper
-    const drawToCanvas = (c: HTMLCanvasElement, w: number, h: number) => {
-      c.width = w;
-      c.height = h;
-      const context = c.getContext('2d');
-      if (!context) return;
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-
-      // If JPG, fill with white background (in case of transparent PNG inputs)
-      if (fileType === 'JPG') {
-        context.fillStyle = '#FFFFFF';
-        context.fillRect(0, 0, w, h);
-      } else {
-        // PNG and WEBP preserve transparency
-        context.clearRect(0, 0, w, h);
-      }
-
-      context.drawImage(img, 0, 0, w, h);
-    };
-
-    // Helper promise for canvas.toBlob
     const getBlob = (c: HTMLCanvasElement, mime: string, q: number): Promise<Blob | null> => {
       return new Promise((resolve) => {
         c.toBlob((blob) => resolve(blob), mime, q);
@@ -396,155 +499,171 @@ export default function PhotoSignatureResizerSection({
         const targetBytes = targetKB * 1024;
 
         if (fileType === 'PNG') {
-          // PNG is lossless (Signatures & Logos): Find the optimal crisp scale
-          const scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25];
-          let bestBlob: Blob | null = null;
-          let bestW = baseW;
-          let bestH = baseH;
+          // PNG (Lossless - Signatures / Documents)
+          const crispC = createCrispCanvas(img, baseW, baseH, false);
+          const directBlob = await getBlob(crispC, mimeType, 1.0);
 
-          for (const s of scales) {
-            const curW = Math.max(80, Math.round(baseW * s));
-            const curH = Math.max(40, Math.round(baseH * s));
-            drawToCanvas(canvas, curW, curH);
-            const b = await getBlob(canvas, mimeType, 1.0);
-            if (b) {
-              bestBlob = b;
-              bestW = curW;
-              bestH = curH;
-              if (b.size <= targetBytes) {
-                break; // Found the largest resolution that fits under targetBytes
-              }
-            }
-          }
+          if (directBlob && directBlob.size <= targetBytes) {
+            finalBlob = directBlob;
+            finalW = baseW;
+            finalH = baseH;
+          } else {
+            // Step down resolution smoothly while keeping maximum crispness
+            const scales = [0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30];
+            let bestBlob = directBlob;
+            let bestW = baseW;
+            let bestH = baseH;
 
-          finalBlob = bestBlob;
-          finalW = bestW;
-          finalH = bestH;
-        } else {
-          // JPG & WEBP: High-Fidelity Multi-Scale & Adaptive Quality Engine
-          // We test descending resolution scales with high visual quality (never drop JPEG quality below 0.60 to prevent block artifacts/fatna!)
-          const scales = [1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6, 0.55, 0.5, 0.45, 0.4, 0.35, 0.3];
-          
-          let selectedBlob: Blob | null = null;
-          let selectedW = baseW;
-          let selectedH = baseH;
-
-          // If user locked specific pixels in 'pixels' mode, test at baseW & baseH first
-          if (resizeMode === 'pixels' && (width !== originalWidth || height !== originalHeight)) {
-            drawToCanvas(canvas, baseW, baseH);
-            // Binary search quality in [0.55, 0.98]
-            let lowQ = 0.55;
-            let highQ = 0.98;
-            let bestBlob: Blob | null = null;
-
-            for (let iter = 0; iter < 7; iter++) {
-              const midQ = (lowQ + highQ) / 2;
-              const blob = await getBlob(canvas, mimeType, midQ);
-              if (!blob) break;
-              if (blob.size <= targetBytes) {
-                bestBlob = blob;
-                lowQ = midQ; // try to get higher quality while staying under target
-              } else {
-                highQ = midQ;
-              }
-            }
-
-            if (bestBlob && bestBlob.size <= targetBytes) {
-              selectedBlob = bestBlob;
-              selectedW = baseW;
-              selectedH = baseH;
-            }
-          }
-
-          // If not yet satisfied, evaluate scale matrix with high perceptual quality
-          if (!selectedBlob) {
             for (const s of scales) {
-              const curW = Math.max(160, Math.round(baseW * s));
-              const curH = Math.max(160, Math.round(baseH * s));
-              drawToCanvas(canvas, curW, curH);
-
-              // 1. Quick probe at high quality (0.82)
-              let blobHigh = await getBlob(canvas, mimeType, 0.82);
-              if (blobHigh && blobHigh.size <= targetBytes) {
-                // We can even optimize up towards 0.95
-                let lQ = 0.80;
-                let hQ = 0.97;
-                let bestFit = blobHigh;
-                for (let i = 0; i < 5; i++) {
-                  const mQ = (lQ + hQ) / 2;
-                  const b = await getBlob(canvas, mimeType, mQ);
-                  if (b && b.size <= targetBytes) {
-                    bestFit = b;
-                    lQ = mQ;
-                  } else {
-                    hQ = mQ;
-                  }
-                }
-                selectedBlob = bestFit;
-                selectedW = curW;
-                selectedH = curH;
-                break; // Found top resolution that stays crisp at high quality
-              }
-
-              // 2. Probe at medium-high quality (0.65 to 0.80)
-              let blobMed = await getBlob(canvas, mimeType, 0.68);
-              if (blobMed && blobMed.size <= targetBytes) {
-                let lQ = 0.65;
-                let hQ = 0.82;
-                let bestFit = blobMed;
-                for (let i = 0; i < 5; i++) {
-                  const mQ = (lQ + hQ) / 2;
-                  const b = await getBlob(canvas, mimeType, mQ);
-                  if (b && b.size <= targetBytes) {
-                    bestFit = b;
-                    lQ = mQ;
-                  } else {
-                    hQ = mQ;
-                  }
-                }
-                selectedBlob = bestFit;
-                selectedW = curW;
-                selectedH = curH;
-                break;
-              }
-            }
-          }
-
-          // Fallback if very strict target (e.g. 10 KB on large photo): Maintain minimum dimension & crisp smoothing
-          if (!selectedBlob) {
-            const minW = Math.max(200, Math.round(baseW * 0.25));
-            const minH = Math.max(200, Math.round(baseH * 0.25));
-            drawToCanvas(canvas, minW, minH);
-
-            let lQ = 0.50;
-            let hQ = 0.85;
-            let bestFit: Blob | null = null;
-            for (let i = 0; i < 6; i++) {
-              const mQ = (lQ + hQ) / 2;
-              const b = await getBlob(canvas, mimeType, mQ);
-              if (b) {
-                bestFit = b;
-                if (b.size <= targetBytes) {
-                  lQ = mQ;
-                } else {
-                  hQ = mQ;
+              const curW = Math.max(80, Math.round(baseW * s));
+              const curH = Math.max(40, Math.round(baseH * s));
+              const stepCanvas = createCrispCanvas(img, curW, curH, false);
+              const stepBlob = await getBlob(stepCanvas, mimeType, 1.0);
+              if (stepBlob) {
+                bestBlob = stepBlob;
+                bestW = curW;
+                bestH = curH;
+                if (stepBlob.size <= targetBytes) {
+                  break;
                 }
               }
             }
-            selectedBlob = bestFit;
-            selectedW = minW;
-            selectedH = minH;
+            finalBlob = bestBlob;
+            finalW = bestW;
+            finalH = bestH;
           }
+        } else {
+          // JPG & WEBP: High-Fidelity Anti-Tearing Adaptive Quality Engine
+          // RULE 1: If user chose explicit dimensions in 'pixels' mode, strictly preserve them!
+          if (resizeMode === 'pixels') {
+            const crispC = createCrispCanvas(img, baseW, baseH, fileType === 'JPG');
+            
+            // Check top quality first
+            const topBlob = await getBlob(crispC, mimeType, 0.95);
+            if (topBlob && topBlob.size <= targetBytes) {
+              finalBlob = topBlob;
+            } else {
+              // Precise binary search in [0.25, 0.95] for highest quality under targetBytes
+              let lowQ = 0.25;
+              let highQ = 0.95;
+              let bestFit: Blob | null = null;
 
-          finalBlob = selectedBlob;
-          finalW = selectedW;
-          finalH = selectedH;
+              for (let iter = 0; iter < 7; iter++) {
+                const midQ = (lowQ + highQ) / 2;
+                const testBlob = await getBlob(crispC, mimeType, midQ);
+                if (testBlob) {
+                  if (testBlob.size <= targetBytes) {
+                    bestFit = testBlob;
+                    lowQ = midQ; // Try higher quality
+                  } else {
+                    highQ = midQ;
+                  }
+                }
+              }
+
+              if (!bestFit) {
+                bestFit = await getBlob(crispC, mimeType, 0.28);
+              }
+              finalBlob = bestFit;
+            }
+            finalW = baseW;
+            finalH = baseH;
+          } else {
+            // General or Percentage Resizing:
+            // First check if baseW x baseH can fit targetBytes with quality >= 0.40
+            const crispC = createCrispCanvas(img, baseW, baseH, fileType === 'JPG');
+            const testMax = await getBlob(crispC, mimeType, 0.95);
+
+            if (testMax && testMax.size <= targetBytes) {
+              // Fits at 95% pristine quality! Full resolution kept
+              finalBlob = testMax;
+              finalW = baseW;
+              finalH = baseH;
+            } else {
+              // Test minimum acceptable quality at full resolution
+              const testMin = await getBlob(crispC, mimeType, 0.42);
+              if (testMin && testMin.size <= targetBytes) {
+                // Requested resolution is 100% PRESERVED!
+                // Binary search for highest possible quality
+                let lowQ = 0.42;
+                let highQ = 0.95;
+                let bestFit: Blob | null = testMin;
+
+                for (let i = 0; i < 7; i++) {
+                  const midQ = (lowQ + highQ) / 2;
+                  const testBlob = await getBlob(crispC, mimeType, midQ);
+                  if (testBlob) {
+                    if (testBlob.size <= targetBytes) {
+                      bestFit = testBlob;
+                      lowQ = midQ;
+                    } else {
+                      highQ = midQ;
+                    }
+                  }
+                }
+                finalBlob = bestFit;
+                finalW = baseW;
+                finalH = baseH;
+              } else {
+                // If original image is high-megapixel (e.g. 12-24 MP camera photo) and target KB is small (e.g. 20-50 KB),
+                // step down dimensions smoothly while keeping JPEG quality high (0.60 to 0.88).
+                // This ensures the photo is silky smooth and never tears or pixelates!
+                const scaleCandidates = [0.85, 0.70, 0.58, 0.48, 0.38, 0.28, 0.20];
+                let foundBlob: Blob | null = null;
+                let foundW = baseW;
+                let foundH = baseH;
+
+                for (const s of scaleCandidates) {
+                  const curW = Math.max(260, Math.round(baseW * s));
+                  const curH = Math.max(260, Math.round(baseH * s));
+                  const candCanvas = createCrispCanvas(img, curW, curH, fileType === 'JPG');
+
+                  let lowQ = 0.55;
+                  let highQ = 0.88;
+                  let candBest: Blob | null = null;
+
+                  for (let i = 0; i < 5; i++) {
+                    const midQ = (lowQ + highQ) / 2;
+                    const testB = await getBlob(candCanvas, mimeType, midQ);
+                    if (testB) {
+                      if (testB.size <= targetBytes) {
+                        candBest = testB;
+                        lowQ = midQ;
+                      } else {
+                        highQ = midQ;
+                      }
+                    }
+                  }
+
+                  if (candBest) {
+                    foundBlob = candBest;
+                    foundW = curW;
+                    foundH = curH;
+                    break;
+                  }
+                }
+
+                if (!foundBlob) {
+                  const minW = Math.max(240, Math.round(baseW * 0.20));
+                  const minH = Math.max(240, Math.round(baseH * 0.20));
+                  const fallbackCanvas = createCrispCanvas(img, minW, minH, fileType === 'JPG');
+                  foundBlob = await getBlob(fallbackCanvas, mimeType, 0.52);
+                  foundW = minW;
+                  foundH = minH;
+                }
+
+                finalBlob = foundBlob;
+                finalW = foundW;
+                finalH = foundH;
+              }
+            }
+          }
         }
       } else {
-        // MODE 2: Manual Quality Mode (Uses exact canvas width/height)
-        drawToCanvas(canvas, baseW, baseH);
-        const qNorm = Math.max(0.1, Math.min(1.0, quality / 100));
-        finalBlob = await getBlob(canvas, mimeType, qNorm);
+        // MODE 2: Manual Quality Mode (Uses exact canvas width/height with crisp smoothing)
+        const crispC = createCrispCanvas(img, baseW, baseH, fileType === 'JPG');
+        const qNorm = Math.max(0.15, Math.min(1.0, quality / 100));
+        finalBlob = await getBlob(crispC, mimeType, qNorm);
         finalW = baseW;
         finalH = baseH;
       }
@@ -1251,9 +1370,21 @@ export default function PhotoSignatureResizerSection({
                       <Sparkles className="w-3 h-3" />
                       <span>Resized Image</span>
                     </span>
-                    <span className="text-[10px] font-mono text-blue-400 font-bold">
-                      {newWidth}×{newHeight}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-blue-400 font-bold">
+                        {newWidth}×{newHeight}
+                      </span>
+                      {resizedImageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewModalOpen(true)}
+                          className="p-1 rounded text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 transition-colors cursor-pointer"
+                          title="Full Size Zoom Preview"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="w-full flex-1 min-h-[140px] max-h-48 rounded-xl overflow-hidden relative flex items-center justify-center p-2 bg-black/10 dark:bg-black/40">
                     {isProcessing ? (
@@ -1269,9 +1400,21 @@ export default function PhotoSignatureResizerSection({
                       />
                     ) : null}
                   </div>
-                  <span className="text-[10px] font-mono font-bold text-blue-500 mt-2">
-                    {formatFileSize(newFileSize)}
-                  </span>
+                  <div className="w-full flex items-center justify-between mt-2 pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
+                    <span className="text-[10px] font-mono font-bold text-blue-500">
+                      {formatFileSize(newFileSize)}
+                    </span>
+                    {resizedImageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewModalOpen(true)}
+                        className="text-[10px] text-blue-500 hover:text-blue-400 font-semibold flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3 h-3" />
+                        <span>{language === 'hi' ? 'फुल देखें' : 'Zoom'}</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1299,6 +1442,74 @@ export default function PhotoSignatureResizerSection({
 
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Full Size Preview Modal to inspect crispness / pixel clarity */}
+      {previewModalOpen && resizedImageUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className={`relative max-w-3xl w-full max-h-[90vh] rounded-2xl border flex flex-col overflow-hidden shadow-2xl ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            {/* Modal Header */}
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-blue-500" />
+                <h3 className="text-sm font-bold">
+                  {language === 'hi' ? 'रीसाइज्ड इमेज फुल-साइज प्रिव्यू' : 'Resized Image Full Quality Preview'}
+                </h3>
+                <span className="text-xs font-mono bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded-full border border-blue-500/20 font-bold">
+                  {newWidth}×{newHeight}px • {formatFileSize(newFileSize)}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-auto p-4 sm:p-6 flex items-center justify-center bg-slate-950/40 min-h-[300px]">
+              <div className="relative border border-slate-700/50 rounded-xl overflow-hidden shadow-lg max-w-full">
+                <img
+                  src={resizedImageUrl}
+                  alt="Full Resized Preview"
+                  className="max-h-[60vh] max-w-full object-contain mx-auto"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-xs text-emerald-500 font-medium flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>{language === 'hi' ? 'फुल क्लैरिटी व एंटी-टियरिंग' : '100% Crisp Clarity'}</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-700 hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  {language === 'hi' ? 'बंद करें' : 'Close'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDownload();
+                    setPreviewModalOpen(false);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{language === 'hi' ? 'डाउनलोड करें' : 'Download'}</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

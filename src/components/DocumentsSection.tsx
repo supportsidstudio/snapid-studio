@@ -17,6 +17,7 @@ import {
   Sliders,
   Sparkles,
   Layout,
+  ArrowLeft,
   FileDown,
   Move,
   Crop,
@@ -50,9 +51,8 @@ const DOCUMENT_PRESETS: DocumentPreset[] = [
 ];
 
 const LAYOUT_PRESETS = [
-  { id: 'side_by_side' as DocumentLayoutPresetId, labelEn: 'Side-by-Side (Horizontally foldable)', labelHi: 'अगल-बगल (हॉरिजॉन्टल फोल्ड)', descEn: 'Front and back side printed horizontally next to each other. Perfect for folding.', descHi: 'सामने और पीछे का हिस्सा प्रिंटिंग के बाद मोडने के लिए अगल-बगल रहता है |' },
-  { id: 'stacked' as DocumentLayoutPresetId, labelEn: 'Stacked (Vertically foldable)', labelHi: 'सामने ऊपर, पीछे नीचे (वर्टिकल फोल्ड)', descEn: 'Front side placed on top, back side on bottom. Suitable for folding over.', descHi: 'ऊपर सामने और नीचे पीछे का हिस्सा |' },
   { id: 'split' as DocumentLayoutPresetId, labelEn: 'Centered Split (Full page A4 placement)', labelHi: 'A4 केंद्र सप्रिट (अलग प्रिंट)', descEn: 'Placed near the center of the sheet with comfortable cutting margins.', descHi: 'काटने के लिए पर्याप्त जगह के साथ A4 शीट के बीच में रखा गया है |' },
+  { id: 'stacked' as DocumentLayoutPresetId, labelEn: 'Stacked (Vertically foldable)', labelHi: 'सामने ऊपर, पीछे नीचे (वर्टिकल फोल्ड)', descEn: 'Front side placed on top, back side on bottom. Suitable for folding over.', descHi: 'ऊपर सामने और नीचे पीछे का हिस्सा |' },
 ];
 
 export default function DocumentsSection({ language, theme }: DocumentsSectionProps) {
@@ -60,7 +60,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
 
   // Document preset selections
   const [activeDocType, setActiveDocType] = useState<DocumentTypeId>('aadhaar');
-  const [layoutStyle, setLayoutStyle] = useState<DocumentLayoutPresetId>('side_by_side');
+  const [layoutStyle, setLayoutStyle] = useState<DocumentLayoutPresetId>('split');
 
   // Multi-side file States
   const [frontImage, setFrontImage] = useState<string | null>(null);
@@ -188,6 +188,15 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
   const fallbackFileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDocPreset = DOCUMENT_PRESETS.find(d => d.id === activeDocType) || DOCUMENT_PRESETS[0];
+
+  // Dynamic aspect ratio tracking for front and back sides
+  const [frontAspect, setFrontAspect] = useState<number>(selectedDocPreset.aspectRatio);
+  const [backAspect, setBackAspect] = useState<number>(selectedDocPreset.aspectRatio);
+
+  useEffect(() => {
+    if (!frontImage) setFrontAspect(selectedDocPreset.aspectRatio);
+    if (!backImage) setBackAspect(selectedDocPreset.aspectRatio);
+  }, [activeDocType, selectedDocPreset.aspectRatio]);
 
   // Canvas Refs
   const frontCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -856,7 +865,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           let boxY = 5;
           let boxW = 90;
           let boxH = 90;
-          if (analysis.originalWidth > 0 && analysis.originalHeight > 0) {
+          if (analysis.originalWidth > 0 && analysis.originalHeight > 0 && analysis.cropWidth > 0 && analysis.cropHeight > 0) {
             boxX = Math.max(0, Math.min(95, (analysis.cropX / analysis.originalWidth) * 100));
             boxY = Math.max(0, Math.min(95, (analysis.cropY / analysis.originalHeight) * 100));
             boxW = Math.max(5, Math.min(100 - boxX, (analysis.cropWidth / analysis.originalWidth) * 100));
@@ -865,57 +874,36 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           
           setCropBox({ x: boxX, y: boxY, w: boxW, h: boxH });
           setModalRotation(0);
+          setDetectionFailed(false);
 
-          if (!analysis.failed) {
-            if (side === 'front') {
-              setFrontOriginal(dataUrl);
-              setFrontImage(analysis.croppedDataUrl);
-              setFrontZoom(1.0);
-              setFrontPanX(0);
-              setFrontPanY(0);
-              setFrontRot(0);
-              setFrontBright(100);
-              setFrontContrast(100);
-              setActiveSide('front');
-            } else {
-              setBackOriginal(dataUrl);
-              setBackImage(analysis.croppedDataUrl);
-              setBackZoom(1.0);
-              setBackPanX(0);
-              setBackPanY(0);
-              setBackRot(0);
-              setBackBright(100);
-              setBackContrast(100);
-              setActiveSide('back');
-            }
-            setPreviewTab('individual');
+          const initialAspect = (analysis.cropWidth > 0 && analysis.cropHeight > 0)
+            ? (analysis.cropWidth / analysis.cropHeight)
+            : selectedDocPreset.aspectRatio;
+
+          if (side === 'front') {
+            setFrontOriginal(dataUrl);
+            setFrontImage(analysis.croppedDataUrl || dataUrl);
+            setFrontAspect(initialAspect);
+            setFrontZoom(1.0);
+            setFrontPanX(0);
+            setFrontPanY(0);
+            setFrontRot(0);
+            setFrontBright(100);
+            setFrontContrast(100);
+            setActiveSide('front');
           } else {
-            // If detection failed or boundary unclear
-            setDetectionFailed(true);
-            setDetectionFailedSide(side);
-            if (side === 'front') {
-              setFrontOriginal(dataUrl);
-              setFrontImage(dataUrl);
-              setFrontZoom(1.0);
-              setFrontPanX(0);
-              setFrontPanY(0);
-              setFrontRot(0);
-              setFrontBright(100);
-              setFrontContrast(100);
-              setActiveSide('front');
-            } else {
-              setBackOriginal(dataUrl);
-              setBackImage(dataUrl);
-              setBackZoom(1.0);
-              setBackPanX(0);
-              setBackPanY(0);
-              setBackRot(0);
-              setBackBright(100);
-              setBackContrast(100);
-              setActiveSide('back');
-            }
-            setPreviewTab('individual');
+            setBackOriginal(dataUrl);
+            setBackImage(analysis.croppedDataUrl || dataUrl);
+            setBackAspect(initialAspect);
+            setBackZoom(1.0);
+            setBackPanX(0);
+            setBackPanY(0);
+            setBackRot(0);
+            setBackBright(100);
+            setBackContrast(100);
+            setActiveSide('back');
           }
+          setPreviewTab('individual');
 
           // Immediately open the 8-directional crop modal fitted to document boundary!
           setCropModalSide(side);
@@ -926,11 +914,11 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           resolveResolve();
         } catch (err) {
           console.warn("AUTO CROP: Error during detection, applying safe manual fallback", err);
-          setDetectionFailed(true);
-          setDetectionFailedSide(side);
+          setDetectionFailed(false);
           if (side === 'front') {
             setFrontImage(dataUrl);
             setFrontOriginal(dataUrl);
+            setFrontAspect(selectedDocPreset.aspectRatio);
             setFrontZoom(1.0);
             setFrontPanX(0);
             setFrontPanY(0);
@@ -941,6 +929,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           } else {
             setBackImage(dataUrl);
             setBackOriginal(dataUrl);
+            setBackAspect(selectedDocPreset.aspectRatio);
             setBackZoom(1.0);
             setBackPanX(0);
             setBackPanY(0);
@@ -963,6 +952,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         console.warn("AUTO CROP: FileReader error reading document file");
         setIsDetectingFront(false);
         setIsDetectingBack(false);
+        alert(language === 'hi' ? 'फ़ाइल पढ़ने में समस्या हुई। कृपया पुनः प्रयास करें।' : 'Error reading image file. Please try again.');
         resolveResolve();
       };
       reader.readAsDataURL(file);
@@ -1222,337 +1212,316 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     }
   };
 
-  // Extract crop rectangle from the rotated canvas in high resolution
+  // Unified Document Canvas Rendering Engine: synchronously renders front, back, and assembly sheets
+  const renderAllDocumentCanvases = async (
+    overrideFront?: string | null,
+    overrideBack?: string | null,
+    overrideFrontAspect?: number,
+    overrideBackAspect?: number
+  ) => {
+    const curFront = overrideFront !== undefined ? overrideFront : frontImage;
+    const curBack = overrideBack !== undefined ? overrideBack : backImage;
+    const curFrontAspect = overrideFrontAspect !== undefined ? overrideFrontAspect : frontAspect;
+    const curBackAspect = overrideBackAspect !== undefined ? overrideBackAspect : backAspect;
+
+    const loadImg = (src: string | null): Promise<HTMLImageElement | null> => {
+      if (!src) return Promise.resolve(null);
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
+        img.src = src;
+      });
+    };
+
+    const [frontImgEl, backImgEl] = await Promise.all([loadImg(curFront), loadImg(curBack)]);
+
+    // 1. Render Front Canvas
+    const fCanvas = frontCanvasRef.current;
+    if (fCanvas) {
+      const fCtx = fCanvas.getContext('2d');
+      if (fCtx) {
+        if (frontImgEl) {
+          const aspect = curFrontAspect || (frontImgEl.naturalWidth / frontImgEl.naturalHeight) || selectedDocPreset.aspectRatio;
+          let baseW = 856;
+          let baseH = Math.round(856 / aspect);
+          if (aspect < 1) {
+            baseH = 856;
+            baseW = Math.round(856 * aspect);
+          }
+          fCanvas.width = baseW;
+          fCanvas.height = baseH;
+
+          fCtx.clearRect(0, 0, baseW, baseH);
+          fCtx.fillStyle = '#ffffff';
+          fCtx.fillRect(0, 0, baseW, baseH);
+
+          fCtx.save();
+          fCtx.translate(baseW / 2 + frontPanX, baseH / 2 + frontPanY);
+          fCtx.rotate((frontRot * Math.PI) / 180);
+
+          const drawW = baseW * frontZoom;
+          const drawH = baseH * frontZoom;
+          fCtx.filter = `brightness(${frontBright}%) contrast(${frontContrast}%)`;
+          fCtx.drawImage(frontImgEl, -drawW / 2, -drawH / 2, drawW, drawH);
+          fCtx.restore();
+
+          if (borderWidth > 0) {
+            fCtx.strokeStyle = borderColor;
+            const ratio = baseW / selectedDocPreset.widthMm;
+            const strokePx = borderWidth * ratio;
+            fCtx.lineWidth = strokePx;
+            fCtx.strokeRect(strokePx / 2, strokePx / 2, baseW - strokePx, baseH - strokePx);
+          }
+        } else {
+          fCanvas.width = 856;
+          fCanvas.height = 540;
+          fCtx.clearRect(0, 0, 856, 540);
+        }
+      }
+    }
+
+    // 2. Render Back Canvas
+    const bCanvas = backCanvasRef.current;
+    if (bCanvas) {
+      const bCtx = bCanvas.getContext('2d');
+      if (bCtx) {
+        if (backImgEl) {
+          const aspect = curBackAspect || (backImgEl.naturalWidth / backImgEl.naturalHeight) || selectedDocPreset.aspectRatio;
+          let baseW = 856;
+          let baseH = Math.round(856 / aspect);
+          if (aspect < 1) {
+            baseH = 856;
+            baseW = Math.round(856 * aspect);
+          }
+          bCanvas.width = baseW;
+          bCanvas.height = baseH;
+
+          bCtx.clearRect(0, 0, baseW, baseH);
+          bCtx.fillStyle = '#ffffff';
+          bCtx.fillRect(0, 0, baseW, baseH);
+
+          bCtx.save();
+          bCtx.translate(baseW / 2 + backPanX, baseH / 2 + backPanY);
+          bCtx.rotate((backRot * Math.PI) / 180);
+
+          const drawW = baseW * backZoom;
+          const drawH = baseH * backZoom;
+          bCtx.filter = `brightness(${backBright}%) contrast(${backContrast}%)`;
+          bCtx.drawImage(backImgEl, -drawW / 2, -drawH / 2, drawW, drawH);
+          bCtx.restore();
+
+          if (borderWidth > 0) {
+            bCtx.strokeStyle = borderColor;
+            const ratio = baseW / selectedDocPreset.widthMm;
+            const strokePx = borderWidth * ratio;
+            bCtx.lineWidth = strokePx;
+            bCtx.strokeRect(strokePx / 2, strokePx / 2, baseW - strokePx, baseH - strokePx);
+          }
+        } else {
+          bCanvas.width = 856;
+          bCanvas.height = 540;
+          bCtx.clearRect(0, 0, 856, 540);
+        }
+      }
+    }
+
+    // 3. Render Final Print Assembly Sheet
+    const aCanvas = assemblyCanvasRef.current;
+    if (aCanvas) {
+      const aCtx = aCanvas.getContext('2d');
+      if (aCtx) {
+        const pageWidthMm = docPrintOrientation === 'portrait' ? 210 : 297;
+        const pageHeightMm = docPrintOrientation === 'portrait' ? 297 : 210;
+        const dpm = 300 / 25.4; // 11.81 pixels per mm
+
+        const widthPx = Math.round(pageWidthMm * dpm);
+        const heightPx = Math.round(pageHeightMm * dpm);
+
+        aCanvas.width = widthPx;
+        aCanvas.height = heightPx;
+
+        aCtx.fillStyle = '#ffffff';
+        aCtx.fillRect(0, 0, widthPx, heightPx);
+
+        // Draw grid scale markers
+        aCtx.strokeStyle = '#e2e8f0';
+        aCtx.lineWidth = 1;
+        for (let x = 0; x < widthPx; x += Math.round(20 * dpm)) {
+          aCtx.beginPath();
+          aCtx.moveTo(x, 0);
+          aCtx.lineTo(x, heightPx);
+          aCtx.stroke();
+        }
+        for (let y = 0; y < heightPx; y += Math.round(20 * dpm)) {
+          aCtx.beginPath();
+          aCtx.moveTo(0, y);
+          aCtx.lineTo(widthPx, y);
+          aCtx.stroke();
+        }
+
+        // Calculate card dimensions on A4 sheet
+        const refAspect = (curFront ? curFrontAspect : curBackAspect) || selectedDocPreset.aspectRatio;
+        let itemWPx: number;
+        let itemHPx: number;
+        if (refAspect >= 1) {
+          itemWPx = Math.round(selectedDocPreset.widthMm * dpm);
+          itemHPx = Math.round(itemWPx / refAspect);
+        } else {
+          itemHPx = Math.round(selectedDocPreset.widthMm * dpm);
+          itemWPx = Math.round(itemHPx * refAspect);
+        }
+
+        const drawItem = (source: HTMLCanvasElement | null, px: number, py: number, label: 'Front' | 'Back') => {
+          const hasImg = label === 'Front' ? !!curFront : !!curBack;
+          if (source && hasImg) {
+            aCtx.drawImage(source, px, py, itemWPx, itemHPx);
+          } else {
+            aCtx.strokeStyle = '#94a3b8';
+            aCtx.lineWidth = 3;
+            aCtx.setLineDash([8, 8]);
+            aCtx.strokeRect(px, py, itemWPx, itemHPx);
+            aCtx.setLineDash([]);
+
+            aCtx.fillStyle = '#f8fafc';
+            aCtx.fillRect(px, py, itemWPx, itemHPx);
+
+            aCtx.font = 'bold 36px sans-serif';
+            aCtx.fillStyle = '#64748b';
+            aCtx.textAlign = 'center';
+            aCtx.textBaseline = 'middle';
+            aCtx.fillText(`${label} Side Preview`, px + itemWPx / 2, py + itemHPx / 2);
+          }
+        };
+
+        const duplicateCopiesCount = docPrintCopiesMode === 'single' ? 1 : docPrintCopiesCount;
+
+        if (layoutStyle === 'side_by_side') {
+          const totalWidth = (itemWPx * 2) + Math.round(4 * dpm);
+          const startX = Math.round((widthPx - totalWidth) / 2);
+          const rowGapPx = Math.round(12 * dpm);
+          const totalRowsHeight = (duplicateCopiesCount * itemHPx) + ((duplicateCopiesCount - 1) * rowGapPx);
+          const startY = Math.round((heightPx - totalRowsHeight) / 2);
+
+          for (let i = 0; i < duplicateCopiesCount; i++) {
+            const activeY = startY + (i * (itemHPx + rowGapPx));
+            drawItem(fCanvas, startX, activeY, 'Front');
+            drawItem(bCanvas, startX + itemWPx + Math.round(4 * dpm), activeY, 'Back');
+
+            // Separation fold-guide
+            aCtx.strokeStyle = '#cbd5e1';
+            aCtx.lineWidth = 2;
+            aCtx.beginPath();
+            const fx = startX + itemWPx + Math.round(2 * dpm);
+            aCtx.moveTo(fx, activeY - 10);
+            aCtx.lineTo(fx, activeY + itemHPx + 10);
+            aCtx.stroke();
+          }
+        } else if (layoutStyle === 'stacked') {
+          const pairHeight = (itemHPx * 2) + Math.round(4 * dpm);
+          const rowGapPx = Math.round(15 * dpm);
+          const totalRowsHeight = (duplicateCopiesCount * pairHeight) + ((duplicateCopiesCount - 1) * rowGapPx);
+          const startY = Math.round((heightPx - totalRowsHeight) / 2);
+          const startX = Math.round((widthPx - itemWPx) / 2);
+
+          for (let i = 0; i < duplicateCopiesCount; i++) {
+            const activeY = startY + (i * (pairHeight + rowGapPx));
+            drawItem(fCanvas, startX, activeY, 'Front');
+            drawItem(bCanvas, startX, activeY + itemHPx + Math.round(4 * dpm), 'Back');
+
+            // Fold guideline
+            aCtx.strokeStyle = '#cbd5e1';
+            aCtx.lineWidth = 2;
+            aCtx.beginPath();
+            const fy = activeY + itemHPx + Math.round(2 * dpm);
+            aCtx.moveTo(startX - 20, fy);
+            aCtx.lineTo(startX + itemWPx + 20, fy);
+            aCtx.stroke();
+          }
+        } else if (layoutStyle === 'split') {
+          const marginY = Math.round(42 * dpm);
+          const pairHeight = (itemHPx * 2) + marginY;
+          const rowGapPx = Math.round(10 * dpm);
+          const totalRowsHeight = (duplicateCopiesCount * pairHeight) + ((duplicateCopiesCount - 1) * rowGapPx);
+          const startY = Math.round((heightPx - totalRowsHeight) / 2);
+          const startX = Math.round((widthPx - itemWPx) / 2);
+
+          for (let i = 0; i < duplicateCopiesCount; i++) {
+            const activeY = startY + (i * (pairHeight + rowGapPx));
+            drawItem(fCanvas, startX, activeY, 'Front');
+            drawItem(bCanvas, startX, activeY + itemHPx + marginY, 'Back');
+          }
+        }
+
+        // Synchronize directly into global print DOM element
+        if (curFront || curBack) {
+          await syncDocPrintArea(aCanvas);
+        }
+      }
+    }
+  };
+
+  // Extract crop rectangle from the rotated canvas in high resolution & update immediately
   const applyManualCrop = () => {
     const canvas = cropCanvasRef.current;
     if (!canvas) return;
 
-    const rx = (cropBox.x / 100) * canvas.width;
-    const ry = (cropBox.y / 100) * canvas.height;
-    const rw = (cropBox.w / 100) * canvas.width;
-    const rh = (cropBox.h / 100) * canvas.height;
+    const clampedX = Math.max(0, Math.min(99, cropBox.x));
+    const clampedY = Math.max(0, Math.min(99, cropBox.y));
+    const clampedW = Math.max(1, Math.min(100 - clampedX, cropBox.w));
+    const clampedH = Math.max(1, Math.min(100 - clampedY, cropBox.h));
+
+    const rx = Math.round((clampedX / 100) * canvas.width);
+    const ry = Math.round((clampedY / 100) * canvas.height);
+    const rw = Math.max(1, Math.round((clampedW / 100) * canvas.width));
+    const rh = Math.max(1, Math.round((clampedH / 100) * canvas.height));
 
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = Math.max(1, Math.round(rw));
-    outCanvas.height = Math.max(1, Math.round(rh));
+    outCanvas.width = rw;
+    outCanvas.height = rh;
 
     const ctx = outCanvas.getContext('2d');
     if (ctx) {
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, outCanvas.width, outCanvas.height);
-      ctx.drawImage(canvas, rx, ry, rw, rh, 0, 0, outCanvas.width, outCanvas.height);
+      ctx.fillRect(0, 0, rw, rh);
+      ctx.drawImage(canvas, rx, ry, rw, rh, 0, 0, rw, rh);
       const croppedDUrl = outCanvas.toDataURL('image/png');
+      const newAspect = rw / rh;
       
       if (cropModalSide === 'front') {
+        setFrontAspect(newAspect);
         setFrontImage(croppedDUrl);
         setFrontZoom(1.0);
         setFrontPanX(0);
         setFrontPanY(0);
         setFrontRot(0);
+        // Instant synchronous render with latest front crop
+        renderAllDocumentCanvases(croppedDUrl, backImage, newAspect, backAspect);
       } else {
+        setBackAspect(newAspect);
         setBackImage(croppedDUrl);
         setBackZoom(1.0);
         setBackPanX(0);
         setBackPanY(0);
         setBackRot(0);
+        // Instant synchronous render with latest back crop
+        renderAllDocumentCanvases(frontImage, croppedDUrl, frontAspect, newAspect);
       }
       setCropModalOpen(false);
+      setDetectionFailed(false);
     }
   };
 
-  // Render Front Canvas
+  // Reactive canvas rendering effect
   useEffect(() => {
-    const canvas = frontCanvasRef.current;
-    if (!canvas || !frontImage) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const img = new Image();
-    img.onload = () => {
-      // High-res rendering scale: standard card ratio 1.585
-      const baseWidth = 856;
-      const baseHeight = 540;
-      canvas.width = baseWidth;
-      canvas.height = baseHeight;
-
-      ctx.clearRect(0, 0, baseWidth, baseHeight);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, baseWidth, baseHeight);
-
-      // Draw with offset zoom rotate
-      ctx.save();
-      ctx.translate(baseWidth / 2 + frontPanX, baseHeight / 2 + frontPanY);
-      ctx.rotate((frontRot * Math.PI) / 180);
-
-      const fitScale = Math.min(baseWidth / img.width, baseHeight / img.height);
-      const drawWidth = img.width * fitScale * frontZoom;
-      const drawHeight = img.height * fitScale * frontZoom;
-
-      ctx.filter = `brightness(${frontBright}%) contrast(${frontContrast}%)`;
-      ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-      ctx.restore();
-
-      // Border outer
-      if (borderWidth > 0) {
-        ctx.strokeStyle = borderColor;
-        const ratio = baseWidth / selectedDocPreset.widthMm;
-        const strokePx = borderWidth * ratio;
-        ctx.lineWidth = strokePx;
-        ctx.strokeRect(strokePx / 2, strokePx / 2, baseWidth - strokePx, baseHeight - strokePx);
-      }
-    };
-    img.src = frontImage;
+    renderAllDocumentCanvases();
   }, [
     activeDocType,
     frontImage,
-    frontZoom,
-    frontPanX,
-    frontPanY,
-    frontRot,
-    frontBright,
-    frontContrast,
-    borderWidth,
-    borderColor
-  ]);
-
-  // Render Back Canvas
-  useEffect(() => {
-    const canvas = backCanvasRef.current;
-    if (!canvas || !backImage) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const img = new Image();
-    img.onload = () => {
-      const baseWidth = 856;
-      const baseHeight = 540;
-      canvas.width = baseWidth;
-      canvas.height = baseHeight;
-
-      ctx.clearRect(0, 0, baseWidth, baseHeight);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, baseWidth, baseHeight);
-
-      // Draw with offset zoom rotate
-      ctx.save();
-      ctx.translate(baseWidth / 2 + backPanX, baseHeight / 2 + backPanY);
-      ctx.rotate((backRot * Math.PI) / 180);
-
-      const fitScale = Math.min(baseWidth / img.width, baseHeight / img.height);
-      const drawWidth = img.width * fitScale * backZoom;
-      const drawHeight = img.height * fitScale * backZoom;
-
-      ctx.filter = `brightness(${backBright}%) contrast(${backContrast}%)`;
-      ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-      ctx.restore();
-
-      // Border outer
-      if (borderWidth > 0) {
-        ctx.strokeStyle = borderColor;
-        const ratio = baseWidth / selectedDocPreset.widthMm;
-        const strokePx = borderWidth * ratio;
-        ctx.lineWidth = strokePx;
-        ctx.strokeRect(strokePx / 2, strokePx / 2, baseWidth - strokePx, baseHeight - strokePx);
-      }
-    };
-    img.src = backImage;
-  }, [
-    activeDocType,
     backImage,
-    backZoom,
-    backPanX,
-    backPanY,
-    backRot,
-    backBright,
-    backContrast,
-    borderWidth,
-    borderColor
-  ]);
-
-  // Render Final Print Assembly Sheet on dynamic viewport canvas
-  useEffect(() => {
-    // Avoid expensive 2480x3508 canvas allocation & rendering on mount when user is on individual tab with no images
-    if (previewTab !== 'assembly' && !frontImage && !backImage) {
-      return;
-    }
-
-    const canvas = assemblyCanvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const cardWidthMm = selectedDocPreset.widthMm;
-    const cardHeightMm = selectedDocPreset.heightMm;
-
-    // Use current quick print settings
-    const pageWidthMm = docPrintOrientation === 'portrait' ? 210 : 297;
-    const pageHeightMm = docPrintOrientation === 'portrait' ? 297 : 210;
-    const dpm = 300 / 25.4; // 11.81 pixels per mm
-
-    const widthPx = Math.round(pageWidthMm * dpm);
-    const heightPx = Math.round(pageHeightMm * dpm);
-
-    canvas.width = widthPx;
-    canvas.height = heightPx;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, widthPx, heightPx);
-
-    // Draw grid scale markers on physical sheet to guide users
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 1;
-    for (let x = 0; x < widthPx; x += Math.round(20 * dpm)) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, heightPx);
-      ctx.stroke();
-    }
-    for (let y = 0; y < heightPx; y += Math.round(20 * dpm)) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(widthPx, y);
-      ctx.stroke();
-    }
-
-    const cardWPx = Math.round(cardWidthMm * dpm);
-    const cardHPx = Math.round(cardHeightMm * dpm);
-
-    const centerX = widthPx / 2;
-    const centerY = heightPx / 2;
-
-    const frontSrc = frontCanvasRef.current;
-    const backSrc = backCanvasRef.current;
-
-    const drawItem = (source: HTMLCanvasElement | null, px: number, py: number, label: string) => {
-      if (source && ((label === 'Front' && frontImage) || (label === 'Back' && backImage))) {
-        ctx.drawImage(source, px, py, cardWPx, cardHPx);
-      } else {
-        ctx.strokeStyle = '#94a3b8';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([8, 8]);
-        ctx.strokeRect(px, py, cardWPx, cardHPx);
-        ctx.setLineDash([]);
-
-        ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(px, py, cardWPx, cardHPx);
-
-        ctx.font = 'bold 36px font-sans';
-        ctx.fillStyle = '#64748b';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${label} Side Preview`, px + cardWPx / 2, py + cardHPx / 2);
-      }
-    };
-
-    // Calculate copy alignment vertical coordinates
-    const duplicateCopiesCount = docPrintCopiesMode === 'single' ? 1 : docPrintCopiesCount;
-
-    if (layoutStyle === 'side_by_side') {
-      const totalWidth = (cardWPx * 2) + Math.round(4 * dpm);
-      const startX = Math.round((widthPx - totalWidth) / 2);
-      
-      // Calculate row offsets so they fit on the page
-      const rowGapPx = Math.round(12 * dpm);
-      const totalRowsHeight = (duplicateCopiesCount * cardHPx) + ((duplicateCopiesCount - 1) * rowGapPx);
-      const startY = Math.round((heightPx - totalRowsHeight) / 2);
-
-      for (let i = 0; i < duplicateCopiesCount; i++) {
-        const activeY = startY + (i * (cardHPx + rowGapPx));
-        drawItem(frontSrc, startX, activeY, 'Front');
-        drawItem(backSrc, startX + cardWPx + Math.round(4 * dpm), activeY, 'Back');
-
-        // Separation fold-guide
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const fx = startX + cardWPx + Math.round(2 * dpm);
-        ctx.moveTo(fx, activeY - 10);
-        ctx.lineTo(fx, activeY + cardHPx + 10);
-        ctx.stroke();
-      }
-
-    } else if (layoutStyle === 'stacked') {
-      const pairHeight = (cardHPx * 2) + Math.round(4 * dpm);
-      const rowGapPx = Math.round(15 * dpm);
-      const totalRowsHeight = (duplicateCopiesCount * pairHeight) + ((duplicateCopiesCount - 1) * rowGapPx);
-      const startY = Math.round((heightPx - totalRowsHeight) / 2);
-      const startX = Math.round(centerX - (cardWPx / 2));
-
-      for (let i = 0; i < duplicateCopiesCount; i++) {
-        const activeY = startY + (i * (pairHeight + rowGapPx));
-        drawItem(frontSrc, startX, activeY, 'Front');
-        drawItem(backSrc, startX, activeY + cardHPx + Math.round(4 * dpm), 'Back');
-
-        // Fold guideline
-        ctx.strokeStyle = '#cbd5e1';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        const fy = activeY + cardHPx + Math.round(2 * dpm);
-        ctx.moveTo(startX - 20, fy);
-        ctx.lineTo(startX + cardWPx + 20, fy);
-        ctx.stroke();
-      }
-
-    } else if (layoutStyle === 'split') {
-      // Split layout: centered or stacked
-      const pairHeight = (cardHPx * 2) + Math.round(42 * dpm);
-      const rowGapPx = Math.round(10 * dpm);
-      const totalRowsHeight = (duplicateCopiesCount * pairHeight) + ((duplicateCopiesCount - 1) * rowGapPx);
-      const startY = Math.round((heightPx - totalRowsHeight) / 2);
-      const startX = Math.round(centerX - (cardWPx / 2));
-
-      for (let i = 0; i < duplicateCopiesCount; i++) {
-        const activeY = startY + (i * (pairHeight + rowGapPx));
-        const marginY = Math.round(42 * dpm);
-        drawItem(frontSrc, startX, activeY, 'Front');
-        drawItem(backSrc, startX, activeY + cardHPx + marginY, 'Back');
-      }
-    }
-
-    // Pre-sync print buffer into DOM ahead of time for instant 1st-try Ctrl+P printing (only when images exist, deferred to idle)
-    if (frontImage || backImage) {
-      const syncTask = () => {
-        try {
-          if (!assemblyCanvasRef.current) return;
-          const dataUrl = assemblyCanvasRef.current.toDataURL('image/png');
-          let printContainer = document.getElementById('snapid-global-print-area');
-          if (!printContainer) {
-            printContainer = document.createElement('div');
-            printContainer.id = 'snapid-global-print-area';
-            printContainer.style.display = 'none';
-            document.body.appendChild(printContainer);
-          } else {
-            printContainer.style.display = 'none';
-          }
-          let img = printContainer.querySelector('img') as HTMLImageElement | null;
-          if (!img) {
-            img = document.createElement('img');
-            img.alt = 'Document Print Sheet';
-            printContainer.appendChild(img);
-          }
-          img.src = dataUrl;
-          if (img.decode) {
-            img.decode().catch(() => {});
-          }
-        } catch {
-          // ignore
-        }
-      };
-
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(syncTask, { timeout: 1200 });
-      } else {
-        setTimeout(syncTask, 150);
-      }
-    }
-  }, [
-    activeDocType,
-    layoutStyle,
-    frontImage,
-    backImage,
+    frontAspect,
+    backAspect,
     frontZoom,
     frontPanX,
     frontPanY,
@@ -1567,6 +1536,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     backContrast,
     borderWidth,
     borderColor,
+    layoutStyle,
     previewTab,
     docPrintPaperSize,
     docPrintOrientation,
@@ -1710,8 +1680,8 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
   };
 
   // Sync document print area with pre-decode and dynamic page rules
-  const syncDocPrintArea = async () => {
-    const canvas = assemblyCanvasRef.current;
+  const syncDocPrintArea = async (customCanvas?: HTMLCanvasElement | null) => {
+    const canvas = customCanvas || assemblyCanvasRef.current;
     if (!canvas || (!frontImage && !backImage)) return false;
 
     try {
@@ -1767,6 +1737,8 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         : 'Please upload at least one document side (Front or Back) first!');
       return;
     }
+    // Guarantee latest cropped rendering is complete on assembly canvas
+    await renderAllDocumentCanvases();
     const canvas = assemblyCanvasRef.current;
     if (!canvas) {
       alert(language === 'hi'
@@ -1774,10 +1746,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         : 'Print Error: Layout canvas is not available.');
       return;
     }
-    await syncDocPrintArea();
+    await syncDocPrintArea(canvas);
     setTimeout(() => {
       window.print();
-    }, 40);
+    }, 50);
   };
 
   // Instant Ctrl+P / Cmd+P Keyboard Interceptor for Documents
@@ -2006,7 +1978,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         onMouseMove={handleMouseMove}
                         onMouseUp={handleMouseUpOrLeave}
                         onMouseLeave={handleMouseUpOrLeave}
-                        style={{ aspectRatio: selectedDocPreset.aspectRatio }}
+                        style={{ aspectRatio: (activeSide === 'front' ? frontAspect : backAspect) || selectedDocPreset.aspectRatio }}
                         className={`relative w-auto h-full max-h-[290px] shadow-2xl overflow-hidden border-2 select-none cursor-move rounded-md group ${
                           theme === 'dark' ? 'border-slate-850 bg-slate-900 shadow-black' : 'border-black bg-white'
                         }`}
@@ -2109,6 +2081,53 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 Page assembly preset: {layoutStyle} • Placed on physical 210x297mm A4 Canvas
               </p>
             </div>
+          </div>
+
+          {/* Side-by-Side: Print & Print Layout / Back to Edit (Always Visible) */}
+          <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 w-full">
+            {/* 1. PRINT BUTTON */}
+            <button
+              type="button"
+              id="snapid-doc-print-btn"
+              onClick={handleDirectPrintDoc}
+              className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all border border-blue-500/20 subtle-glow-button active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!frontImage && !backImage}
+            >
+              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
+              <span>Print</span>
+            </button>
+            
+            {/* 2. PRINT LAYOUT / BACK TO EDIT BUTTON */}
+            <button
+              type="button"
+              id="snapid-doc-tab-toggle-btn"
+              onClick={() => {
+                if (previewTab === 'assembly') {
+                  setPreviewTab('individual');
+                } else {
+                  setPreviewTab('assembly');
+                }
+              }}
+              className={`w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base border flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all subtle-glow-button active:scale-[0.98] ${
+                previewTab === 'assembly'
+                  ? 'bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25'
+                  : theme === 'dark' 
+                    ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' 
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+              }`}
+            >
+              {previewTab === 'assembly' ? (
+                <>
+                  <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-400 shrink-0" />
+                  <span>{language === 'hi' ? 'वापस जाएं (Back)' : 'Back to Edit'}</span>
+                </>
+              ) : (
+                <>
+                  <Layout className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-400 shrink-0" />
+                  <span>Print Layout</span>
+                </>
+              )}
+            </button>
           </div>
 
           {/* Quick downloads block below stage */}
@@ -2522,119 +2541,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 )}
               </div>
             </div>
-
-            {/* Document Detection Warning Card */}
-            {detectionFailed && (
-              <div className={`rounded-xl border p-3.5 transition-all text-xs ${
-                theme === 'dark' 
-                  ? 'bg-red-500/5 border-red-500/30 text-red-200' 
-                  : 'bg-red-50/80 border-red-200 text-red-950 shadow-xs'
-              }`}>
-                {/* Collapsed Header */}
-                <div 
-                  onClick={() => setGuidanceExpanded(!guidanceExpanded)}
-                  className="flex items-center justify-between cursor-pointer select-none font-semibold gap-2"
-                >
-                  <span className="flex items-center gap-1.5 leading-tight text-left">
-                    <span className="text-sm shrink-0">⚠️</span>
-                    <span className="text-[11px] font-bold">
-                      {language === 'hi' 
-                        ? '⚠️ यह छवि ऑटो क्रॉप के लिए उपयुक्त नहीं है। कारण देखने के लिए क्लिक करें।' 
-                        : "⚠️ This image is not suitable for Auto Crop. Click to see why."
-                      }
-                    </span>
-                  </span>
-                  <span className="text-red-500 text-[10px] font-black shrink-0">
-                    {guidanceExpanded ? '▲' : '▼'}
-                  </span>
-                </div>
-
-                {/* Expanded Guidance Grid */}
-                {guidanceExpanded && (
-                  <div className="mt-4 pt-3 border-t border-red-500/10 space-y-4 animate-in fade-in duration-200">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                      {/* Possible Reasons */}
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-red-500 flex items-center gap-1 text-[11px]">
-                          <span>❌</span>
-                          <span>{language === 'hi' ? 'संभावित कारण:' : 'Possible reasons:'}</span>
-                        </h4>
-                        <ul className="space-y-1.5 pl-4 list-disc text-[10.5px] text-slate-400">
-                          {language === 'hi' ? (
-                            <>
-                              <li>दस्तावेज़ बहुत दूर है या हाथ में पकड़ा हुआ है।</li>
-                              <li>सभी 4 कोने दिखाई नहीं दे रहे हैं।</li>
-                              <li>फ़ोटो धुंधली, तिरछी या बहुत गहरी (डार्क) है।</li>
-                              <li>दस्तावेज़ को उचित दस्तावेज़ स्कैन की तरह कैप्चर नहीं किया गया है।</li>
-                            </>
-                          ) : (
-                            <>
-                              <li>The document is too far away or held in hand.</li>
-                              <li>All 4 corners are not visible.</li>
-                              <li>The photo is blurry, tilted, or too dark.</li>
-                              <li>The document is not captured like a proper document scan.</li>
-                            </>
-                          )}
-                        </ul>
-                      </div>
-
-                      {/* Best Results */}
-                      <div className="space-y-2">
-                        <h4 className="font-bold text-emerald-500 flex items-center gap-1 text-[11px]">
-                          <span>✅</span>
-                          <span>{language === 'hi' ? 'सर्वोत्तम परिणाम के लिए:' : 'For best results:'}</span>
-                        </h4>
-                        <ul className="space-y-1.5 pl-4 list-disc text-[10.5px] text-slate-400">
-                          {language === 'hi' ? (
-                            <>
-                              <li>दस्तावेज़ को समतल सतह पर रखें।</li>
-                              <li>केवल दस्तावेज़ को कैप्चर करें।</li>
-                              <li>सभी 4 कोनों को स्पष्ट रूप से दिखाई देने दें।</li>
-                              <li>फ़ोटो बिल्कुल ऊपर से (सीधे) और पर्याप्त करीब से लें।</li>
-                            </>
-                          ) : (
-                            <>
-                              <li>Place the document on a flat surface.</li>
-                              <li>Capture only the document.</li>
-                              <li>Keep all 4 corners visible.</li>
-                              <li>Take the photo from directly above and close enough.</li>
-                            </>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="flex flex-col sm:flex-row items-center justify-start gap-2 pt-2.5 border-t border-red-500/10">
-                      <button
-                        type="button"
-                        onClick={() => fallbackFileInputRef.current?.click()}
-                        className="w-full sm:w-auto px-3.5 py-1.5 bg-red-650 hover:bg-red-550 text-white rounded-lg font-bold text-[10.5px] shadow-sm transition-all cursor-pointer inline-flex items-center justify-center gap-1"
-                      >
-                        <Upload className="w-3 h-3" />
-                        <span>{language === 'hi' ? 'दूसरी छवि अपलोड करें' : 'Upload Another Image'}</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCropModalSide(detectionFailedSide || 'front');
-                          setCropModalOpen(true);
-                        }}
-                        className={`w-full sm:w-auto px-3.5 py-1.5 rounded-lg font-bold text-[10.5px] border shadow-xs transition-all cursor-pointer inline-flex items-center justify-center gap-1 ${
-                          theme === 'dark'
-                            ? 'bg-slate-900 border-slate-850 hover:bg-slate-800 text-slate-200'
-                            : 'bg-slate-100 border-slate-200 hover:bg-slate-150 text-slate-700'
-                        }`}
-                      >
-                        <Maximize2 className="w-3 h-3 text-blue-500" />
-                        <span>{language === 'hi' ? 'मैन्युअल क्रॉप करें' : 'Crop Manually'}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Hidden file input for programmatic fallbacks */}
@@ -2701,40 +2607,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             </p>
 
             <div className="grid grid-cols-1 gap-2 pt-1">
-              
-              {/* 1. PRINT INSTANTLY */}
-              <button
-                type="button"
-                onClick={handleDirectPrintDoc}
-                className="w-full px-4.5 py-3 rounded-xl font-extrabold text-xs text-white bg-blue-600 hover:bg-blue-550 flex items-center justify-between group cursor-pointer transition-all border border-blue-500/10"
-              >
-                <div className="flex items-center gap-2">
-                  <Printer className="w-4 h-4 shrink-0" />
-                  <span>PRINT INSTANTLY (No Download)</span>
-                </div>
-                <span className="bg-blue-700 text-[10px] font-bold px-2 py-0.5 rounded text-blue-100">
-                  Direct Print
-                </span>
-              </button>
-
-              {/* 2. GENERATE LAYOUT GRID BUTTON */}
-              <button
-                type="button"
-                onClick={() => setPreviewTab('assembly')}
-                className={`w-full px-4.5 py-3 rounded-xl font-bold text-xs border flex items-center justify-between group cursor-pointer transition-all ${
-                  previewTab === 'assembly'
-                    ? 'bg-blue-600/10 border-blue-500/20 text-blue-500 font-semibold shadow-xs'
-                    : theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Layout className="w-4 h-4 text-blue-400 shrink-0" />
-                  <span>Generate & View print layout</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-
-              {/* 3. DOWNLOAD PNG */}
+              {/* 1. DOWNLOAD PNG */}
               <button
                 type="button"
                 onClick={downloadAssemblyPng}
