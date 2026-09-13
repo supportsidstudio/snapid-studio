@@ -1,25 +1,58 @@
 import * as ort from 'onnxruntime-web';
 
 // Matching onnxruntime-web package version in package.json (1.29.0)
-const ORT_VERSION = '1.29.0';
+const ORT_VERSION = '1.20.1';
 const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
-const MODEL_SOURCES = [
-  '/models/u2netp.onnx',
-  'https://huggingface.co/edgetools/u2netp/resolve/main/u2netp.onnx',
-  'https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2netp.onnx'
-];
+/**
+ * Dynamically resolves the base URL of the deployed app,
+ * automatically handling root domains, subdirectories (e.g. GitHub Pages /<repo>/),
+ * Vite preview, Netlify, and local development.
+ */
+function getAppBaseUrl(): string {
+  if (typeof self !== 'undefined' && self.location && self.location.href) {
+    const href = self.location.href;
+    // If worker is located in /assets/ subdirectory
+    const assetsIndex = href.lastIndexOf('/assets/');
+    if (assetsIndex !== -1) {
+      return href.substring(0, assetsIndex + 1); // e.g. "https://supportsidstudio.github.io/snapid-studio/"
+    }
+    try {
+      const url = new URL(href);
+      if (url.origin && !url.origin.startsWith('blob:') && !url.origin.startsWith('file:')) {
+        const pathSegments = url.pathname.split('/').filter(Boolean);
+        if (pathSegments.length > 1) {
+          // Sub-path deployment (e.g. /snapid-studio/...)
+          return `${url.origin}/${pathSegments[0]}/`;
+        }
+        return `${url.origin}/`;
+      }
+    } catch (e) {
+      // Fallback
+    }
+  }
+  return '/';
+}
 
 function getWasmBasePath(): string {
-  if (typeof location !== 'undefined' && location.origin && location.origin !== 'null' && !location.origin.startsWith('blob:') && !location.origin.startsWith('file:')) {
-    return `${location.origin}/onnxruntime/`;
-  }
-  return CDN_WASM_PATH;
+  const base = getAppBaseUrl();
+  return `${base.replace(/\/+$/, '')}/onnxruntime/`;
+}
+
+function getModelSources(): string[] {
+  const base = getAppBaseUrl();
+  const localModel = `${base.replace(/\/+$/, '')}/models/u2netp.onnx`;
+  return [
+    localModel,
+    'https://huggingface.co/edgetools/u2netp/resolve/main/u2netp.onnx',
+    'https://cdn.jsdelivr.net/gh/danielgatis/rembg@v0.0.0/models/u2netp.onnx'
+  ];
 }
 
 try {
   ort.env.wasm.wasmPaths = getWasmBasePath();
   ort.env.wasm.numThreads = 1;
+  ort.env.wasm.proxy = false;
 } catch (e) {
   console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
 }
@@ -28,9 +61,12 @@ let session: ort.InferenceSession | null = null;
 let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
 
 async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
-  const resolvedUrl = (typeof location !== 'undefined' && location.origin && location.origin !== 'null' && !location.origin.startsWith('blob:') && url.startsWith('/'))
-    ? `${location.origin}${url}`
-    : url;
+  const base = getAppBaseUrl();
+  let resolvedUrl = url;
+
+  if (url.startsWith('/')) {
+    resolvedUrl = `${base.replace(/\/+$/, '')}${url}`;
+  }
 
   console.log(`[U2NetP Worker] Attempting to load U²-NetP model from: ${resolvedUrl}`);
   const response = await fetch(resolvedUrl, { cache: 'force-cache' });
@@ -63,9 +99,10 @@ async function getSession(): Promise<ort.InferenceSession> {
 
   sessionLoadingPromise = (async () => {
     let lastError: any = null;
+    const modelSources = getModelSources();
 
     // Try creating session with each verified model source until one succeeds
-    for (const source of MODEL_SOURCES) {
+    for (const source of modelSources) {
       try {
         const buffer = await fetchValidModelBuffer(source);
 
@@ -74,10 +111,11 @@ async function getSession(): Promise<ort.InferenceSession> {
           graphOptimizationLevel: 'all',
         };
 
-        // Try local wasm first
+        // Try local wasm first with dynamic basePath
         try {
           ort.env.wasm.wasmPaths = getWasmBasePath();
           ort.env.wasm.numThreads = 1;
+          ort.env.wasm.proxy = false;
           const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
           console.log(`[U2NetP Worker] U²-NetP session active via local WASM! Inputs: [${newSession.inputNames.join(', ')}]`);
           session = newSession;
@@ -86,6 +124,7 @@ async function getSession(): Promise<ort.InferenceSession> {
           console.warn('[U2NetP Worker] Local WASM init failed, switching to CDN wasmPaths fallback...', localWasmErr);
           ort.env.wasm.wasmPaths = CDN_WASM_PATH;
           ort.env.wasm.numThreads = 1;
+          ort.env.wasm.proxy = false;
           const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
           console.log(`[U2NetP Worker] U²-NetP session active via CDN WASM! Inputs: [${newSession.inputNames.join(', ')}]`);
           session = newSession;
