@@ -51,6 +51,8 @@ import {
   renderHighResSheetCanvas,
   generatePrintReadyPdf,
   syncDirectPrintDOM,
+  verifyPrintQuantity,
+  cleanupPrintMemory,
   DPI_300_DPM
 } from '../utils/passport-print-engine';
 import BgRemovalWorker from '../workers/bg-removal.worker?worker';
@@ -667,14 +669,16 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     return Math.max(1, maxCols * maxRows);
   }, [selectedSheetPreset, selectedSizePreset, sheetSize, customPaperWidthMm, customPaperHeightMm]);
 
+  // Dynamic photo count: user may print any quantity (4, 8, 16, 32, 64, 100, 200+)
+  // System dynamically calculates required print pages with strict 1:1 parity (TOTAL SELECTED = TOTAL RENDERED = TOTAL PRINTABLE)
   const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(8);
+  const [isPreparingPrint, setIsPreparingPrint] = useState<boolean>(false);
+  const [printProgress, setPrintProgress] = useState<{ current: number; total: number } | null>(null);
 
-  // Keep copies count bounded between 1 and 64 (multi-page sheets supported automatically)
+  // Keep copies count positive (minimum 1, no artificial upper limit)
   useEffect(() => {
     if (photosCopiesCount < 1) {
       setPhotosCopiesCount(1);
-    } else if (photosCopiesCount > 64) {
-      setPhotosCopiesCount(64);
     }
   }, [photosCopiesCount]);
 
@@ -1248,21 +1252,44 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     link.click();
   };
 
-  // Download Exact Millimetric High-Quality PDF ready-for-print
+  // Download Exact Millimetric High-Quality PDF ready-for-print (with multi-page batch optimization)
   const downloadSheetPdf = async () => {
     if (!previewCanvasRef.current) return;
 
     try {
       const config = getPrintEngineConfig();
+      const verification = verifyPrintQuantity(config);
+      if (!verification.verified) {
+        alert(verification.errorMessage || 'Print verification error: quantity mismatch.');
+        return;
+      }
+
+      if (verification.totalPages > 2) {
+        setIsPreparingPrint(true);
+        setPrintProgress({ current: 1, total: verification.totalPages });
+      }
+
       const filename = `SnapID_Passport_${selectedSizePreset.id}_sheet_${selectedSheetPreset.id}.pdf`;
-      await generatePrintReadyPdf(previewCanvasRef.current, config, filename);
+      await generatePrintReadyPdf(
+        previewCanvasRef.current, 
+        config, 
+        filename,
+        (current, total) => {
+          setPrintProgress({ current, total });
+        }
+      );
     } catch (e) {
       console.error('PDF creation error:', e);
       alert('Failed to generate PDF layout. Please try downloading as PNG.');
+    } finally {
+      setIsPreparingPrint(false);
+      setPrintProgress(null);
     }
   };
 
-  // Instant 1st-try Direct Print Trigger
+  // Instant Direct Print Trigger with Strict Quantity Verification:
+  // RULE: TOTAL SELECTED = TOTAL RENDERED = TOTAL PRINTABLE
+  // Browser print dialog opens ONLY after verification succeeds!
   const handleDirectPrint = async () => {
     if (!previewCanvasRef.current || !originalImage) {
       alert(language === 'hi' 
@@ -1270,11 +1297,52 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         : "Please upload and process an image first before printing.");
       return;
     }
+
     const config = getPrintEngineConfig();
-    await syncDirectPrintDOM(previewCanvasRef.current, config);
-    setTimeout(() => {
-      window.print();
-    }, 40);
+
+    // 1. Strict Verification Check before opening print dialog
+    const verification = verifyPrintQuantity(config);
+    if (!verification.verified) {
+      const msg = `Print Verification Failed: Selected count (${verification.totalSelected}) does not equal Printable count (${verification.totalPrintable}).`;
+      console.error('[SnapID Print]', msg, verification);
+      alert(msg);
+      return;
+    }
+
+    console.info(
+      `[SnapID Print Verified] TOTAL SELECTED (${verification.totalSelected}) = ` +
+      `TOTAL RENDERED (${verification.totalRendered}) = ` +
+      `TOTAL PRINTABLE (${verification.totalPrintable}) across ${verification.totalPages} pages.`
+    );
+
+    setIsPreparingPrint(true);
+    setPrintProgress({ current: 1, total: verification.totalPages });
+
+    try {
+      // 2. Synchronize DOM page-by-page efficiently
+      const success = await syncDirectPrintDOM(
+        previewCanvasRef.current, 
+        config,
+        (current, total) => {
+          setPrintProgress({ current, total });
+        }
+      );
+
+      if (success) {
+        // Only open browser print dialog after verification and DOM readiness
+        setTimeout(() => {
+          window.print();
+        }, 50);
+      } else {
+        alert("Failed to prepare printable layout.");
+      }
+    } catch (err: any) {
+      console.error("Direct Print Error:", err);
+      alert(err?.message || "Failed to prepare printable layout.");
+    } finally {
+      setIsPreparingPrint(false);
+      setPrintProgress(null);
+    }
   };
 
   // Keyboard Shortcuts: F8 (8 photos), F9 (32 photos), Alt+E / F4 (AI Enhance), Ctrl+P (Direct Print)
@@ -1981,10 +2049,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 )}
               </div>
 
-              {/* 3. Copies Selection Panel - Compact Interactive Stepper & Studio Presets */}
+              {/* 3. Copies Selection Panel - Dynamic Count with No Artificial Limit */}
               {sheetSize !== 'single' && (
-                <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-2">
-                  <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border subtle-element-glow ${
+                <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-2.5">
+                  <div className={`flex items-center justify-between px-2.5 py-2 rounded-xl border subtle-element-glow ${
                     theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className="flex flex-col">
@@ -1998,7 +2066,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       </span>
                     </div>
 
-                    {/* Stepper (- [count] +) */}
+                    {/* Stepper with direct editable number input (- [input] +) */}
                     <div className="flex items-center gap-1.5">
                       <button
                         type="button"
@@ -2017,22 +2085,35 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         <Minus className="w-3.5 h-3.5" />
                       </button>
 
-                      <div className="min-w-[32px] text-center">
-                        <span className="text-sm font-black font-mono text-blue-500">
-                          {photosCopiesCount}
-                        </span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          id="passport-copies-custom-input"
+                          min={1}
+                          step={1}
+                          value={photosCopiesCount}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10);
+                            if (!isNaN(val) && val >= 1) {
+                              setPhotosCopiesCount(val);
+                            } else if (e.target.value === '') {
+                              setPhotosCopiesCount(1);
+                            }
+                          }}
+                          className={`w-14 sm:w-16 px-1.5 py-1 text-center text-xs sm:text-sm font-black font-mono rounded border transition-all focus:outline-none focus:ring-1 focus:ring-blue-500 subtle-element-glow ${
+                            theme === 'dark'
+                              ? 'bg-slate-950 border-slate-700 text-blue-400'
+                              : 'bg-white border-slate-300 text-blue-600 shadow-xs'
+                          }`}
+                          title={language === 'hi' ? 'कोई भी फोटो संख्या दर्ज करें (उदा. 4, 8, 16, 32, 64, 100, 200+)' : 'Enter any photo count (e.g. 4, 8, 16, 32, 64, 100, 200+)'}
+                        />
                       </div>
 
                       <button
                         type="button"
                         id="passport-copies-increase-btn"
-                        disabled={photosCopiesCount >= 64}
-                        onClick={() => setPhotosCopiesCount(prev => Math.min(64, prev + 1))}
-                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button ${
-                          photosCopiesCount >= 64
-                            ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
-                            : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
-                        }`}
+                        onClick={() => setPhotosCopiesCount(prev => prev + 1)}
+                        className="w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20"
                         title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -2040,14 +2121,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     </div>
                   </div>
 
-                  {/* Preset quick studio counts */}
+                  {/* Preset quick studio counts (4, 8, 16, 32, 64, 100, 200) */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Studio Layouts:</span>
-                      <span className="text-[8px] font-mono text-slate-500">Shortcuts: F8=8, F9=32</span>
+                      <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Quick Quantity:</span>
+                      <span className="text-[8px] font-mono text-slate-500">No Limit (4 to 200+)</span>
                     </div>
-                    <div className="grid grid-cols-6 gap-1">
-                      {[4, 6, 8, 12, 16, 32].map(count => (
+                    <div className="grid grid-cols-7 gap-1">
+                      {[4, 8, 16, 32, 64, 100, 200].map(count => (
                         <button
                           key={count}
                           type="button"
@@ -2059,12 +2140,27 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                                 ? 'border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-700' 
                                 : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
-                          title={`${count} Photos${count === 8 ? ' (F8)' : count === 32 ? ' (F9)' : ''}`}
+                          title={`${count} Photos`}
                         >
                           {count}
                         </button>
                       ))}
                     </div>
+                  </div>
+
+                  {/* Mathematical Parity & Verification Banner */}
+                  <div className={`p-2 rounded-xl border flex items-center justify-between text-[10px] font-mono ${
+                    theme === 'dark' 
+                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400' 
+                      : 'bg-emerald-50/80 border-emerald-200 text-emerald-700'
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span className="font-bold">Verified:</span>
+                    </div>
+                    <span className="font-semibold text-right">
+                      {photosCopiesCount} Selected = {photosCopiesCount} Printable ({Math.ceil(photosCopiesCount / maxCopiesOnPaper)} {Math.ceil(photosCopiesCount / maxCopiesOnPaper) > 1 ? 'Sheets' : 'Sheet'})
+                    </span>
                   </div>
                 </div>
               )}
@@ -3288,6 +3384,41 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   <span className="truncate">{language === 'hi' ? 'क्रॉप लागू करें (Apply)' : 'Apply Crop (Enter)'}</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Print / Export Preparation Streaming Progress Dialog for Large Batches */}
+      {isPreparingPrint && printProgress && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm select-none animate-fadeIn">
+          <div className={`w-full max-w-sm rounded-2xl border p-5 flex flex-col items-center space-y-3.5 text-center shadow-2xl ${
+            theme === 'dark' ? 'bg-slate-900 border-blue-500/40 text-white' : 'bg-white border-blue-200 text-slate-900'
+          }`}>
+            <div className="p-3 rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
+              <Printer className="w-6 h-6 text-blue-500 animate-pulse" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-bold text-sm sm:text-base">
+                {language === 'hi' ? 'प्रिंट लेआउट तैयार किया जा रहा है' : 'Preparing Print Layout'}
+              </h4>
+              <p className="text-xs text-slate-400">
+                {language === 'hi' 
+                  ? `पेज ${printProgress.current} / ${printProgress.total} स्ट्रीम हो रहा है...`
+                  : `Processing sheet ${printProgress.current} of ${printProgress.total}...`}
+              </p>
+            </div>
+            <div className="w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden p-0.5 border border-slate-700/50">
+              <div 
+                className="bg-gradient-to-r from-blue-600 to-cyan-500 h-full rounded-full transition-all duration-200"
+                style={{ width: `${Math.max(8, Math.round((printProgress.current / printProgress.total) * 100))}%` }}
+              />
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-emerald-400 font-semibold">
+              <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <span>
+                {photosCopiesCount} Selected = {photosCopiesCount} Printed ({printProgress.total} {printProgress.total > 1 ? 'Sheets' : 'Sheet'})
+              </span>
             </div>
           </div>
         </div>

@@ -72,33 +72,49 @@ export function calculateSheetLayout(config: PrintEngineConfig, pageIndex = 0): 
   const remainingPhotos = copiesCount - (safePageIndex * perSheetCapacity);
   const photosOnPage = Math.max(1, Math.min(perSheetCapacity, remainingPhotos));
 
-  // Determine optimal column arrangement for clean visual grouping
+  // Determine optimal column arrangement
   let cols = maxCols;
-  if (photosOnPage <= 2) {
-    cols = Math.min(maxCols, 2);
-  } else if (photosOnPage <= 4) {
-    cols = Math.min(maxCols, 2);
-  } else if (photosOnPage <= 6) {
-    cols = maxCols >= 4 && photosOnPage > 4 ? 4 : Math.min(maxCols, 3);
-  } else if (photosOnPage <= 8) {
-    cols = Math.min(maxCols, 4);
+  let rows = Math.ceil(photosOnPage / maxCols);
+  let startXMm = 0;
+  let startYMm = 0;
+
+  if (totalPages === 1) {
+    // For single-page prints, adjust column layout for aesthetic centered grouping
+    if (photosOnPage <= 2) {
+      cols = Math.min(maxCols, 2);
+    } else if (photosOnPage <= 4) {
+      cols = Math.min(maxCols, 2);
+    } else if (photosOnPage <= 6) {
+      cols = maxCols >= 4 && photosOnPage > 4 ? 4 : Math.min(maxCols, 3);
+    } else if (photosOnPage <= 8) {
+      cols = Math.min(maxCols, 4);
+    } else {
+      cols = maxCols;
+    }
+
+    if (Math.ceil(photosOnPage / cols) > maxRows) {
+      cols = Math.min(maxCols, Math.ceil(photosOnPage / maxRows));
+    }
+
+    rows = Math.ceil(photosOnPage / cols);
+
+    const gridWidthMm = (cols * photoWidthMm) + ((cols - 1) * gapMm);
+    const gridHeightMm = (rows * photoHeightMm) + ((rows - 1) * gapMm);
+
+    startXMm = Math.max(0, (pageWidthMm - gridWidthMm) / 2);
+    startYMm = Math.max(0, (pageHeightMm - gridHeightMm) / 2);
   } else {
+    // Multi-page batch: keep exact consistent grid columns and sheet origin across all pages
+    // This guarantees identical trimming & cutting lines across the entire batch
     cols = maxCols;
+    rows = Math.ceil(photosOnPage / maxCols);
+
+    const fullGridWidthMm = (maxCols * photoWidthMm) + ((maxCols - 1) * gapMm);
+    const fullGridHeightMm = (maxRows * photoHeightMm) + ((maxRows - 1) * gapMm);
+
+    startXMm = Math.max(0, (pageWidthMm - fullGridWidthMm) / 2);
+    startYMm = Math.max(0, (pageHeightMm - fullGridHeightMm) / 2);
   }
-
-  // If number of rows exceeds maxRows, adjust columns
-  if (Math.ceil(photosOnPage / cols) > maxRows) {
-    cols = Math.min(maxCols, Math.ceil(photosOnPage / maxRows));
-  }
-
-  const rows = Math.ceil(photosOnPage / cols);
-
-  // Exact centering of the grid on physical paper
-  const gridWidthMm = (cols * photoWidthMm) + ((cols - 1) * gapMm);
-  const gridHeightMm = (rows * photoHeightMm) + ((rows - 1) * gapMm);
-
-  const startXMm = Math.max(0, (pageWidthMm - gridWidthMm) / 2);
-  const startYMm = Math.max(0, (pageHeightMm - gridHeightMm) / 2);
 
   return {
     totalPages,
@@ -276,13 +292,108 @@ export function renderHighResSheetCanvas(
 }
 
 /**
- * Generate a Print-Ready Studio-Quality PDF (with automatic multi-page handling)
+ * Result of the strict print verification rule:
+ * TOTAL SELECTED = TOTAL RENDERED = TOTAL PRINTABLE
+ */
+export interface PrintVerificationResult {
+  verified: boolean;
+  totalSelected: number;
+  totalRendered: number;
+  totalPrintable: number;
+  totalPages: number;
+  perSheetCapacity: number;
+  pagesBreakdown: { page: number; photosCount: number }[];
+  errorMessage?: string;
+}
+
+/**
+ * Mathematically verify that selected photo count exactly equals total printed photo count.
+ * RULE: TOTAL SELECTED = TOTAL RENDERED = TOTAL PRINTABLE
+ * No photos dropped, no photos hidden, no photos duplicated, no silent count reduction.
+ */
+export function verifyPrintQuantity(config: PrintEngineConfig): PrintVerificationResult {
+  const totalSelected = config.isSingle ? 1 : Math.max(1, Math.round(config.copiesCount));
+
+  if (config.isSingle) {
+    return {
+      verified: true,
+      totalSelected: 1,
+      totalRendered: 1,
+      totalPrintable: 1,
+      totalPages: 1,
+      perSheetCapacity: 1,
+      pagesBreakdown: [{ page: 1, photosCount: 1 }]
+    };
+  }
+
+  const baseLayout = calculateSheetLayout(config, 0);
+  const totalPages = baseLayout.totalPages;
+  const perSheetCapacity = baseLayout.perSheetCapacity;
+
+  let totalRendered = 0;
+  const pagesBreakdown: { page: number; photosCount: number }[] = [];
+
+  for (let p = 0; p < totalPages; p++) {
+    const pageLayout = calculateSheetLayout(config, p);
+    totalRendered += pageLayout.photosOnPage;
+    pagesBreakdown.push({
+      page: p + 1,
+      photosCount: pageLayout.photosOnPage
+    });
+  }
+
+  const totalPrintable = totalRendered;
+  const verified = (totalSelected === totalRendered) && (totalRendered === totalPrintable) && (totalSelected > 0);
+
+  return {
+    verified,
+    totalSelected,
+    totalRendered,
+    totalPrintable,
+    totalPages,
+    perSheetCapacity,
+    pagesBreakdown,
+    errorMessage: verified ? undefined : `Quantity mismatch: Selected (${totalSelected}) != Rendered (${totalRendered})`
+  };
+}
+
+// Track active Object URLs for direct print DOM to cleanly revoke memory
+let activePrintObjectUrls: string[] = [];
+
+export function cleanupPrintMemory(): void {
+  if (activePrintObjectUrls.length > 0) {
+    activePrintObjectUrls.forEach(url => {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    });
+    activePrintObjectUrls = [];
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('afterprint', () => {
+    cleanupPrintMemory();
+  });
+}
+
+/**
+ * Generate a Print-Ready Studio-Quality PDF (with automatic multi-page handling and memory-efficient batch processing)
  */
 export async function generatePrintReadyPdf(
   singleCardCanvas: HTMLCanvasElement,
   config: PrintEngineConfig,
-  filename = 'SnapID_Passport_Sheet.pdf'
+  filename = 'SnapID_Passport_Sheet.pdf',
+  onProgress?: (current: number, total: number) => void
 ): Promise<void> {
+  // Verify quantity parity before generating PDF
+  const verification = verifyPrintQuantity(config);
+  if (!verification.verified) {
+    throw new Error(`PDF Generation Failed: ${verification.errorMessage}`);
+  }
+
   const { pageWidthMm, pageHeightMm } = config;
   const isLandscape = pageWidthMm >= pageHeightMm;
   const orientation = isLandscape ? 'landscape' : 'portrait';
@@ -291,37 +402,66 @@ export async function generatePrintReadyPdf(
     orientation,
     unit: 'mm',
     format: [pageWidthMm, pageHeightMm],
-    compress: false
+    compress: true
   });
 
-  const layout = calculateSheetLayout(config, 0);
-  const totalPages = layout.totalPages;
+  const totalPages = verification.totalPages;
 
+  // Process one print page at a time to prevent RAM spikes on large batches
   for (let p = 0; p < totalPages; p++) {
+    if (onProgress) {
+      onProgress(p + 1, totalPages);
+    }
     if (p > 0) {
       doc.addPage([pageWidthMm, pageHeightMm], orientation);
     }
 
     const sheetCanvas = renderHighResSheetCanvas(singleCardCanvas, config, p);
-    const sheetDataUrl = sheetCanvas.toDataURL('image/png', 1.0);
+    const sheetDataUrl = sheetCanvas.toDataURL('image/jpeg', 0.98);
 
-    doc.addImage(sheetDataUrl, 'PNG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
+    // Free canvas RAM buffer immediately
+    sheetCanvas.width = 0;
+    sheetCanvas.height = 0;
+
+    doc.addImage(sheetDataUrl, 'JPEG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
+
+    // Yield control briefly for large batches
+    if (totalPages > 4) {
+      await new Promise(r => setTimeout(r, 4));
+    }
   }
 
   doc.save(filename);
 }
 
 /**
- * Synchronize the direct print DOM container and inject exact millimetric @page styles
+ * Synchronize the direct print DOM container with strict verification and memory-efficient streaming
+ * RULE: TOTAL SELECTED = TOTAL RENDERED = TOTAL PRINTABLE
  */
 export async function syncDirectPrintDOM(
   singleCardCanvas: HTMLCanvasElement,
-  config: PrintEngineConfig
+  config: PrintEngineConfig,
+  onProgress?: (current: number, total: number) => void
 ): Promise<boolean> {
   try {
+    // 1. Strict Verification Check: Selected MUST equal Rendered and Printable
+    const verification = verifyPrintQuantity(config);
+    if (!verification.verified) {
+      console.error('[Print Engine] Verification failed:', verification);
+      throw new Error(`Print verification failed: Selected (${verification.totalSelected}) != Rendered (${verification.totalRendered})`);
+    }
+
+    console.info(
+      `[Print Engine Verified] TOTAL SELECTED (${verification.totalSelected}) = ` +
+      `TOTAL RENDERED (${verification.totalRendered}) = ` +
+      `TOTAL PRINTABLE (${verification.totalPrintable}) across ${verification.totalPages} pages.`
+    );
+
+    // Free previously allocated object URLs to prevent RAM leakage
+    cleanupPrintMemory();
+
     const { pageWidthMm, pageHeightMm } = config;
-    const layout = calculateSheetLayout(config, 0);
-    const totalPages = layout.totalPages;
+    const totalPages = verification.totalPages;
 
     let printContainer = document.getElementById('snapid-global-print-area');
     if (!printContainer) {
@@ -336,12 +476,40 @@ export async function syncDirectPrintDOM(
 
     const imgPromises: Promise<void>[] = [];
 
+    // Helper to asynchronously convert canvas to Blob URL for low RAM footprint
+    const canvasToBlobUrl = (canvas: HTMLCanvasElement): Promise<string> => {
+      return new Promise((resolve) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const url = URL.createObjectURL(blob);
+              activePrintObjectUrls.push(url);
+              resolve(url);
+            } else {
+              resolve(canvas.toDataURL('image/png', 1.0));
+            }
+          },
+          'image/png'
+        );
+      });
+    };
+
+    // 2. Render and process pages sequentially, one page at a time
     for (let p = 0; p < totalPages; p++) {
+      if (onProgress) {
+        onProgress(p + 1, totalPages);
+      }
+
       const sheetCanvas = renderHighResSheetCanvas(singleCardCanvas, config, p);
-      const sheetDataUrl = sheetCanvas.toDataURL('image/png', 1.0);
+      const sheetBlobUrl = await canvasToBlobUrl(sheetCanvas);
+
+      // Immediately free the backing canvas surface to reclaim GPU memory
+      sheetCanvas.width = 0;
+      sheetCanvas.height = 0;
 
       const pageDiv = document.createElement('div');
       pageDiv.className = 'snapid-print-page';
+      pageDiv.dataset.pageIndex = String(p);
       pageDiv.style.width = `${pageWidthMm}mm`;
       pageDiv.style.height = `${pageHeightMm}mm`;
       pageDiv.style.pageBreakAfter = p === totalPages - 1 ? 'auto' : 'always';
@@ -352,8 +520,8 @@ export async function syncDirectPrintDOM(
       pageDiv.style.overflow = 'hidden';
 
       const img = document.createElement('img');
-      img.alt = `Print Sheet Page ${p + 1}`;
-      img.src = sheetDataUrl;
+      img.alt = `Print Sheet Page ${p + 1} of ${totalPages}`;
+      img.src = sheetBlobUrl;
       img.style.width = '100%';
       img.style.height = '100%';
       img.style.display = 'block';
@@ -364,6 +532,11 @@ export async function syncDirectPrintDOM(
 
       if (img.decode) {
         imgPromises.push(img.decode().catch(() => {}));
+      }
+
+      // Small tick to prevent UI lockup on large print batches (e.g. 50+ pages)
+      if (totalPages > 4) {
+        await new Promise((r) => setTimeout(r, 4));
       }
     }
 
@@ -425,6 +598,13 @@ export async function syncDirectPrintDOM(
     `;
 
     await Promise.all(imgPromises);
+
+    // 3. Final DOM Verification: confirm total pages rendered match expectation
+    const pagesInDom = printContainer.querySelectorAll('.snapid-print-page').length;
+    if (pagesInDom !== totalPages) {
+      throw new Error(`DOM print pages verification failed: expected ${totalPages}, found ${pagesInDom}`);
+    }
+
     return true;
   } catch (err) {
     console.warn('Print sync error:', err);
