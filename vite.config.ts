@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/snapid-studio/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
