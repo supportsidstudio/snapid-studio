@@ -1,8 +1,10 @@
 import * as ort from 'onnxruntime-web';
 
-// Matching onnxruntime-web package version in package.json (1.29.0)
+// Matching onnxruntime-web package version in package.json
 const ORT_VERSION = '1.20.1';
 const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
+
+let runtimeAppBaseUrl: string | null = null;
 
 /**
  * Dynamically resolves the base URL of the deployed app,
@@ -10,6 +12,9 @@ const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSIO
  * Vite preview, Netlify, and local development.
  */
 function getAppBaseUrl(): string {
+  if (runtimeAppBaseUrl) {
+    return runtimeAppBaseUrl;
+  }
   if (typeof self !== 'undefined' && self.location && self.location.href) {
     const href = self.location.href;
     // If worker is located in /assets/ subdirectory
@@ -263,7 +268,16 @@ async function generateTransparentImage(
 }
 
 self.onmessage = async (e: MessageEvent) => {
-  const { type, blob } = e.data;
+  const { type, blob, baseUrl } = e.data;
+
+  if (baseUrl && typeof baseUrl === 'string') {
+    runtimeAppBaseUrl = baseUrl;
+    try {
+      ort.env.wasm.wasmPaths = getWasmBasePath();
+    } catch (err) {
+      // Ignored
+    }
+  }
 
   if (type === 'preload') {
     try {

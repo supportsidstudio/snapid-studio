@@ -101,7 +101,8 @@ const globalPreload = async (): Promise<void> => {
         }
       };
       worker.addEventListener('message', handleMessage);
-      worker.postMessage({ type: 'preload' });
+      const appBaseUrl = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/')) : '/';
+      worker.postMessage({ type: 'preload', baseUrl: appBaseUrl });
     });
   })();
 
@@ -879,9 +880,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               }
             };
             worker.addEventListener('message', handleMessage);
+            const appBaseUrl = typeof window !== 'undefined' ? (window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/')) : '/';
             worker.postMessage({
               type: 'removeBackground',
-              blob: inputBlob
+              blob: inputBlob,
+              baseUrl: appBaseUrl
             });
           });
 
