@@ -825,6 +825,253 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     });
   };
 
+  // Analyze a document image canvas and return a score indicating how likely it is right-side up (upright)
+  // Higher score = UPRIGHT (horizontal text lines, emblem/header at top, face hair at top)
+  const scoreUprightOrientation = (canvas: HTMLCanvasElement): number => {
+    try {
+      const w = canvas.width;
+      const h = canvas.height;
+      if (w <= 0 || h <= 0) return 0;
+
+      // Analysis thumbnail
+      const anW = 400;
+      const anH = Math.max(10, Math.round(400 * (h / w)));
+      const aCanvas = document.createElement('canvas');
+      aCanvas.width = anW;
+      aCanvas.height = anH;
+      const aCtx = aCanvas.getContext('2d', { willReadFrequently: true });
+      if (!aCtx) return 0;
+
+      aCtx.drawImage(canvas, 0, 0, anW, anH);
+      const imgData = aCtx.getImageData(0, 0, anW, anH);
+      const data = imgData.data;
+
+      // 1. Check Horizontal Text Line Density (Row projection variance vs Column projection variance)
+      // Horizontal text lines produce alternating bands of text and whitespace along rows (high variance across rows)
+      const rowDarkCounts: number[] = new Array(anH).fill(0);
+      const colDarkCounts: number[] = new Array(anW).fill(0);
+      let totalDark = 0;
+
+      let topDarkPixels = 0;
+      let bottomDarkPixels = 0;
+      let topEdgeEnergy = 0;
+      let bottomEdgeEnergy = 0;
+
+      let skinPixels = 0;
+      let minSkinX = anW, maxSkinX = 0, minSkinY = anH, maxSkinY = 0;
+
+      const topBoundary = Math.round(anH * 0.35);
+      const bottomBoundary = Math.round(anH * 0.65);
+
+      for (let y = 1; y < anH - 1; y++) {
+        const rowIdx = y * anW * 4;
+        const isTop = y <= topBoundary;
+        const isBottom = y >= bottomBoundary;
+
+        for (let x = 1; x < anW - 1; x++) {
+          const idx = rowIdx + x * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+          const isDark = lum < 125;
+          if (isDark) {
+            rowDarkCounts[y]++;
+            colDarkCounts[x]++;
+            totalDark++;
+            if (isTop) topDarkPixels++;
+            if (isBottom) bottomDarkPixels++;
+          }
+
+          // Vertical edge (crossing horizontal text line)
+          const idxBelow = ((y + 1) * anW + x) * 4;
+          const lumBelow = 0.299 * data[idxBelow] + 0.587 * data[idxBelow + 1] + 0.114 * data[idxBelow + 2];
+          const vEdge = Math.abs(lum - lumBelow);
+
+          if (isTop) topEdgeEnergy += vEdge;
+          if (isBottom) bottomEdgeEnergy += vEdge;
+
+          // Skin tone check for ID face detection (Aadhaar, PAN, DL, Voter ID front)
+          if (r > 80 && g > 40 && b > 20 && r > g && g > b && (r - g) > 12 && (r - g) < 110) {
+            skinPixels++;
+            if (x < minSkinX) minSkinX = x;
+            if (x > maxSkinX) maxSkinX = x;
+            if (y < minSkinY) minSkinY = y;
+            if (y > maxSkinY) maxSkinY = y;
+          }
+        }
+      }
+
+      // Horizontal text lines yield higher row variance compared to column variance
+      const avgRowDark = totalDark / Math.max(1, anH);
+      let rowVar = 0;
+      for (let y = 0; y < anH; y++) {
+        rowVar += Math.pow(rowDarkCounts[y] - avgRowDark, 2);
+      }
+      rowVar = rowVar / Math.max(1, anH);
+
+      const avgColDark = totalDark / Math.max(1, anW);
+      let colVar = 0;
+      for (let x = 0; x < anW; x++) {
+        colVar += Math.pow(colDarkCounts[x] - avgColDark, 2);
+      }
+      colVar = colVar / Math.max(1, anW);
+
+      // Text horizontal orientation factor (bonus if text runs horizontally)
+      const textOrientationScore = (rowVar - colVar) * 2;
+
+      // Aspect ratio factor: ID cards are landscape (width > height).
+      const aspectScore = (w > h) ? 4000 : -4000;
+
+      // Header on top factor (Top dark & edge vs Bottom dark & edge)
+      // Indian IDs always have header banner / emblem / title on top
+      const headerScore = (topEdgeEnergy * 1.5 + topDarkPixels * 12) - (bottomEdgeEnergy * 1.5 + bottomDarkPixels * 12);
+
+      let totalScore = headerScore + textOrientationScore + aspectScore;
+
+      // Face analysis: if face is detected
+      if (skinPixels > 200 && maxSkinY > minSkinY + 20 && maxSkinX > minSkinX + 20) {
+        const boxH = maxSkinY - minSkinY;
+        let hairLum = 0, hairCount = 0;
+        let neckLum = 0, neckCount = 0;
+
+        const hairYEnd = minSkinY + Math.round(boxH * 0.25);
+        const neckYStart = maxSkinY - Math.round(boxH * 0.25);
+
+        for (let fy = minSkinY; fy <= maxSkinY; fy++) {
+          for (let fx = minSkinX; fx <= maxSkinX; fx++) {
+            const fidx = (fy * anW + fx) * 4;
+            const flum = 0.299 * data[fidx] + 0.587 * data[fidx + 1] + 0.114 * data[fidx + 2];
+            if (fy <= hairYEnd) {
+              hairLum += flum;
+              hairCount++;
+            } else if (fy >= neckYStart) {
+              neckLum += flum;
+              neckCount++;
+            }
+          }
+        }
+
+        const avgHairLum = hairCount > 0 ? hairLum / hairCount : 128;
+        const avgNeckLum = neckCount > 0 ? neckLum / neckCount : 128;
+
+        // In upright face, hair on top is darker than neck on bottom
+        if (avgHairLum < avgNeckLum - 5) {
+          totalScore += 25000; // Face is definitely upright!
+        } else if (avgNeckLum < avgHairLum - 5) {
+          totalScore -= 25000; // Face is upside down!
+        }
+      }
+
+      return totalScore;
+    } catch {
+      return 0;
+    }
+  };
+
+  // Helper to rotate an image DataURL smoothly by any degree
+  const rotateImageDataUrl = (src: string, angleDeg: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const rad = (angleDeg * Math.PI) / 180;
+        const cos = Math.abs(Math.cos(rad));
+        const sin = Math.abs(Math.sin(rad));
+        const newW = Math.round(img.naturalWidth * cos + img.naturalHeight * sin);
+        const newH = Math.round(img.naturalWidth * sin + img.naturalHeight * cos);
+
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, newW);
+        c.height = Math.max(1, newH);
+        const ctx = c.getContext('2d');
+        if (!ctx) {
+          resolve(src);
+          return;
+        }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, newW, newH);
+        ctx.translate(newW / 2, newH / 2);
+        ctx.rotate(rad);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        resolve(c.toDataURL('image/png'));
+      };
+      img.onerror = () => resolve(src);
+      img.src = src;
+    });
+  };
+
+  // Automatically straighten and orient any uploaded document photo
+  // Evaluates ALL FOUR canonical orientations (0°, 90°, 180°, 270°) to ensure the document is right-side up
+  const autoStraightenDocumentImage = (rawSrc: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = async () => {
+        try {
+          // Candidate orthogonal angles: 0° (as uploaded), 90° (cw), 180° (flipped), 270° / -90° (ccw)
+          const candidateAngles = [0, 90, 180, 270];
+
+          const renderRotated = (angleDeg: number): HTMLCanvasElement => {
+            const rad = (angleDeg * Math.PI) / 180;
+            const cos = Math.abs(Math.cos(rad));
+            const sin = Math.abs(Math.sin(rad));
+            const newW = Math.round(img.naturalWidth * cos + img.naturalHeight * sin);
+            const newH = Math.round(img.naturalWidth * sin + img.naturalHeight * cos);
+
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, newW);
+            c.height = Math.max(1, newH);
+            const ctx = c.getContext('2d');
+            if (ctx) {
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, newW, newH);
+              ctx.translate(newW / 2, newH / 2);
+              ctx.rotate(rad);
+              ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+            }
+            return c;
+          };
+
+          const candidates = candidateAngles.map((angle) => {
+            const canvas = renderRotated(angle);
+            let score = scoreUprightOrientation(canvas);
+            // Conservative bias for 0° so an already straight/upright photo is NOT rotated
+            if (angle === 0) {
+              score += 4000;
+            }
+            return { angle, canvas, score };
+          });
+
+          // Sort descending by upright score
+          candidates.sort((a, b) => b.score - a.score);
+          const best = candidates[0];
+
+          console.log(
+            `[AUTO-ORIENT] Evaluated:`,
+            candidates.map((c) => `${c.angle}°: ${Math.round(c.score)}`).join(', '),
+            `=> Chosen: ${best.angle}°`
+          );
+
+          if (best.angle === 0) {
+            resolve(rawSrc);
+          } else {
+            resolve(best.canvas.toDataURL('image/png'));
+          }
+        } catch {
+          resolve(rawSrc);
+        }
+      };
+      img.onerror = () => resolve(rawSrc);
+      img.src = rawSrc;
+    });
+  };
+
   // Step 10: preview refreshed logger
   useEffect(() => {
     if (frontImage || backImage) {
@@ -856,9 +1103,14 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     return new Promise((resolveResolve) => {
       const reader = new FileReader();
       reader.onload = async (event) => {
-        const dataUrl = event.target?.result as string;
+        const rawDataUrl = event.target?.result as string;
+        let dataUrl = rawDataUrl;
         try {
-          // Run AI-inspired card boundary automatic detection and crop!
+          // Automatically straighten and orient any uploaded document photo (portrait, sideways, or upside-down)
+          // to a perfect horizontal upright card layout (like Image 3 standard photocopy) without any manual intervention!
+          dataUrl = await autoStraightenDocumentImage(rawDataUrl);
+
+          // Run AI-inspired card boundary automatic detection and crop on the horizontal upright image!
           const analysis = await detectDocumentAndCrop(dataUrl, selectedDocPreset.aspectRatio);
           
           let boxX = 5;
@@ -873,16 +1125,17 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           }
           
           setCropBox({ x: boxX, y: boxY, w: boxW, h: boxH });
-          setModalRotation(0);
           setDetectionFailed(false);
 
           const initialAspect = (analysis.cropWidth > 0 && analysis.cropHeight > 0)
             ? (analysis.cropWidth / analysis.cropHeight)
             : selectedDocPreset.aspectRatio;
 
+          const croppedUrl = analysis.croppedDataUrl || dataUrl;
+
           if (side === 'front') {
             setFrontOriginal(dataUrl);
-            setFrontImage(analysis.croppedDataUrl || dataUrl);
+            setFrontImage(croppedUrl);
             setFrontAspect(initialAspect);
             setFrontZoom(1.0);
             setFrontPanX(0);
@@ -891,9 +1144,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             setFrontBright(100);
             setFrontContrast(100);
             setActiveSide('front');
+            await renderAllDocumentCanvases(croppedUrl, backImage, initialAspect, backAspect);
           } else {
             setBackOriginal(dataUrl);
-            setBackImage(analysis.croppedDataUrl || dataUrl);
+            setBackImage(croppedUrl);
             setBackAspect(initialAspect);
             setBackZoom(1.0);
             setBackPanX(0);
@@ -902,12 +1156,9 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             setBackBright(100);
             setBackContrast(100);
             setActiveSide('back');
+            await renderAllDocumentCanvases(frontImage, croppedUrl, frontAspect, initialAspect);
           }
           setPreviewTab('individual');
-
-          // Immediately open the 8-directional crop modal fitted to document boundary!
-          setCropModalSide(side);
-          setCropModalOpen(true);
 
           setIsDetectingFront(false);
           setIsDetectingBack(false);
@@ -926,6 +1177,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             setFrontBright(100);
             setFrontContrast(100);
             setActiveSide('front');
+            await renderAllDocumentCanvases(dataUrl, backImage, selectedDocPreset.aspectRatio, backAspect);
           } else {
             setBackImage(dataUrl);
             setBackOriginal(dataUrl);
@@ -937,11 +1189,9 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             setBackBright(100);
             setBackContrast(100);
             setActiveSide('back');
+            await renderAllDocumentCanvases(frontImage, dataUrl, frontAspect, selectedDocPreset.aspectRatio);
           }
           setCropBox({ x: 5, y: 5, w: 90, h: 90 });
-          setModalRotation(0);
-          setCropModalSide(side);
-          setCropModalOpen(true);
 
           setIsDetectingFront(false);
           setIsDetectingBack(false);
@@ -1237,32 +1487,28 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
 
     const [frontImgEl, backImgEl] = await Promise.all([loadImg(curFront), loadImg(curBack)]);
 
-    // 1. Render Front Canvas
+    // 1. Render Front Canvas - Always standard horizontal card (856x540)
     const fCanvas = frontCanvasRef.current;
     if (fCanvas) {
       const fCtx = fCanvas.getContext('2d');
       if (fCtx) {
+        const baseW = 856;
+        const baseH = 540;
+        fCanvas.width = baseW;
+        fCanvas.height = baseH;
+
+        fCtx.clearRect(0, 0, baseW, baseH);
+        fCtx.fillStyle = '#ffffff';
+        fCtx.fillRect(0, 0, baseW, baseH);
+
         if (frontImgEl) {
-          const aspect = curFrontAspect || (frontImgEl.naturalWidth / frontImgEl.naturalHeight) || selectedDocPreset.aspectRatio;
-          let baseW = 856;
-          let baseH = Math.round(856 / aspect);
-          if (aspect < 1) {
-            baseH = 856;
-            baseW = Math.round(856 * aspect);
-          }
-          fCanvas.width = baseW;
-          fCanvas.height = baseH;
-
-          fCtx.clearRect(0, 0, baseW, baseH);
-          fCtx.fillStyle = '#ffffff';
-          fCtx.fillRect(0, 0, baseW, baseH);
-
           fCtx.save();
           fCtx.translate(baseW / 2 + frontPanX, baseH / 2 + frontPanY);
           fCtx.rotate((frontRot * Math.PI) / 180);
 
-          const drawW = baseW * frontZoom;
-          const drawH = baseH * frontZoom;
+          let drawW = baseW * frontZoom;
+          let drawH = baseH * frontZoom;
+
           fCtx.filter = `brightness(${frontBright}%) contrast(${frontContrast}%)`;
           fCtx.drawImage(frontImgEl, -drawW / 2, -drawH / 2, drawW, drawH);
           fCtx.restore();
@@ -1274,40 +1520,32 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             fCtx.lineWidth = strokePx;
             fCtx.strokeRect(strokePx / 2, strokePx / 2, baseW - strokePx, baseH - strokePx);
           }
-        } else {
-          fCanvas.width = 856;
-          fCanvas.height = 540;
-          fCtx.clearRect(0, 0, 856, 540);
         }
       }
     }
 
-    // 2. Render Back Canvas
+    // 2. Render Back Canvas - Always standard horizontal card (856x540)
     const bCanvas = backCanvasRef.current;
     if (bCanvas) {
       const bCtx = bCanvas.getContext('2d');
       if (bCtx) {
+        const baseW = 856;
+        const baseH = 540;
+        bCanvas.width = baseW;
+        bCanvas.height = baseH;
+
+        bCtx.clearRect(0, 0, baseW, baseH);
+        bCtx.fillStyle = '#ffffff';
+        bCtx.fillRect(0, 0, baseW, baseH);
+
         if (backImgEl) {
-          const aspect = curBackAspect || (backImgEl.naturalWidth / backImgEl.naturalHeight) || selectedDocPreset.aspectRatio;
-          let baseW = 856;
-          let baseH = Math.round(856 / aspect);
-          if (aspect < 1) {
-            baseH = 856;
-            baseW = Math.round(856 * aspect);
-          }
-          bCanvas.width = baseW;
-          bCanvas.height = baseH;
-
-          bCtx.clearRect(0, 0, baseW, baseH);
-          bCtx.fillStyle = '#ffffff';
-          bCtx.fillRect(0, 0, baseW, baseH);
-
           bCtx.save();
           bCtx.translate(baseW / 2 + backPanX, baseH / 2 + backPanY);
           bCtx.rotate((backRot * Math.PI) / 180);
 
-          const drawW = baseW * backZoom;
-          const drawH = baseH * backZoom;
+          let drawW = baseW * backZoom;
+          let drawH = baseH * backZoom;
+
           bCtx.filter = `brightness(${backBright}%) contrast(${backContrast}%)`;
           bCtx.drawImage(backImgEl, -drawW / 2, -drawH / 2, drawW, drawH);
           bCtx.restore();
@@ -1319,10 +1557,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             bCtx.lineWidth = strokePx;
             bCtx.strokeRect(strokePx / 2, strokePx / 2, baseW - strokePx, baseH - strokePx);
           }
-        } else {
-          bCanvas.width = 856;
-          bCanvas.height = 540;
-          bCtx.clearRect(0, 0, 856, 540);
         }
       }
     }
@@ -1361,22 +1595,23 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           aCtx.stroke();
         }
 
-        // Calculate card dimensions on A4 sheet
-        const refAspect = (curFront ? curFrontAspect : curBackAspect) || selectedDocPreset.aspectRatio;
-        let itemWPx: number;
-        let itemHPx: number;
-        if (refAspect >= 1) {
-          itemWPx = Math.round(selectedDocPreset.widthMm * dpm);
-          itemHPx = Math.round(itemWPx / refAspect);
-        } else {
-          itemHPx = Math.round(selectedDocPreset.widthMm * dpm);
-          itemWPx = Math.round(itemHPx * refAspect);
-        }
+        // Calculate card dimensions on A4 sheet - ALWAYS standard horizontal photocopy card (85.6mm x 54mm)
+        const itemWPx = Math.round(selectedDocPreset.widthMm * dpm);
+        const itemHPx = Math.round(selectedDocPreset.heightMm * dpm);
 
         const drawItem = (source: HTMLCanvasElement | null, px: number, py: number, label: 'Front' | 'Back') => {
           const hasImg = label === 'Front' ? !!curFront : !!curBack;
           if (source && hasImg) {
-            aCtx.drawImage(source, px, py, itemWPx, itemHPx);
+            // Guarantee horizontal orientation: if source canvas is somehow vertical, draw rotated 90°
+            if (source.width < source.height) {
+              aCtx.save();
+              aCtx.translate(px + itemWPx / 2, py + itemHPx / 2);
+              aCtx.rotate((90 * Math.PI) / 180);
+              aCtx.drawImage(source, -itemHPx / 2, -itemWPx / 2, itemHPx, itemWPx);
+              aCtx.restore();
+            } else {
+              aCtx.drawImage(source, px, py, itemWPx, itemHPx);
+            }
           } else {
             aCtx.strokeStyle = '#94a3b8';
             aCtx.lineWidth = 3;
@@ -1478,39 +1713,61 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     const rh = Math.max(1, Math.round((clampedH / 100) * canvas.height));
 
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = rw;
-    outCanvas.height = rh;
-
-    const ctx = outCanvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, rw, rh);
-      ctx.drawImage(canvas, rx, ry, rw, rh, 0, 0, rw, rh);
-      const croppedDUrl = outCanvas.toDataURL('image/png');
-      const newAspect = rw / rh;
-      
-      if (cropModalSide === 'front') {
-        setFrontAspect(newAspect);
-        setFrontImage(croppedDUrl);
-        setFrontZoom(1.0);
-        setFrontPanX(0);
-        setFrontPanY(0);
-        setFrontRot(0);
-        // Instant synchronous render with latest front crop
-        renderAllDocumentCanvases(croppedDUrl, backImage, newAspect, backAspect);
-      } else {
-        setBackAspect(newAspect);
-        setBackImage(croppedDUrl);
-        setBackZoom(1.0);
-        setBackPanX(0);
-        setBackPanY(0);
-        setBackRot(0);
-        // Instant synchronous render with latest back crop
-        renderAllDocumentCanvases(frontImage, croppedDUrl, frontAspect, newAspect);
+    if (rw < rh) {
+      // The cropped selection is vertical (height > width), but ID documents (Aadhaar, PAN, DL)
+      // must ALWAYS be horizontal landscape like standard photocopy (Image 3)!
+      // Rotate 90 degrees clockwise so width becomes rh and height becomes rw!
+      outCanvas.width = rh;
+      outCanvas.height = rw;
+      const ctx = outCanvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, rh, rw);
+        ctx.save();
+        ctx.translate(rh / 2, rw / 2);
+        ctx.rotate((90 * Math.PI) / 180);
+        ctx.drawImage(canvas, rx, ry, rw, rh, -rw / 2, -rh / 2, rw, rh);
+        ctx.restore();
       }
-      setCropModalOpen(false);
-      setDetectionFailed(false);
+    } else {
+      outCanvas.width = rw;
+      outCanvas.height = rh;
+      const ctx = outCanvas.getContext('2d');
+      if (ctx) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, rw, rh);
+        ctx.drawImage(canvas, rx, ry, rw, rh, 0, 0, rw, rh);
+      }
     }
+
+    const croppedDUrl = outCanvas.toDataURL('image/png');
+    const newAspect = outCanvas.width / outCanvas.height;
+    
+    if (cropModalSide === 'front') {
+      setFrontAspect(newAspect);
+      setFrontImage(croppedDUrl);
+      setFrontZoom(1.0);
+      setFrontPanX(0);
+      setFrontPanY(0);
+      setFrontRot(0);
+      // Instant synchronous render with latest front crop
+      renderAllDocumentCanvases(croppedDUrl, backImage, newAspect, backAspect);
+    } else {
+      setBackAspect(newAspect);
+      setBackImage(croppedDUrl);
+      setBackZoom(1.0);
+      setBackPanX(0);
+      setBackPanY(0);
+      setBackRot(0);
+      // Instant synchronous render with latest back crop
+      renderAllDocumentCanvases(frontImage, croppedDUrl, frontAspect, newAspect);
+    }
+    setCropModalOpen(false);
+    setDetectionFailed(false);
   };
 
   // Reactive canvas rendering effect
@@ -1925,7 +2182,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     </button>
                   </div>
 
-                  {/* Explicit Crop trigger shortcuts */}
+                  {/* Crop Action Buttons */}
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -1942,7 +2199,8 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                           : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
                       }`}
                     >
-                      <span>📐 {language === 'hi' ? 'फ्रंट क्रॉप करें' : 'Crop Front Side'}</span>
+                      <Crop className="w-3.5 h-3.5" />
+                      <span>{language === 'hi' ? 'फ्रंट क्रॉप' : 'Crop Front'}</span>
                     </button>
                     <button
                       type="button"
@@ -1959,7 +2217,8 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                           : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
                       }`}
                     >
-                      <span>📐 {language === 'hi' ? 'बैक क्रॉप करें' : 'Crop Back Side'}</span>
+                      <Crop className="w-3.5 h-3.5" />
+                      <span>{language === 'hi' ? 'बैक क्रॉप' : 'Crop Back'}</span>
                     </button>
                   </div>
                 </div>
@@ -2696,12 +2955,30 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => rotateModalBy(90)}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Rotate 90° Clockwise"
+                >
+                  <RotateCw className="w-3 h-3 text-amber-400" />
+                  <span>90° घुमाएं</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => rotateModalBy(180)}
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="180° Flip (उल्टी फोटो सीधी करें)"
+                >
+                  <RefreshCw className="w-3 h-3 text-purple-400" />
+                  <span>180° उल्टी से सीधी</span>
+                </button>
+                <button
+                  type="button"
                   onClick={reDetectInModal}
                   className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition-colors cursor-pointer flex items-center gap-1.5"
                   title="Auto detect document boundaries"
                 >
                   <Sparkles className="w-3 h-3 text-emerald-400" />
-                  <span>{language === 'hi' ? 'ऑटो डिटेक्ट (Auto Detect)' : 'Auto Detect Edges'}</span>
+                  <span>{language === 'hi' ? 'ऑटो डिटेक्ट' : 'Auto Detect'}</span>
                 </button>
                 <button
                   type="button"
@@ -2737,7 +3014,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   title="Fit entire image"
                 >
                   <Maximize2 className="w-3 h-3 text-slate-400" />
-                  <span>{language === 'hi' ? 'पूरा फोटो (Full Image)' : 'Full Image'}</span>
+                  <span>{language === 'hi' ? 'पूरा फोटो' : 'Full Image'}</span>
                 </button>
               </div>
             </div>
@@ -2921,7 +3198,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(-90)}
-                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="-90°"
                   >
                     -90°
@@ -2929,7 +3206,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(-1)}
-                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="-1°"
                   >
                     -1°
@@ -2937,7 +3214,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(1)}
-                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="+1°"
                   >
                     +1°
@@ -2945,10 +3222,18 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(90)}
-                    className="flex-1 px-2.5 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="+90°"
                   >
                     +90°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rotateModalBy(180)}
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-purple-900/60 hover:bg-purple-900 text-purple-200 border border-purple-700/60 cursor-pointer transition-colors"
+                    title="180° Flip (उल्टी फोटो सीधी करें)"
+                  >
+                    180° फ्लिप
                   </button>
                 </div>
               </div>

@@ -31,7 +31,8 @@ import {
   X,
   Grid3X3,
   Square,
-  Move
+  Move,
+  Pipette
 } from 'lucide-react';
 import { 
   AppLanguage, 
@@ -44,9 +45,19 @@ import {
 } from '../types';
 import { translations } from '../translations';
 import { jsPDF } from 'jspdf';
+import {
+  calculateSheetLayout,
+  renderSinglePassportCardCanvas,
+  renderHighResSheetCanvas,
+  generatePrintReadyPdf,
+  syncDirectPrintDOM,
+  DPI_300_DPM
+} from '../utils/passport-print-engine';
 import BgRemovalWorker from '../workers/bg-removal.worker?worker';
+import PhotoEnhanceWorker from '../workers/photo-enhance.worker?worker';
 
 let bgWorker: Worker | null = null;
+let enhanceWorker: Worker | null = null;
 
 const getWorker = () => {
   if (!bgWorker && typeof window !== 'undefined') {
@@ -55,197 +66,11 @@ const getWorker = () => {
   return bgWorker;
 };
 
-const enhancePassportPhoto = (blob: Blob): Promise<Blob> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(blob);
-    img.src = url;
-    
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      
-      const width = img.naturalWidth;
-      const height = img.naturalHeight;
-      
-      if (width === 0 || height === 0) {
-        resolve(blob);
-        return;
-      }
-      
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        resolve(blob);
-        return;
-      }
-      
-      ctx.drawImage(img, 0, 0);
-      const imgData = ctx.getImageData(0, 0, width, height);
-      const data = imgData.data;
-      
-      // --- PART 1: AUTO BRIGHTNESS ADJUSTMENT ---
-      let totalLuminance = 0;
-      let subjectPixelCount = 0;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3];
-        if (a > 50) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          // Standard luma formula (ITU-R BT.709)
-          const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-          totalLuminance += luma;
-          subjectPixelCount++;
-        }
-      }
-      
-      let multiplier = 1.0;
-      if (subjectPixelCount > 0) {
-        const avgLuminance = totalLuminance / subjectPixelCount;
-        
-        // Soft standard passport luma range is 120 - 150
-        if (avgLuminance < 120) {
-          // Gently brighten dark photos
-          multiplier = Math.min(1.15, 132 / avgLuminance);
-        } else if (avgLuminance > 160) {
-          // Gently dim overexposed photos
-          multiplier = Math.max(0.88, 148 / avgLuminance);
-        }
-      }
-      
-      // Skin detection function covering light, olive, brown, and dark skin tones
-      const isSkinPixel = (r: number, g: number, b: number) => {
-        if (r < 50 || g < 35 || b < 22) return false;
-        if (r <= g) return false;
-        const rGDiff = r - g;
-        if (rGDiff < 10 || rGDiff > 75) return false;
-        if (g < b) return false;
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        if (max - min < 15) return false;
-        return true;
-      };
-      
-      // Apply brightness factor first directly to the output buffer
-      if (multiplier !== 1.0) {
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] > 50) {
-            data[i] = Math.max(0, Math.min(255, data[i] * multiplier));
-            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] * multiplier));
-            data[i + 2] = Math.max(0, Math.min(255, data[i + 2] * multiplier));
-          }
-        }
-      }
-      
-      // Copy the brightened state to srcData as the reading source
-      const srcData = new Uint8ClampedArray(data);
-      
-      // Pass 2: Selective Bilateral Smoothing (preserving sharp features)
-      const radius = 1; // 3x3 window is 3x faster than 5x5 and visually indistinguishable for skin-smoothing
-      const colorThreshold = 35; // Maximum pixel color difference to smooth
-      const blendFactor = 0.65; // Blends 65% smooth skin with 35% original to keep microtexture natural
-      
-      // Performance optimization: Process only the bounding box of non-transparent pixels
-      let minX = width;
-      let maxX = 0;
-      let minY = height;
-      let maxY = 0;
-      let hasSubject = false;
-
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = (y * width + x) * 4;
-          if (srcData[idx + 3] > 50) {
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-            hasSubject = true;
-          }
-        }
-      }
-
-      if (hasSubject) {
-        const margin = 2;
-        const startY = Math.max(0, minY - margin);
-        const endY = Math.min(height - 1, maxY + margin);
-        const startX = Math.max(0, minX - margin);
-        const endX = Math.min(width - 1, maxX + margin);
-
-        for (let y = startY; y <= endY; y++) {
-          for (let x = startX; x <= endX; x++) {
-            const idx = (y * width + x) * 4;
-            const a = srcData[idx + 3];
-            
-            if (a > 50) {
-              const r = srcData[idx];
-              const g = srcData[idx + 1];
-              const b = srcData[idx + 2];
-              
-              if (isSkinPixel(r, g, b)) {
-                let rSum = 0;
-                let gSum = 0;
-                let bSum = 0;
-                let weightSum = 0;
-                
-                for (let ky = -radius; ky <= radius; ky++) {
-                  const ny = y + ky;
-                  if (ny < 0 || ny >= height) continue;
-                  
-                  for (let kx = -radius; kx <= radius; kx++) {
-                    const nx = x + kx;
-                    if (nx < 0 || nx >= width) continue;
-                    
-                    const nIdx = (ny * width + nx) * 4;
-                    const nA = srcData[nIdx + 3];
-                    
-                    if (nA > 50) {
-                      const nR = srcData[nIdx];
-                      const nG = srcData[nIdx + 1];
-                      const nB = srcData[nIdx + 2];
-                      
-                      if (isSkinPixel(nR, nG, nB)) {
-                        const colorDist = Math.abs(r - nR) + Math.abs(g - nG) + Math.abs(b - nB);
-                        if (colorDist < colorThreshold) {
-                          const weight = 1.0 - (colorDist / (colorThreshold * 1.5));
-                          rSum += nR * weight;
-                          gSum += nG * weight;
-                          bSum += nB * weight;
-                          weightSum += weight;
-                        }
-                      }
-                    }
-                  }
-                }
-                
-                if (weightSum > 0) {
-                  const smoothedR = rSum / weightSum;
-                  const smoothedG = gSum / weightSum;
-                  const smoothedB = bSum / weightSum;
-                  
-                  data[idx] = Math.max(0, Math.min(255, smoothedR * blendFactor + r * (1 - blendFactor)));
-                  data[idx + 1] = Math.max(0, Math.min(255, smoothedG * blendFactor + g * (1 - blendFactor)));
-                  data[idx + 2] = Math.max(0, Math.min(255, smoothedB * blendFactor + b * (1 - blendFactor)));
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      ctx.putImageData(imgData, 0, 0);
-      canvas.toBlob((enhancedBlob) => {
-        resolve(enhancedBlob || blob);
-      }, 'image/png');
-    };
-    
-    img.onerror = () => {
-      resolve(blob);
-    };
-  });
+const getEnhanceWorker = () => {
+  if (!enhanceWorker && typeof window !== 'undefined') {
+    enhanceWorker = new PhotoEnhanceWorker();
+  }
+  return enhanceWorker;
 };
 
 const U2NETP_CONFIG = {
@@ -338,6 +163,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [rawSourceImage, setRawSourceImage] = useState<string | null>(null);
   const [removedBgImg, setRemovedBgImg] = useState<string | null>(null);
+  const [rawRemovedBgImg, setRawRemovedBgImg] = useState<string | null>(null);
+  const [enhancedBgImg, setEnhancedBgImg] = useState<string | null>(null);
+  const [useEnhancedPhoto, setUseEnhancedPhoto] = useState<boolean>(true);
+  const [enhanceCount, setEnhanceCount] = useState<number>(0);
+  const [enhancementStatus, setEnhancementStatus] = useState<'ready' | 'enhancing' | 'enhanced' | 'unavailable'>('ready');
+  const [enhancementErrorMsg, setEnhancementErrorMsg] = useState<string | null>(null);
+  const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
+  const [enhanceStepText, setEnhanceStepText] = useState<string>('');
   
   // Settings & Toggles
   const [sizePreset, setSizePreset] = useState<PassportPresetId>('eu_uk');
@@ -346,8 +179,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [customPaperHeightMm, setCustomPaperHeightMm] = useState<number>(150);
 
   // Background selection
-  const [bgColorType, setBgColorType] = useState<'white' | 'blue' | 'red' | 'transparent' | 'custom'>('white');
+  const [bgColorType, setBgColorType] = useState<'white' | 'blue' | 'lightgray' | 'red' | 'cyan' | 'offwhite' | 'transparent' | 'custom'>('white');
   const [customBgColor, setCustomBgColor] = useState('#ffffff');
+  const [sheetPageIndex, setSheetPageIndex] = useState<number>(0);
   
   // AI Progress
   const [isRemovingBg, setIsRemovingBg] = useState(false);
@@ -750,6 +584,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
       setOriginalImage(croppedDataUrl);
       setRemovedBgImg(null); // Reset background so AI auto-extracts the newly cropped portrait
+      setRawRemovedBgImg(null);
+      setEnhancedBgImg(null);
+      setEnhanceCount(0);
+      setEnhancementStatus('ready');
+      setEnhancementErrorMsg(null);
+      setUseEnhancedPhoto(true);
       setZoom(1.0);
       setPanX(0);
       setPanY(0);
@@ -828,14 +668,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
   const [photosCopiesCount, setPhotosCopiesCount] = useState<number>(8);
 
-  // Keep copies count strictly bounded between 1 and max paper capacity
+  // Keep copies count bounded between 1 and 64 (multi-page sheets supported automatically)
   useEffect(() => {
-    if (photosCopiesCount > maxCopiesOnPaper) {
-      setPhotosCopiesCount(maxCopiesOnPaper);
-    } else if (photosCopiesCount < 1) {
+    if (photosCopiesCount < 1) {
       setPhotosCopiesCount(1);
+    } else if (photosCopiesCount > 64) {
+      setPhotosCopiesCount(64);
     }
-  }, [maxCopiesOnPaper]);
+  }, [photosCopiesCount]);
 
   const [showBeforePreview, setShowBeforePreview] = useState<boolean>(false);
   const [singleCanvasUpdated, setSingleCanvasUpdated] = useState<number>(0);
@@ -940,6 +780,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       setRawSourceImage(optimizedUrl);
       setOriginalImage(optimizedUrl);
       setRemovedBgImg(null);
+      setRawRemovedBgImg(null);
+      setEnhancedBgImg(null);
+      setEnhanceCount(0);
+      setEnhancementStatus('ready');
+      setEnhancementErrorMsg(null);
+      setUseEnhancedPhoto(true);
       setZoom(1.0);
       setPanX(0);
       setPanY(0);
@@ -1039,19 +885,21 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             });
           });
 
-          setAiStep(language === 'hi' ? 'फोटो परिष्कृत की जा रही है...' : 'Optimizing photo...');
-          const polishStart = performance.now();
-          const enhancedBlob = await enhancePassportPhoto(resultBlob);
-          const polishElapsed = (performance.now() - polishStart).toFixed(1);
-          console.log(`[U2-NetP PIPELINE] Portrait enhance & skin smoothing finished in ${polishElapsed}ms`);
-
           const totalElapsed = ((performance.now() - overallStart) / 1000).toFixed(2);
-          console.log(`[U2-NetP PIPELINE TOTAL] Entire process completed in ${totalElapsed}s`);
+          console.log(`[U2-NetP PIPELINE TOTAL] Background removal completed in ${totalElapsed}s`);
 
           // Only update the state if this represents the latest requested image
           if (src === latestRequestedSrcRef.current) {
-            const transparentUrl = URL.createObjectURL(enhancedBlob);
+            const transparentUrl = URL.createObjectURL(resultBlob);
+            setRawRemovedBgImg(transparentUrl);
             setRemovedBgImg(transparentUrl);
+            setEnhancedBgImg(null);
+            setEnhancementStatus('ready');
+            setEnhancementErrorMsg(null);
+            setUseEnhancedPhoto(true);
+
+            // Automatically run professional AI photo enhancement in the background (Pass 1)
+            runAiPhotoEnhancement(resultBlob, true);
           }
         } catch (err) {
           console.error('Error removing background via U²-NetP ONNX:', err);
@@ -1072,14 +920,108 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       });
   };
 
+  // AI Photo Enhancement runner (supports iterative passes & super-resolution)
+  const runAiPhotoEnhancement = async (inputBlob: Blob, isFirstAutoPass = false) => {
+    setIsEnhancing(true);
+    setEnhancementStatus('enhancing');
+    setEnhanceStepText('Analyzing image clarity...');
+    setEnhancementErrorMsg(null);
+
+    try {
+      const worker = getEnhanceWorker();
+      if (!worker) throw new Error('AI Enhancement worker unavailable');
+
+      const enhancedBlob = await new Promise<Blob>((resolve, reject) => {
+        const handleMessage = (e: MessageEvent) => {
+          if (e.data.type === 'progress') {
+            setEnhanceStepText(e.data.step || 'Enhancing photo...');
+          } else if (e.data.type === 'success') {
+            worker.removeEventListener('message', handleMessage);
+            resolve(e.data.blob);
+          } else if (e.data.type === 'error') {
+            worker.removeEventListener('message', handleMessage);
+            reject(new Error(e.data.error || 'Enhancement failed'));
+          }
+        };
+        worker.addEventListener('message', handleMessage);
+        worker.postMessage({
+          type: 'enhance',
+          blob: inputBlob,
+          strength: 1.0
+        });
+      });
+
+      const enhancedUrl = URL.createObjectURL(enhancedBlob);
+      setEnhancedBgImg(enhancedUrl);
+      setEnhancementStatus('enhanced');
+      setUseEnhancedPhoto(true);
+      setRemovedBgImg(enhancedUrl);
+
+      if (isFirstAutoPass) {
+        setEnhanceCount(1);
+      } else {
+        setEnhanceCount((prev) => prev + 1);
+      }
+    } catch (err: any) {
+      console.warn('AI photo enhancement failed:', err);
+      setEnhancementStatus('unavailable');
+      setEnhancementErrorMsg("AI enhancement couldn't be completed. Original photo is ready.");
+    } finally {
+      setIsEnhancing(false);
+      setEnhanceStepText('');
+    }
+  };
+
+  // Toggle between Enhanced and Original background-removed version
+  const handleToggleEnhanced = (useEnhanced: boolean) => {
+    setUseEnhancedPhoto(useEnhanced);
+    if (useEnhanced && enhancedBgImg) {
+      setRemovedBgImg(enhancedBgImg);
+    } else if (rawRemovedBgImg) {
+      setRemovedBgImg(rawRemovedBgImg);
+    }
+  };
+
+  // Manual trigger for Enhance Photo button (iterative multi-pass enhancement on each click)
+  const handleManualEnhanceClick = async () => {
+    // If currently using enhanced version, enhance that version further; otherwise enhance raw original
+    const srcToEnhance = (useEnhancedPhoto && enhancedBgImg) ? enhancedBgImg : (rawRemovedBgImg || removedBgImg);
+    if (!srcToEnhance || isEnhancing) return;
+
+    try {
+      const resp = await fetch(srcToEnhance);
+      const blob = await resp.blob();
+      await runAiPhotoEnhancement(blob, false);
+    } catch (err) {
+      console.warn('Manual enhancement fetch failed:', err);
+      setEnhancementStatus('unavailable');
+      setEnhancementErrorMsg("AI enhancement couldn't be completed. Original photo is ready.");
+    }
+  };
+
+  // Reset enhancement back to 0x Original
+  const handleResetEnhancement = () => {
+    if (!rawRemovedBgImg) return;
+    setUseEnhancedPhoto(false);
+    setRemovedBgImg(rawRemovedBgImg);
+    setEnhancedBgImg(null);
+    setEnhanceCount(0);
+    setEnhancementStatus('ready');
+    setEnhancementErrorMsg(null);
+  };
+
   // Get background color string
   const getBackgroundColor = () => {
     switch (bgColorType) {
       case 'white': return '#ffffff';
       case 'blue': return '#004494';
+      case 'lightgray': return '#e5e7eb';
       case 'red': return '#d21034';
+      case 'cyan': return '#38bdf8';
+      case 'offwhite': return '#f8fafc';
       case 'transparent': return 'transparent';
-      case 'custom': return customBgColor;
+      case 'custom': return customBgColor || '#ffffff';
+      default: return '#ffffff';
     }
   };
 
@@ -1200,18 +1142,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     borderColor
   ]);
 
-  // Live Sheet lay-up render grid sheet preview
-  useEffect(() => {
-    const sheetCanvas = sheetCanvasRef.current;
-    if (!sheetCanvas || !previewCanvasRef.current || !originalImage) return;
-
-    const ctx = sheetCanvas.getContext('2d');
-    if (!ctx) return;
-
-    // Wait until single card renderer finishes
-    const singleCanvas = previewCanvasRef.current;
-    
-    // Physical Page Config
+  // Physical print engine config helper
+  const getPrintEngineConfig = () => {
     let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
     let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
     if (sheetSize === 'size_user_defined') {
@@ -1221,7 +1153,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
     let pageWidthMm = baseWidthMm;
     let pageHeightMm = baseHeightMm;
-    
+
     if (sheetSize === 'single') {
       pageWidthMm = selectedSizePreset.widthMm + (borderWidth * 2);
       pageHeightMm = selectedSizePreset.heightMm + (borderWidth * 2);
@@ -1232,97 +1164,50 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       pageHeightMm = minDim;
     }
 
-    // Set 300 DPI high-res scale (1 inch = 25.4 mm)
-    const dpm = 300 / 25.4; // pixels per mm (~11.81 px/mm)
-    const widthPx = Math.round(pageWidthMm * dpm);
-    const heightPx = Math.round(pageHeightMm * dpm);
+    return {
+      pageWidthMm,
+      pageHeightMm,
+      photoWidthMm: selectedSizePreset.widthMm,
+      photoHeightMm: selectedSizePreset.heightMm,
+      copiesCount: sheetSize === 'single' ? 1 : photosCopiesCount,
+      borderWidthMm: borderWidth,
+      borderColor: borderColor,
+      isSingle: sheetSize === 'single'
+    };
+  };
 
-    sheetCanvas.width = widthPx;
-    sheetCanvas.height = heightPx;
+  // Live Sheet lay-up render grid sheet preview using fast responsive Engine
+  useEffect(() => {
+    const sheetCanvas = sheetCanvasRef.current;
+    if (!sheetCanvas || !previewCanvasRef.current || !originalImage) return;
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, widthPx, heightPx);
-
-    if (sheetSize === 'single') {
-      // Draw standard single passport size directly centered (standalone download)
-      ctx.drawImage(singleCanvas, 0, 0, widthPx, heightPx);
-      return;
-    }
-
-    const photoWidthPx = Math.round(selectedSizePreset.widthMm * dpm);
-    const photoHeightPx = Math.round(selectedSizePreset.heightMm * dpm);
-
-    // Sheet layouts with smart adaptive padding (Landscape studio standard)
-    const isSmallPhotoPaper = pageWidthMm <= 160 && pageHeightMm <= 210;
-    const gapMm = isSmallPhotoPaper ? 2 : 3.5;
-    const edgeMargin = isSmallPhotoPaper ? 2 : 8;
-    const gapPx = Math.round(gapMm * dpm);
-
-    const maxCols = Math.max(1, Math.floor((pageWidthMm - (2 * edgeMargin) + gapMm) / (selectedSizePreset.widthMm + gapMm)));
-    const maxRows = Math.max(1, Math.floor((pageHeightMm - (2 * edgeMargin) + gapMm) / (selectedSizePreset.heightMm + gapMm)));
-    const maxCapacity = maxCols * maxRows;
-
-    let numPhotos = Math.max(1, Math.min(photosCopiesCount, maxCapacity));
-
-    // Choose optimal columns to keep layout clean and within maxCols and maxRows
-    let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? (maxCols >= 4 && numPhotos > 4 ? 4 : 3) : 4);
-    if (Math.ceil(numPhotos / numCols) > maxRows) {
-      numCols = Math.min(maxCols, Math.ceil(numPhotos / maxRows));
-    }
-
-    // Compute layout margins to center the entire grid
-    const totalGridWidth = (numCols * photoWidthPx) + ((numCols - 1) * gapPx);
-    const numRows = Math.ceil(numPhotos / numCols);
-    const totalGridHeight = (numRows * photoHeightPx) + ((numRows - 1) * gapPx);
+    const singleCanvas = previewCanvasRef.current;
+    const config = getPrintEngineConfig();
     
-    const startX = Math.round((widthPx - totalGridWidth) / 2);
-    const startY = Math.round((heightPx - totalGridHeight) / 2);
-
-    // Render photo copies
-    for (let i = 0; i < numPhotos; i++) {
-      const row = Math.floor(i / numCols);
-      const col = i % numCols;
-
-      const px = startX + (col * (photoWidthPx + gapPx));
-      const py = startY + (row * (photoHeightPx + gapPx));
-
-      // Draw faint cut mark around card limit
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(px - 1, py - 1, photoWidthPx + 2, photoHeightPx + 2);
-
-      ctx.drawImage(singleCanvas, px, py, photoWidthPx, photoHeightPx);
+    // Ensure sheetPageIndex is valid
+    const layout = calculateSheetLayout(config, sheetPageIndex);
+    const safePageIndex = Math.max(0, Math.min(layout.totalPages - 1, sheetPageIndex));
+    if (safePageIndex !== sheetPageIndex) {
+      setSheetPageIndex(safePageIndex);
     }
 
-    // Pre-sync print buffer into DOM ahead of time for instant 1st-try Ctrl+P printing
-    try {
-      const dataUrl = sheetCanvas.toDataURL('image/png');
-      let printContainer = document.getElementById('snapid-global-print-area');
-      if (!printContainer) {
-        printContainer = document.createElement('div');
-        printContainer.id = 'snapid-global-print-area';
-        printContainer.style.display = 'none';
-        document.body.appendChild(printContainer);
-      } else {
-        printContainer.style.display = 'none';
-      }
-      let img = printContainer.querySelector('img') as HTMLImageElement | null;
-      if (!img) {
-        img = document.createElement('img');
-        img.alt = 'Print Sheet';
-        printContainer.appendChild(img);
-      }
-      img.src = dataUrl;
-      if (img.decode) {
-        img.decode().catch(() => {});
-      }
-    } catch {
-      // ignore
+    // Fast screen preview DPM (caps at ~900px wide for instantaneous 60fps rendering without memory freeze)
+    const previewDpm = Math.min(DPI_300_DPM, Math.max(3.0, 900 / Math.max(config.pageWidthMm, config.pageHeightMm)));
+
+    // Render fast preview sheet canvas
+    const renderedSheet = renderHighResSheetCanvas(singleCanvas, config, safePageIndex, previewDpm);
+    sheetCanvas.width = renderedSheet.width;
+    sheetCanvas.height = renderedSheet.height;
+
+    const ctx = sheetCanvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(renderedSheet, 0, 0);
     }
   }, [
     sizePreset, 
     sheetSize, 
     photosCopiesCount,
+    sheetPageIndex,
     originalImage, 
     removedBgImg, 
     bgColorType, 
@@ -1345,201 +1230,67 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     if (!previewCanvasRef.current) return;
     const link = document.createElement('a');
     link.download = `SnapID_Passport_${selectedSizePreset.id}_single.png`;
-    link.href = previewCanvasRef.current.toDataURL('image/png');
+    link.href = previewCanvasRef.current.toDataURL('image/png', 1.0);
     link.click();
   };
 
-  // Download Entire Compiled Sheet layout as PNG
+  // Download Entire Compiled Sheet layout as 300 DPI PNG
   const downloadSheetPng = () => {
-    if (!sheetCanvasRef.current) return;
+    if (!previewCanvasRef.current) return;
+    const config = getPrintEngineConfig();
+    const sheetCanvas = renderHighResSheetCanvas(previewCanvasRef.current, config, sheetPageIndex);
     const link = document.createElement('a');
-    link.download = `SnapID_Passport_${selectedSizePreset.id}_sheet_${selectedSheetPreset.id}.png`;
-    link.href = sheetCanvasRef.current.toDataURL('image/png');
+    link.download = `SnapID_Passport_${selectedSizePreset.id}_sheet_${selectedSheetPreset.id}_page${sheetPageIndex + 1}.png`;
+    link.href = sheetCanvas.toDataURL('image/png', 1.0);
     link.click();
   };
 
   // Download Exact Millimetric High-Quality PDF ready-for-print
-  const downloadSheetPdf = () => {
+  const downloadSheetPdf = async () => {
     if (!previewCanvasRef.current) return;
 
     try {
-      // Setup PDF in exact millimeters
-      const isSingleRaw = sheetSize === 'single';
-      
-      let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
-      let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
-      if (sheetSize === 'size_user_defined') {
-        baseWidthMm = customPaperWidthMm || 100;
-        baseHeightMm = customPaperHeightMm || 150;
-      }
-      
-      let widthMm = baseWidthMm;
-      let heightMm = baseHeightMm;
-      
-      if (isSingleRaw) {
-        widthMm = selectedSizePreset.widthMm + (borderWidth * 2);
-        heightMm = selectedSizePreset.heightMm + (borderWidth * 2);
-      } else {
-        const minDim = Math.min(baseWidthMm, baseHeightMm);
-        const maxDim = Math.max(baseWidthMm, baseHeightMm);
-        widthMm = maxDim;
-        heightMm = minDim;
-      }
-
-      // Initialize doc with precise physical formats (Landscape for sheets)
-      const doc = new jsPDF({
-        orientation: isSingleRaw ? 'portrait' : 'landscape',
-        unit: 'mm',
-        format: [widthMm, heightMm]
-      });
-
-      const cardImgData = previewCanvasRef.current.toDataURL('image/png');
-
-      if (isSingleRaw) {
-        // Just fit the card precisely to the page limits
-        doc.addImage(cardImgData, 'PNG', 0, 0, widthMm, heightMm);
-      } else {
-        // Build millimetric copy placement to match canvas sheets
-        const photoWidthMm = selectedSizePreset.widthMm;
-        const photoHeightMm = selectedSizePreset.heightMm;
-        const isSmallPhotoPaper = widthMm <= 160 && heightMm <= 210;
-        const gapMm = isSmallPhotoPaper ? 2 : 3.5;
-        const edgeMargin = isSmallPhotoPaper ? 2 : 8;
-
-        const maxCols = Math.max(1, Math.floor((widthMm - (2 * edgeMargin) + gapMm) / (photoWidthMm + gapMm)));
-        const maxRows = Math.max(1, Math.floor((heightMm - (2 * edgeMargin) + gapMm) / (photoHeightMm + gapMm)));
-        const maxCapacity = maxCols * maxRows;
-
-        let numPhotos = Math.max(1, Math.min(photosCopiesCount, maxCapacity));
-
-        let numCols = Math.min(maxCols, numPhotos <= 2 ? 2 : numPhotos <= 4 ? 2 : numPhotos <= 6 ? (maxCols >= 4 && numPhotos > 4 ? 4 : 3) : 4);
-        if (Math.ceil(numPhotos / numCols) > maxRows) {
-          numCols = Math.min(maxCols, Math.ceil(numPhotos / maxRows));
-        }
-
-        const gridWidth = (numCols * photoWidthMm) + ((numCols - 1) * gapMm);
-        const numRows = Math.ceil(numPhotos / numCols);
-        const gridHeight = (numRows * photoHeightMm) + ((numRows - 1) * gapMm);
-
-        const startX = (widthMm - gridWidth) / 2;
-        const startY = (heightMm - gridHeight) / 2;
-
-        for (let i = 0; i < numPhotos; i++) {
-          const r = Math.floor(i / numCols);
-          const c = i % numCols;
-
-          const px = startX + (c * (photoWidthMm + gapMm));
-          const py = startY + (r * (photoHeightMm + gapMm));
-
-          // Draw a very faint cut guidelines
-          doc.setDrawColor(230, 230, 230);
-          doc.setLineWidth(0.1);
-          doc.rect(px - 0.2, py - 0.2, photoWidthMm + 0.4, photoHeightMm + 0.4, 'S');
-
-          // Place portrait
-          doc.addImage(cardImgData, 'PNG', px, py, photoWidthMm, photoHeightMm);
-        }
-      }
-
-      doc.save(`SnapID_Passport_${selectedSizePreset.id}_sheet_${selectedSheetPreset.id}.pdf`);
+      const config = getPrintEngineConfig();
+      const filename = `SnapID_Passport_${selectedSizePreset.id}_sheet_${selectedSheetPreset.id}.pdf`;
+      await generatePrintReadyPdf(previewCanvasRef.current, config, filename);
     } catch (e) {
       console.error('PDF creation error:', e);
       alert('Failed to generate PDF layout. Please try downloading as PNG.');
     }
   };
 
-  // Sync print buffer into dedicated DOM element with exact physical millimeter @page CSS
-  const syncPrintArea = async () => {
-    const canvas = sheetCanvasRef.current;
-    if (!canvas || !originalImage) return false;
-
-    try {
-      const dataUrl = canvas.toDataURL('image/png');
-      let printContainer = document.getElementById('snapid-global-print-area');
-      if (!printContainer) {
-        printContainer = document.createElement('div');
-        printContainer.id = 'snapid-global-print-area';
-        printContainer.style.display = 'none';
-        document.body.appendChild(printContainer);
-      } else {
-        printContainer.style.display = 'none';
-      }
-
-      let img = printContainer.querySelector('img') as HTMLImageElement | null;
-      if (!img) {
-        img = document.createElement('img');
-        img.alt = 'Print Preview';
-        printContainer.appendChild(img);
-      }
-      img.src = dataUrl;
-
-      let styleEl = document.getElementById('snapid-print-style') as HTMLStyleElement | null;
-      if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = 'snapid-print-style';
-        document.head.appendChild(styleEl);
-      }
-
-      let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
-      let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
-      if (sheetSize === 'size_user_defined') {
-        baseWidthMm = customPaperWidthMm || 100;
-        baseHeightMm = customPaperHeightMm || 150;
-      }
-      
-      let widthMm = baseWidthMm;
-      let heightMm = baseHeightMm;
-      
-      if (sheetSize === 'single') {
-        widthMm = selectedSizePreset.widthMm + (borderWidth * 2);
-        heightMm = selectedSizePreset.heightMm + (borderWidth * 2);
-      } else {
-        const minDim = Math.min(baseWidthMm, baseHeightMm);
-        const maxDim = Math.max(baseWidthMm, baseHeightMm);
-        widthMm = maxDim;
-        heightMm = minDim;
-      }
-
-      styleEl.innerHTML = `
-        @media print {
-          @page {
-            size: ${widthMm}mm ${heightMm}mm !important;
-            margin: 0mm !important;
-          }
-        }
-      `;
-
-      if (img.decode) {
-        await img.decode().catch(() => {});
-      }
-      return true;
-    } catch (err) {
-      console.warn('Print sync error:', err);
-      return false;
-    }
-  };
-
   // Instant 1st-try Direct Print Trigger
   const handleDirectPrint = async () => {
-    if (!sheetCanvasRef.current || !originalImage) {
+    if (!previewCanvasRef.current || !originalImage) {
       alert(language === 'hi' 
         ? "कृपया प्रिंट करने से पहले फोटो अपलोड और प्रोसेस करें।"
         : "Please upload and process an image first before printing.");
       return;
     }
-    await syncPrintArea();
+    const config = getPrintEngineConfig();
+    await syncDirectPrintDOM(previewCanvasRef.current, config);
     setTimeout(() => {
       window.print();
     }, 40);
   };
 
-  // Instant Ctrl+P / Cmd+P Keyboard Interceptor
+  // Keyboard Shortcuts: F8 (8 photos), F9 (32 photos), Alt+E / F4 (AI Enhance), Ctrl+P (Direct Print)
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
-        if (originalImage && sheetCanvasRef.current) {
+      if (e.key === 'F8') {
+        e.preventDefault();
+        setPhotosCopiesCount(8);
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        setPhotosCopiesCount(32);
+      } else if (e.key === 'F4' || (e.altKey && (e.key === 'e' || e.key === 'E'))) {
+        e.preventDefault();
+        handleManualEnhanceClick();
+      } else if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
+        if (originalImage && previewCanvasRef.current) {
           e.preventDefault();
-          await syncPrintArea();
+          const config = getPrintEngineConfig();
+          await syncDirectPrintDOM(previewCanvasRef.current, config);
           setTimeout(() => {
             window.print();
           }, 40);
@@ -1551,19 +1302,37 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [originalImage, sheetSize, photosCopiesCount, sizePreset, customPaperWidthMm, customPaperHeightMm, singleCanvasUpdated]);
+  }, [
+    originalImage, 
+    sheetSize, 
+    photosCopiesCount, 
+    sizePreset, 
+    customPaperWidthMm, 
+    customPaperHeightMm, 
+    singleCanvasUpdated,
+    useEnhancedPhoto,
+    enhancedBgImg,
+    rawRemovedBgImg,
+    removedBgImg,
+    isEnhancing,
+    borderWidth,
+    borderColor
+  ]);
 
   // Browser BeforePrint fallback hook
   useEffect(() => {
     const handleBeforePrint = () => {
-      syncPrintArea();
+      if (previewCanvasRef.current) {
+        const config = getPrintEngineConfig();
+        syncDirectPrintDOM(previewCanvasRef.current, config);
+      }
     };
 
     window.addEventListener('beforeprint', handleBeforePrint);
     return () => {
       window.removeEventListener('beforeprint', handleBeforePrint);
     };
-  }, [originalImage, sheetSize, customPaperWidthMm, customPaperHeightMm]);
+  }, [originalImage, sheetSize, customPaperWidthMm, customPaperHeightMm, photosCopiesCount, sizePreset, borderWidth, borderColor]);
 
   return (
     <div className="space-y-6">
@@ -1802,23 +1571,69 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     className="w-auto h-auto max-h-[340px] max-w-full block mx-auto object-contain bg-white shrink-0"
                   />
                 </div>
+
+                {/* Multi-Page Sheet Navigation Controls */}
+                {(() => {
+                  const config = getPrintEngineConfig();
+                  const layout = calculateSheetLayout(config, sheetPageIndex);
+                  if (layout.totalPages > 1) {
+                    return (
+                      <div className="mt-2.5 flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          disabled={sheetPageIndex <= 0}
+                          onClick={() => setSheetPageIndex(p => Math.max(0, p - 1))}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                            sheetPageIndex <= 0
+                              ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900'
+                              : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                          }`}
+                        >
+                          ← Prev Page
+                        </button>
+                        <span className="text-xs font-mono font-bold text-slate-200 bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700">
+                          Sheet {sheetPageIndex + 1} of {layout.totalPages} ({layout.photosOnPage} photos)
+                        </span>
+                        <button
+                          type="button"
+                          disabled={sheetPageIndex >= layout.totalPages - 1}
+                          onClick={() => setSheetPageIndex(p => Math.min(layout.totalPages - 1, p + 1))}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                            sheetPageIndex >= layout.totalPages - 1
+                              ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900'
+                              : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                          }`}
+                        >
+                          Next Page →
+                        </button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3.5 text-xs text-slate-400 font-medium text-center">
-                  <span className="truncate max-w-[260px] sm:max-w-none">Layout Sheet: {selectedSheetPreset.nameEn} ({photosCopiesCount} Photos Grid)</span>
+                  <span className="truncate max-w-[260px] sm:max-w-none">Layout Sheet: {selectedSheetPreset.nameEn} ({photosCopiesCount} Photos Total)</span>
                   <span className="hidden sm:inline">•</span>
-                  <span>300 DPI high resolution printing ready</span>
+                  <span>300 DPI Studio Grade Output</span>
                 </div>
               </div>
 
             </div>
 
             {/* Quick action buttons row inside panel */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
               <button
                 onClick={() => {
                   setOriginalImage(null);
                   setRemovedBgImg(null);
+                  setRawRemovedBgImg(null);
+                  setEnhancedBgImg(null);
+                  setEnhanceCount(0);
+                  setEnhancementStatus('ready');
+                  setEnhancementErrorMsg(null);
                 }}
-                className={`w-full sm:w-auto px-4.5 py-2.5 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer subtle-glow-button ${
+                className={`w-full sm:w-auto px-3.5 py-2.5 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer subtle-glow-button ${
                   theme === 'dark'
                     ? 'border-slate-800 hover:bg-slate-900 text-slate-300'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-650'
@@ -2163,18 +1978,20 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 )}
               </div>
 
-              {/* 3. Copies Selection Panel - Compact Interactive Stepper */}
+              {/* 3. Copies Selection Panel - Compact Interactive Stepper & Studio Presets */}
               {sheetSize !== 'single' && (
-                <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-1.5">
+                <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 animate-fadeIn space-y-2">
                   <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border subtle-element-glow ${
                     theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
                   }`}>
                     <div className="flex flex-col">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {language === 'hi' ? 'प्रतियाँ (Copies)' : 'Copies Count'}
+                        {language === 'hi' ? 'फोटो संख्या (Photo Quantity)' : 'Photo Quantity'}
                       </span>
                       <span className="text-[9px] text-blue-500 font-medium font-mono">
-                        Max Capacity: {maxCopiesOnPaper}
+                        {photosCopiesCount > maxCopiesOnPaper 
+                          ? `${Math.ceil(photosCopiesCount / maxCopiesOnPaper)} Sheets (${maxCopiesOnPaper}/sheet)`
+                          : `1 Sheet (${photosCopiesCount}/${maxCopiesOnPaper} slots)`}
                       </span>
                     </div>
 
@@ -2197,7 +2014,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         <Minus className="w-3.5 h-3.5" />
                       </button>
 
-                      <div className="min-w-[30px] text-center">
+                      <div className="min-w-[32px] text-center">
                         <span className="text-sm font-black font-mono text-blue-500">
                           {photosCopiesCount}
                         </span>
@@ -2206,10 +2023,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       <button
                         type="button"
                         id="passport-copies-increase-btn"
-                        disabled={photosCopiesCount >= maxCopiesOnPaper}
-                        onClick={() => setPhotosCopiesCount(prev => Math.min(maxCopiesOnPaper, prev + 1))}
+                        disabled={photosCopiesCount >= 64}
+                        onClick={() => setPhotosCopiesCount(prev => Math.min(64, prev + 1))}
                         className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button ${
-                          photosCopiesCount >= maxCopiesOnPaper
+                          photosCopiesCount >= 64
                             ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
                             : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
                         }`}
@@ -2220,29 +2037,254 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     </div>
                   </div>
 
-                  {/* Preset quick counts */}
-                  <div className="flex items-center gap-1 justify-end">
-                    <span className="text-[9px] text-slate-400 mr-auto font-medium">Quick:</span>
-                    {[2, 4, 6, 8, maxCopiesOnPaper].filter((c, idx, arr) => c <= maxCopiesOnPaper && arr.indexOf(c) === idx).map(count => (
-                      <button
-                        key={count}
-                        type="button"
-                        onClick={() => setPhotosCopiesCount(count)}
-                        className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all cursor-pointer subtle-glow-button ${
-                          photosCopiesCount === count
-                            ? 'border-blue-500 bg-blue-500 text-white subtle-glow-active'
-                            : theme === 'dark' ? 'border-slate-800 bg-slate-900 text-slate-400 hover:text-white' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        {count === maxCopiesOnPaper ? `Max(${count})` : count}
-                      </button>
-                    ))}
+                  {/* Preset quick studio counts */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Studio Layouts:</span>
+                      <span className="text-[8px] font-mono text-slate-500">Shortcuts: F8=8, F9=32</span>
+                    </div>
+                    <div className="grid grid-cols-6 gap-1">
+                      {[4, 6, 8, 12, 16, 32].map(count => (
+                        <button
+                          key={count}
+                          type="button"
+                          onClick={() => setPhotosCopiesCount(count)}
+                          className={`py-1 rounded text-[10px] font-mono font-bold border text-center transition-all cursor-pointer subtle-glow-button ${
+                            photosCopiesCount === count
+                              ? 'border-blue-500 bg-blue-500 text-white subtle-glow-active'
+                              : theme === 'dark' 
+                                ? 'border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-700' 
+                                : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          }`}
+                          title={`${count} Photos${count === 8 ? ' (F8)' : count === 32 ? ' (F9)' : ''}`}
+                        >
+                          {count}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Copies selection panel - custom grid options */}
+            {/* Panel Card: Professional Crop & Align Studio Tool (Single Primary Location) */}
+            <div className={`p-4 sm:p-5 rounded-2xl border subtle-glow-card ${
+              theme === 'dark' 
+                ? 'bg-gradient-to-b from-blue-950/20 via-slate-950 to-slate-950 border-blue-500/30 shadow-lg shadow-blue-500/5' 
+                : 'bg-gradient-to-b from-blue-50/50 via-white to-white border-blue-200 shadow-sm'
+            } space-y-3`}>
+              <div className="flex items-center justify-between border-b pb-2 border-slate-200/60 dark:border-slate-800/60">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                    <Crop className="w-4 h-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs sm:text-sm tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                      <span>{language === 'hi' ? 'फोटो क्रॉप एवं अलाइन (Crop Tool)' : 'Crop & Align Tool'}</span>
+                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                        {selectedSizePreset.widthMm}x{selectedSizePreset.heightMm}mm
+                      </span>
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      {language === 'hi' ? 'पासपोर्ट फेस रेश्यो के अनुसार परफेक्ट फ्रेमिंग' : 'Precision crop box & instant alignment'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                id="passport-top-crop-action-btn"
+                onClick={openPhotoshopCropModal}
+                className="w-full py-2.5 sm:py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer bg-blue-600 hover:bg-blue-550 text-white shadow-md shadow-blue-600/25 active:scale-[0.99] border border-blue-400/30"
+              >
+                <Crop className="w-4 h-4 text-white" />
+                <span>{language === 'hi' ? '✂️ फोटो क्रॉप करें (Open Crop Box)' : '✂️ Crop Photo (Studio Box)'}</span>
+              </button>
+            </div>
+
+            {/* Panel Card: AI Photo Enhance */}
+            <div className={`p-4 sm:p-5 rounded-2xl border subtle-glow-card ${
+              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
+            } space-y-3.5`}>
+              <div className="flex items-center justify-between border-b pb-2 border-slate-200/60 dark:border-slate-800/60">
+                <div>
+                  <h3 className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+                    <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 shrink-0" />
+                    <span>✨ AI Photo Enhance</span>
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                    Improve clarity & print quality
+                  </p>
+                </div>
+
+                {/* Status Badge */}
+                <div>
+                  {enhancementStatus === 'enhancing' ? (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1 animate-pulse">
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                      <span>{enhanceStepText || 'Enhancing...'}</span>
+                    </span>
+                  ) : enhancementStatus === 'enhanced' ? (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <Check className="w-2.5 h-2.5" />
+                      <span>Enhanced{enhanceCount > 1 ? ` (${enhanceCount}x)` : ''}</span>
+                    </span>
+                  ) : enhancementStatus === 'unavailable' ? (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      Enhancement unavailable
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-700/40">
+                      Ready
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Error / Fallback Notification */}
+              {enhancementErrorMsg && (
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400 flex items-start gap-2">
+                  <span className="text-xs">⚠️</span>
+                  <div className="leading-snug">
+                    <span className="font-semibold block">{enhancementErrorMsg}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Manual Selector: Use Enhanced / Use Original & Level Badge */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-medium text-slate-400">
+                  <span className="flex items-center gap-1.5">
+                    <span>Photo Version:</span>
+                    {enhanceCount > 0 && (
+                      <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">
+                        {enhanceCount}x Level
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={!enhancedBgImg || isEnhancing}
+                      onClick={() => handleToggleEnhanced(true)}
+                      className={`px-2.5 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        useEnhancedPhoto && enhancedBgImg
+                          ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
+                          : theme === 'dark' 
+                            ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800' 
+                            : 'bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200'
+                      } ${(!enhancedBgImg || isEnhancing) ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      {enhanceCount > 0 ? `Enhanced (${enhanceCount}x)` : 'Enhanced'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!rawRemovedBgImg || isEnhancing}
+                      onClick={() => handleToggleEnhanced(false)}
+                      className={`px-2.5 py-1 text-[10px] sm:text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        !useEnhancedPhoto && rawRemovedBgImg
+                          ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
+                          : theme === 'dark' 
+                            ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800' 
+                            : 'bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200'
+                      } ${(!rawRemovedBgImg || isEnhancing) ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    >
+                      Original (0x)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Before / Enhanced Compact Preview & Info */}
+                {rawRemovedBgImg && (
+                  <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 ${
+                    theme === 'dark' ? 'bg-slate-900/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`relative w-10 h-12 rounded-lg overflow-hidden border shrink-0 ${
+                        theme === 'dark' ? 'border-slate-700 bg-slate-950' : 'border-slate-300 bg-white'
+                      }`}>
+                        <img 
+                          src={useEnhancedPhoto && enhancedBgImg ? enhancedBgImg : rawRemovedBgImg} 
+                          alt="Active Portrait Version" 
+                          className="w-full h-full object-contain"
+                        />
+                        <span className="absolute bottom-0 inset-x-0 text-[7px] font-black text-center bg-black/75 text-white py-0.2 uppercase tracking-tight">
+                          {useEnhancedPhoto && enhancedBgImg ? `${enhanceCount}x Pass` : 'Original'}
+                        </span>
+                      </div>
+                      <div className="text-[10px]">
+                        <div className="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>{useEnhancedPhoto && enhancedBgImg ? `AI Enhanced (Naturally Brighter & Clearer)` : 'Original Extracted Portrait Active'}</span>
+                        </div>
+                        <div className="text-[9px] text-slate-400 font-normal">
+                          {useEnhancedPhoto && enhancedBgImg
+                            ? `${language === 'hi' ? 'नेचुरली ब्राइट, क्लियर और पासपोर्ट प्रिंटिंग के लिए परफेक्ट।' : 'Naturally brighter, clearer & refined for passport printing.'}`
+                            : `${language === 'hi' ? 'बिना किसी एन्हांसमेंट के ओरिजिनल कटआउट।' : 'Original un-enhanced extracted portrait.'}`}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick reset button if enhanced */}
+                    {enhanceCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleResetEnhancement}
+                        disabled={isEnhancing}
+                        title={language === 'hi' ? 'ओरिजिनल पर वापस रीसेट करें' : 'Reset to original'}
+                        className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors shrink-0"
+                      >
+                        ↺ Reset
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Button & Meta Label */}
+              <div className="space-y-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    id="passport-enhance-photo-btn"
+                    onClick={handleManualEnhanceClick}
+                    disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
+                    className={`flex-1 py-2 sm:py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
+                      isEnhancing
+                        ? 'bg-blue-600/20 text-blue-400 cursor-not-allowed border border-blue-500/30'
+                        : theme === 'dark'
+                          ? 'bg-blue-600/20 hover:bg-blue-600 border border-blue-500/40 text-blue-400 hover:text-white'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
+                    } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${isEnhancing ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isEnhancing 
+                        ? (enhanceStepText || 'Enhancing photo...') 
+                        : '✨ Enhance Photo'}
+                    </span>
+                  </button>
+
+                  {enhanceCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleResetEnhancement}
+                      disabled={isEnhancing}
+                      className="px-3 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                      title={language === 'hi' ? 'ओरिजिनल फोटो पर रीसेट करें' : 'Reset to Original'}
+                    >
+                      ↺ 0x
+                    </button>
+                  )}
+                </div>
+
+                <div className="text-center">
+                  <span className="text-[9px] sm:text-[10px] font-mono text-slate-400 font-medium tracking-wide">
+                    Lightweight • Browser AI • Private
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* Panel Card: Background Fill (Available only when AI extracted background) */}
             <div className={`p-5 rounded-2xl border subtle-glow-card ${
@@ -2260,49 +2302,130 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 )}
               </div>
 
-              <div className={`grid grid-cols-2 gap-2 ${!removedBgImg ? 'opacity-55 pointer-events-none' : ''}`}>
-                <button
-                  type="button"
-                  onClick={() => setBgColorType('white')}
-                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
-                    bgColorType === 'white'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                      : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="w-3 h-3 rounded-full border border-slate-300 bg-white" />
-                  <span>White</span>
-                </button>
+              <div className={`space-y-2.5 ${!removedBgImg ? 'opacity-55 pointer-events-none' : ''}`}>
+                {/* Standard Swatches */}
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('white')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer subtle-glow-button ${
+                      bgColorType === 'white'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
+                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full border border-slate-300 bg-white" />
+                    <span>White</span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => setBgColorType('blue')}
-                  className={`py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
-                    bgColorType === 'blue'
-                      ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                      : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  <div className="w-3 h-3 rounded-full bg-[#004494] border border-blue-600" />
-                  <span>Blue</span>
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('blue')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer subtle-glow-button ${
+                      bgColorType === 'blue'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
+                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#004494] border border-blue-600" />
+                    <span>Blue</span>
+                  </button>
 
-              {/* Dedicated Crop Button with Crop Icon directly below background color */}
-              <div className="pt-2 border-t border-slate-800/60">
-                <button
-                  type="button"
-                  id="passport-crop-action-btn"
-                  onClick={openPhotoshopCropModal}
-                  className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
-                    theme === 'dark'
-                      ? 'border-blue-500/60 bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 hover:border-blue-400 ring-1 ring-blue-500/40'
-                      : 'border-blue-400 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-500 shadow-xs'
-                  }`}
-                >
-                  <Crop className="w-4 h-4 text-blue-500" />
-                  <span>{language === 'hi' ? 'फोटो क्रॉप करें (Crop)' : 'Crop Photo'}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('lightgray')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer subtle-glow-button ${
+                      bgColorType === 'lightgray'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
+                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#e5e7eb] border border-slate-400" />
+                    <span>Gray</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('red')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer subtle-glow-button ${
+                      bgColorType === 'red'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
+                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#d21034] border border-red-600" />
+                    <span>Red</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('cyan')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer subtle-glow-button ${
+                      bgColorType === 'cyan'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
+                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#38bdf8] border border-sky-400" />
+                    <span>Sky Blue</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('offwhite')}
+                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 transition-all cursor-pointer subtle-glow-button ${
+                      bgColorType === 'offwhite'
+                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
+                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#f8fafc] border border-slate-300" />
+                    <span>Off-White</span>
+                  </button>
+                </div>
+
+                {/* More Colors & Custom Color Picker */}
+                <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+                  bgColorType === 'custom'
+                    ? 'border-blue-500/60 bg-blue-500/10'
+                    : theme === 'dark' ? 'border-slate-800/80 bg-slate-900/40' : 'border-slate-200 bg-slate-50'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <label className="relative cursor-pointer flex items-center">
+                      <input
+                        type="color"
+                        value={customBgColor}
+                        onChange={(e) => {
+                          setCustomBgColor(e.target.value);
+                          setBgColorType('custom');
+                        }}
+                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
+                      />
+                      <div 
+                        className="w-6 h-6 rounded-lg border shadow-xs transition-transform hover:scale-110 flex items-center justify-center"
+                        style={{ backgroundColor: customBgColor }}
+                      >
+                        <Pipette className="w-3 h-3 text-slate-700 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" />
+                      </div>
+                    </label>
+                    <div className="text-[10px]">
+                      <span className="font-bold block text-slate-300">Custom Color</span>
+                      <span className="font-mono text-slate-500 uppercase">{customBgColor}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setBgColorType('custom')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all cursor-pointer ${
+                      bgColorType === 'custom'
+                        ? 'border-blue-500 bg-blue-500 text-white'
+                        : theme === 'dark' ? 'border-slate-700 bg-slate-800 text-slate-300 hover:text-white' : 'border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    Apply Custom
+                  </button>
+                </div>
               </div>
             </div>
 
