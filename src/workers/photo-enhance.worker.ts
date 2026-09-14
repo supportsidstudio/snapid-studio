@@ -1,524 +1,455 @@
 /**
- * SnapID Studio - Professional AI Photo & Portrait HD Enhancement Worker
- * 
- * High-performance, memory-safe in-browser super-resolution & portrait detail restoration.
- * 
- * KEY DESIGN PRINCIPLES:
- * 1. 100% Identity Preservation: Strict geometric fidelity, zero facial shape alteration.
- * 2. Natural Skin & Studio HD Finish: Reduces digital noise and JPEG compression while
- *    preserving natural skin pores, authentic textures, and realistic facial lighting.
- * 3. Multi-Scale Detail Enhancement: Restores hair strands, eyelashes, iris catchlights,
- *    eyebrows, and textile definition without harsh white halos or dark ringing.
- * 4. Adaptive Super-Resolution: Intelligent 2x edge-directed detail synthesis for low-res
- *    sources; native precision for HD sources without unnecessary memory footprint.
- * 5. Chroma & Luma Artifact Elimination: Edge-preserving bilateral chroma denoising
- *    cleans color noise and blockiness before sharpening.
- * 6. Subtle Studio Dynamic Range: Gentle S-curve exposure lift recovers underexposed
- *    shadows without blowing out highlights.
- * 7. Alpha Channel & Print System Safe: 100% transparent edge preservation for cutouts.
+ * SnapID Studio - Clark Swin2SR Lightweight x2 1.58bit Super-Resolution Photo Enhancement Worker
+ * Model: clark-labs/clark-swin2sr-lightweight-x2-1.58bit
+ * Runs 100% locally inside the browser using ONNX Runtime Web (WebGPU / WASM)
  */
+import * as ort from 'onnxruntime-web';
 
-// Luminance calculation (Rec. 709)
-function getLuminance(r: number, g: number, b: number): number {
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+const TILE_SIZE = 64;
+const OVERLAP = 8;
+const STRIDE = TILE_SIZE - OVERLAP; // 56px
+
+let runtimeAppBaseUrl: string | null = null;
+let cachedSession: ort.InferenceSession | null = null;
+let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
+let activeBackend: 'WebGPU' | 'WASM' = 'WASM';
+
+function getAppBaseUrl(): string {
+  if (runtimeAppBaseUrl) {
+    return runtimeAppBaseUrl;
+  }
+  if (typeof self !== 'undefined' && self.location && self.location.href) {
+    const href = self.location.href;
+    const assetsIndex = href.lastIndexOf('/assets/');
+    if (assetsIndex !== -1) {
+      return href.substring(0, assetsIndex + 1);
+    }
+    try {
+      const url = new URL(href);
+      if (url.origin && !url.origin.startsWith('blob:') && !url.origin.startsWith('file:')) {
+        const pathSegments = url.pathname.split('/').filter(Boolean);
+        if (pathSegments.length > 1) {
+          return `${url.origin}/${pathSegments[0]}/`;
+        }
+        return `${url.origin}/`;
+      }
+    } catch {
+      // Fallback
+    }
+  }
+  return '/';
 }
 
-// Convert RGB to YCbCr
-function rgbToYCbCr(r: number, g: number, b: number): [number, number, number] {
-  const y = 0.299 * r + 0.587 * g + 0.114 * b;
-  const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-  const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-  return [y, cb, cr];
-}
-
-// Convert YCbCr back to RGB with strict clamping
-function yCbCrToRgb(y: number, cb: number, cr: number): [number, number, number] {
-  const r = y + 1.402 * (cr - 128);
-  const g = y - 0.344136 * (cb - 128) - 0.714136 * (cr - 128);
-  const b = y + 1.772 * (cb - 128);
-  return [
-    Math.max(0, Math.min(255, Math.round(r))),
-    Math.max(0, Math.min(255, Math.round(g))),
-    Math.max(0, Math.min(255, Math.round(b)))
-  ];
-}
-
-// Check for natural skin tone in YCbCr color space
-function isSkinToneYCbCr(cb: number, cr: number): boolean {
-  return cb >= 75 && cb <= 130 && cr >= 130 && cr <= 175;
+function getWasmBasePath(): string {
+  const base = getAppBaseUrl();
+  return `${base.replace(/\/+$/, '')}/onnxruntime/`;
 }
 
 /**
- * Intelligent Edge-Directed 2x Super-Resolution Upscaler
- * Reconstructs high-frequency gradients along edge tangents instead of simple pixel stretching.
+ * Fetch and decompress the Swin2SR model buffer with Cache API caching
  */
-function edgeDirected2xUpscale(
-  srcData: Uint8ClampedArray,
-  srcW: number,
-  srcH: number
-): { data: Uint8ClampedArray; width: number; height: number } {
-  const dstW = srcW * 2;
-  const dstH = srcH * 2;
-  const dstData = new Uint8ClampedArray(dstW * dstH * 4);
+async function getModelBuffer(): Promise<ArrayBuffer> {
+  const CACHE_NAME = 'snapid-swin2sr-v1';
+  const base = getAppBaseUrl();
+  const gzUrl = `${base.replace(/\/+$/, '')}/models/swin2sr/model.onnx.gz`;
+  const plainUrl = `${base.replace(/\/+$/, '')}/models/swin2sr/model.onnx`;
 
-  // Pre-calculate luminance for gradient detection
-  const luma = new Float32Array(srcW * srcH);
-  for (let i = 0; i < srcW * srcH; i++) {
-    const idx = i * 4;
-    luma[i] = getLuminance(srcData[idx], srcData[idx + 1], srcData[idx + 2]);
-  }
-
-  // 1. Map existing source pixels to even coordinates (0, 2, 4...)
-  for (let y = 0; y < srcH; y++) {
-    const srcRow = y * srcW;
-    const dstRow = (y * 2) * dstW;
-    for (let x = 0; x < srcW; x++) {
-      const sIdx = (srcRow + x) * 4;
-      const dIdx = (dstRow + (x * 2)) * 4;
-      dstData[dIdx] = srcData[sIdx];
-      dstData[dIdx + 1] = srcData[sIdx + 1];
-      dstData[dIdx + 2] = srcData[sIdx + 2];
-      dstData[dIdx + 3] = srcData[sIdx + 3];
+  // 1. Try Browser Cache API first
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cachedResp = await cache.match(gzUrl);
+      if (cachedResp) {
+        const buf = await cachedResp.arrayBuffer();
+        if (buf.byteLength > 1000000) {
+          return buf;
+        }
+      }
+    } catch {
+      // Ignore cache open error
     }
   }
 
-  // 2. Interpolate diagonal center pixels (odd x, odd y) with directional gradient weighting
-  for (let y = 0; y < srcH - 1; y++) {
-    const dy = y * 2 + 1;
-    const dstRow = dy * dstW;
-    for (let x = 0; x < srcW - 1; x++) {
-      const dx = x * 2 + 1;
-      const dIdx = (dstRow + dx) * 4;
-
-      const p00 = y * srcW + x;
-      const p10 = y * srcW + (x + 1);
-      const p01 = (y + 1) * srcW + x;
-      const p11 = (y + 1) * srcW + (x + 1);
-
-      // Diagonal gradient magnitudes
-      const gradDiag1 = Math.abs(luma[p00] - luma[p11]); // NW to SE
-      const gradDiag2 = Math.abs(luma[p10] - luma[p01]); // NE to SW
-
-      // Interpolate along the edge (smaller gradient = along edge)
-      const w1 = 1.0 / (1.0 + gradDiag1 * 0.15);
-      const w2 = 1.0 / (1.0 + gradDiag2 * 0.15);
-      const wSum = w1 + w2;
-
-      for (let c = 0; c < 4; c++) {
-        const val1 = (srcData[p00 * 4 + c] + srcData[p11 * 4 + c]) * 0.5;
-        const val2 = (srcData[p10 * 4 + c] + srcData[p01 * 4 + c]) * 0.5;
-        dstData[dIdx + c] = Math.round((val1 * w1 + val2 * w2) / wSum);
+  // 2. Fetch gzipped model if DecompressionStream is supported
+  if (typeof DecompressionStream !== 'undefined') {
+    try {
+      const resp = await fetch(gzUrl, { cache: 'force-cache' });
+      if (resp.ok) {
+        const decompressedStream = resp.body!.pipeThrough(new DecompressionStream('gzip'));
+        const decompressedBuffer = await new Response(decompressedStream).arrayBuffer();
+        if (decompressedBuffer.byteLength > 1000000) {
+          // Store in Cache API asynchronously
+          if (typeof caches !== 'undefined') {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(gzUrl, new Response(decompressedBuffer.slice(0)));
+            }).catch(() => {});
+          }
+          return decompressedBuffer;
+        }
       }
+    } catch (e) {
+      console.warn('[Swin2SR Worker] Gzip download/decompression warning, falling back:', e);
     }
   }
 
-  // 3. Interpolate remaining horizontal & vertical center pixels
-  for (let dy = 0; dy < dstH; dy++) {
-    const dstRow = dy * dstW;
-    for (let dx = 0; dx < dstW; dx++) {
-      if ((dx % 2 === 0 && dy % 2 === 0) || (dx % 2 === 1 && dy % 2 === 1)) {
-        continue;
-      }
-      const dIdx = (dstRow + dx) * 4;
-
-      const top = Math.max(0, dy - 1) * dstW + dx;
-      const bottom = Math.min(dstH - 1, dy + 1) * dstW + dx;
-      const left = dstRow + Math.max(0, dx - 1);
-      const right = dstRow + Math.min(dstW - 1, dx + 1);
-
-      // Luma of 4-neighbors
-      const lTop = getLuminance(dstData[top * 4], dstData[top * 4 + 1], dstData[top * 4 + 2]);
-      const lBottom = getLuminance(dstData[bottom * 4], dstData[bottom * 4 + 1], dstData[bottom * 4 + 2]);
-      const lLeft = getLuminance(dstData[left * 4], dstData[left * 4 + 1], dstData[left * 4 + 2]);
-      const lRight = getLuminance(dstData[right * 4], dstData[right * 4 + 1], dstData[right * 4 + 2]);
-
-      const gradV = Math.abs(lTop - lBottom);
-      const gradH = Math.abs(lLeft - lRight);
-
-      const wV = 1.0 / (1.0 + gradV * 0.15);
-      const wH = 1.0 / (1.0 + gradH * 0.15);
-      const wSum = wV + wH;
-
-      for (let c = 0; c < 4; c++) {
-        const valV = (dstData[top * 4 + c] + dstData[bottom * 4 + c]) * 0.5;
-        const valH = (dstData[left * 4 + c] + dstData[right * 4 + c]) * 0.5;
-        dstData[dIdx + c] = Math.round((valV * wV + valH * wH) / wSum);
+  // 3. Fallback to uncompressed local model
+  try {
+    const resp = await fetch(plainUrl, { cache: 'force-cache' });
+    if (resp.ok) {
+      const buffer = await resp.arrayBuffer();
+      if (buffer.byteLength > 1000000) {
+        return buffer;
       }
     }
+  } catch (e) {
+    console.warn('[Swin2SR Worker] Local model fetch warning:', e);
   }
 
-  return { data: dstData, width: dstW, height: dstH };
+  // 4. Remote Hugging Face fallback if needed
+  const remoteGz = 'https://huggingface.co/clark-labs/clark-swin2sr-lightweight-x2-1.58bit/resolve/main/onnx/model.onnx.gz';
+  const resp = await fetch(remoteGz, { cache: 'force-cache' });
+  if (!resp.ok) {
+    throw new Error(`Failed to download Swin2SR model: ${resp.status}`);
+  }
+  if (typeof DecompressionStream !== 'undefined') {
+    const decompressedStream = resp.body!.pipeThrough(new DecompressionStream('gzip'));
+    return await new Response(decompressedStream).arrayBuffer();
+  }
+  return await resp.arrayBuffer();
 }
 
 /**
- * Core AI-Grade HD Enhancement & Studio Polish Engine
+ * Initializes and caches the ONNX InferenceSession.
+ * Prefers WebGPU, automatically falling back to WASM.
  */
-function enhanceStudioPipeline(
-  srcData: Uint8ClampedArray,
-  width: number,
-  height: number,
-  passCount: number = 1
-): Uint8ClampedArray {
-  const numPixels = width * height;
-  const output = new Uint8ClampedArray(srcData.length);
+async function getSession(): Promise<ort.InferenceSession> {
+  if (cachedSession) {
+    return cachedSession;
+  }
+  if (sessionLoadingPromise) {
+    return sessionLoadingPromise;
+  }
 
-  const yPlane = new Float32Array(numPixels);
-  const cbPlane = new Float32Array(numPixels);
-  const crPlane = new Float32Array(numPixels);
-  const alphaPlane = new Uint8Array(numPixels);
-
-  let minX = width, maxX = 0, minY = height, maxY = 0;
-  let hasSubject = false;
-  let totalLuma = 0;
-  let validPixelCount = 0;
-
-  // Step 1: Deconstruct into YCbCr and identify subject geometry
-  for (let y = 0; y < height; y++) {
-    const rowOffset = y * width;
-    for (let x = 0; x < width; x++) {
-      const pIdx = rowOffset + x;
-      const idx = pIdx * 4;
-      const a = srcData[idx + 3];
-      alphaPlane[pIdx] = a;
-
-      if (a > 10) {
-        const [lumaY, cb, cr] = rgbToYCbCr(srcData[idx], srcData[idx + 1], srcData[idx + 2]);
-        yPlane[pIdx] = lumaY;
-        cbPlane[pIdx] = cb;
-        crPlane[pIdx] = cr;
-
-        totalLuma += lumaY;
-        validPixelCount++;
-
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        hasSubject = true;
-      } else {
-        yPlane[pIdx] = 0;
-        cbPlane[pIdx] = 128;
-        crPlane[pIdx] = 128;
-      }
+  sessionLoadingPromise = (async () => {
+    try {
+      ort.env.wasm.wasmPaths = getWasmBasePath();
+      ort.env.wasm.numThreads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+        ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+        : 1;
+      ort.env.wasm.proxy = false;
+    } catch (e) {
+      console.warn('[Swin2SR Worker] wasm setup warning:', e);
     }
-  }
 
-  if (!hasSubject || validPixelCount === 0) {
-    output.set(srcData);
-    return output;
-  }
+    const modelBuffer = await getModelBuffer();
 
-  const avgSubjectLuma = totalLuma / validPixelCount;
-
-  // Step 2: Edge-Preserving Chroma Denoising (Removes purple/green compression noise & artifacts)
-  const denoisedCb = new Float32Array(numPixels);
-  const denoisedCr = new Float32Array(numPixels);
-
-  for (let y = minY; y <= maxY; y++) {
-    const rowOffset = y * width;
-    for (let x = minX; x <= maxX; x++) {
-      const pIdx = rowOffset + x;
-      if (alphaPlane[pIdx] < 15) {
-        denoisedCb[pIdx] = cbPlane[pIdx];
-        denoisedCr[pIdx] = crPlane[pIdx];
-        continue;
-      }
-
-      const centerCb = cbPlane[pIdx];
-      const centerCr = crPlane[pIdx];
-      let cbSum = 0;
-      let crSum = 0;
-      let wSum = 0;
-
-      for (let dy = -1; dy <= 1; dy++) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        const nRow = ny * width;
-
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          if (nx < 0 || nx >= width) continue;
-          const nPIdx = nRow + nx;
-          if (alphaPlane[nPIdx] < 15) continue;
-
-          const dCb = centerCb - cbPlane[nPIdx];
-          const dCr = centerCr - crPlane[nPIdx];
-          const distSq = dx * dx + dy * dy;
-          const colorDistSq = dCb * dCb + dCr * dCr;
-
-          const spatialW = distSq === 0 ? 1.0 : distSq === 1 ? 0.7 : 0.45;
-          const colorW = Math.exp(-colorDistSq / 128.0);
-          const weight = spatialW * colorW;
-
-          cbSum += cbPlane[nPIdx] * weight;
-          crSum += crPlane[nPIdx] * weight;
-          wSum += weight;
+    // 1. Try WebGPU provider first
+    if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
+      try {
+        const adapter = await (navigator as any).gpu.requestAdapter();
+        if (adapter) {
+          const sess = await ort.InferenceSession.create(modelBuffer, {
+            executionProviders: ['webgpu'],
+            graphOptimizationLevel: 'all',
+          });
+          cachedSession = sess;
+          activeBackend = 'WebGPU';
+          console.log('[Swin2SR Worker] Session initialized with WebGPU acceleration.');
+          return sess;
         }
+      } catch (gpuErr) {
+        console.warn('[Swin2SR Worker] WebGPU unavailable, falling back to WASM CPU:', gpuErr);
       }
-
-      denoisedCb[pIdx] = wSum > 0 ? cbSum / wSum : centerCb;
-      denoisedCr[pIdx] = wSum > 0 ? crSum / wSum : centerCr;
     }
-  }
 
-  // Step 3: Compute Sobel & Laplacian Gradient Magnitudes on Luminance
-  const edgePlane = new Float32Array(numPixels);
-  const laplacianPlane = new Float32Array(numPixels);
+    // 2. Fallback to WASM
+    const sess = await ort.InferenceSession.create(modelBuffer, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
+    cachedSession = sess;
+    activeBackend = 'WASM';
+    console.log('[Swin2SR Worker] Session initialized with WASM engine.');
+    return sess;
+  })();
 
-  for (let y = minY; y <= maxY; y++) {
-    const rowOffset = y * width;
-    const prevRow = Math.max(0, y - 1) * width;
-    const nextRow = Math.min(height - 1, y + 1) * width;
-
-    for (let x = minX; x <= maxX; x++) {
-      const pIdx = rowOffset + x;
-      const left = rowOffset + Math.max(0, x - 1);
-      const right = rowOffset + Math.min(width - 1, x + 1);
-
-      const gx = yPlane[right] - yPlane[left];
-      const gy = yPlane[nextRow + x] - yPlane[prevRow + x];
-      edgePlane[pIdx] = Math.sqrt(gx * gx + gy * gy);
-
-      // Laplacian kernel: 4*center - (top + bottom + left + right)
-      const lap = (4 * yPlane[pIdx]) - (yPlane[prevRow + x] + yPlane[nextRow + x] + yPlane[left] + yPlane[right]);
-      laplacianPlane[pIdx] = lap;
-    }
-  }
-
-  // Step 4: Multi-Scale Bilateral Base Illumination & Local Min-Max Bounding
-  const baseLuma = new Float32Array(numPixels);
-  const minNeighborLuma = new Float32Array(numPixels);
-  const maxNeighborLuma = new Float32Array(numPixels);
-
-  const colorSigma = 14.0;
-  const colorSigmaSq2 = 2 * colorSigma * colorSigma;
-
-  for (let y = minY; y <= maxY; y++) {
-    const rowOffset = y * width;
-
-    for (let x = minX; x <= maxX; x++) {
-      const pIdx = rowOffset + x;
-      if (alphaPlane[pIdx] < 15) continue;
-
-      const centerLuma = yPlane[pIdx];
-      let minL = centerLuma;
-      let maxL = centerLuma;
-
-      let wSum = 0;
-      let lumaSum = 0;
-
-      for (let dy = -1; dy <= 1; dy++) {
-        const ny = y + dy;
-        if (ny < 0 || ny >= height) continue;
-        const nRow = ny * width;
-
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          if (nx < 0 || nx >= width) continue;
-
-          const nPIdx = nRow + nx;
-          if (alphaPlane[nPIdx] < 15) continue;
-
-          const nLuma = yPlane[nPIdx];
-          if (nLuma < minL) minL = nLuma;
-          if (nLuma > maxL) maxL = nLuma;
-
-          const distSq = dx * dx + dy * dy;
-          const spatialWeight = distSq === 0 ? 1.0 : distSq === 1 ? 0.65 : 0.4;
-          const lumaDiff = centerLuma - nLuma;
-          const colorWeight = Math.exp(-(lumaDiff * lumaDiff) / colorSigmaSq2);
-
-          const weight = spatialWeight * colorWeight;
-          lumaSum += nLuma * weight;
-          wSum += weight;
-        }
-      }
-
-      baseLuma[pIdx] = wSum > 0 ? lumaSum / wSum : centerLuma;
-      minNeighborLuma[pIdx] = minL;
-      maxNeighborLuma[pIdx] = maxL;
-    }
-  }
-
-  // Step 5: High-Precision Studio Illumination, Tone Mapping & Micro-Clarity
-  for (let y = 0; y < height; y++) {
-    const rowOffset = y * width;
-    const isInsideY = y >= minY && y <= maxY;
-
-    for (let x = 0; x < width; x++) {
-      const pIdx = rowOffset + x;
-      const idx = pIdx * 4;
-      const alpha = alphaPlane[pIdx];
-
-      if (alpha <= 5 || !isInsideY || x < minX || x > maxX) {
-        output[idx] = srcData[idx];
-        output[idx + 1] = srcData[idx + 1];
-        output[idx + 2] = srcData[idx + 2];
-        output[idx + 3] = alpha;
-        continue;
-      }
-
-      const origY = yPlane[pIdx];
-      const cb = denoisedCb[pIdx];
-      const cr = denoisedCr[pIdx];
-      const edge = edgePlane[pIdx];
-      const lap = laplacianPlane[pIdx];
-      const base = baseLuma[pIdx];
-      const minL = minNeighborLuma[pIdx];
-      const maxL = maxNeighborLuma[pIdx];
-      const isSkin = isSkinToneYCbCr(cb, cr);
-
-      // High frequency texture extraction (hair, iris catchlights, skin pores, fabric)
-      const detail = origY - base;
-
-      // 1. Adaptive Enhancement Gain Calibration
-      let detailGain = 0.25;
-      let deblurGain = 0.12;
-
-      if (edge > 12) {
-        // High structural edge (Eyes, eyelashes, eyebrows, hair boundary, collar, lips)
-        // Elevate fine edge definition without ringing
-        detailGain = Math.min(0.48, 0.28 + (edge / 70) * 0.20);
-        deblurGain = Math.min(0.24, 0.14 + (edge / 80) * 0.10);
-      } else if (isSkin) {
-        // Skin zone: preserve natural pores & texture softly, suppress noise
-        if (Math.abs(detail) < 3.5) {
-          // Micro camera sensor noise in flat skin: gently soften
-          detailGain = -0.15;
-          deblurGain = 0.0;
-        } else {
-          // Authentic facial texture/freckles/natural pores: keep natural
-          detailGain = 0.12;
-          deblurGain = 0.04;
-        }
-      }
-
-      // 2. High-Clarity Reconstruction with Deblur
-      let clarifiedY = base + detail * (1.0 + detailGain) + lap * deblurGain;
-
-      // Strict anti-halo limiter: Prevents white edge halos or black outlines
-      const margin = isSkin ? 2.5 : 4.0;
-      clarifiedY = Math.max(minL - margin, Math.min(maxL + margin, clarifiedY));
-
-      // 3. Studio Dynamic Range & S-Curve Tone Mapping (Naturally Brighter, Never Harsh)
-      const normY = clarifiedY / 255.0;
-
-      // Gentle shadow & midtone illumination lift (studio strobe simulation)
-      let exposureLift = 0.0;
-      if (avgSubjectLuma < 140) {
-        // Underexposed portrait: Lift shadows and midtones cleanly
-        exposureLift = 0.07 * Math.sin(normY * Math.PI) + 0.03 * Math.max(0, 1.0 - normY * 1.5);
-      } else {
-        // Well-exposed portrait: Subtle midtone luminosity
-        exposureLift = 0.04 * Math.sin(normY * Math.PI);
-      }
-
-      const liftedNormY = Math.min(1.0, normY + exposureLift);
-      const brightenedY = liftedNormY * 255.0;
-
-      // Ensure output is naturally clean and never darker than input
-      const finalY = Math.max(origY * 0.98, Math.min(255, brightenedY));
-
-      // 4. Natural Color Vibrancy & Healthy Skin Spectral Radiance
-      let finalCb = cb;
-      let finalCr = cr;
-
-      if (isSkin) {
-        // Healthy skin tone radiance (+2.5% warmth, authentic melanin retention)
-        finalCr = 128 + (cr - 128) * 1.025;
-        finalCb = 128 + (cb - 128) * 1.015;
-      } else if (edge > 6) {
-        // Clothing & background definition (+3% spectral vibrancy)
-        finalCr = 128 + (cr - 128) * 1.03;
-        finalCb = 128 + (cb - 128) * 1.03;
-      }
-
-      // Convert back to pristine RGB
-      const [rOut, gOut, bOut] = yCbCrToRgb(finalY, finalCb, finalCr);
-
-      output[idx] = rOut;
-      output[idx + 1] = gOut;
-      output[idx + 2] = bOut;
-      output[idx + 3] = alpha;
-    }
-  }
-
-  return output;
+  return sessionLoadingPromise;
 }
 
+/**
+ * Smooth weighting for overlapping tile seams
+ */
+function getTileWeight(x: number, y: number, size: number, overlap: number): number {
+  const dx = Math.min(x, size - 1 - x);
+  const dy = Math.min(y, size - 1 - y);
+  const d = Math.min(dx, dy);
+  if (d >= overlap) return 1.0;
+  return Math.max(0.05, (d + 1) / (overlap + 1));
+}
+
+/**
+ * Main enhancement handler for a portrait cutout Blob
+ */
+async function processEnhancement(inputBlob: Blob): Promise<Blob> {
+  // Decode image into an ImageBitmap
+  const imageBitmap = await createImageBitmap(inputBlob);
+  const origW = imageBitmap.width;
+  const origH = imageBitmap.height;
+
+  // Capping inference input resolution to prevent memory freezes on low-end laptops
+  // For passport printing (35x45mm at 300 DPI = ~413x531px):
+  // An upscaled output around 512-700px provides pristine >350 DPI print quality.
+  let scaleFactor = 1.0;
+  const maxInDim = activeBackend === 'WebGPU' ? 384 : 288;
+  if (origW > maxInDim || origH > maxInDim) {
+    scaleFactor = Math.min(maxInDim / origW, maxInDim / origH);
+  }
+
+  const inW = Math.max(64, Math.round(origW * scaleFactor));
+  const inH = Math.max(64, Math.round(origH * scaleFactor));
+
+  // Render input into an OffscreenCanvas
+  const inputCanvas = new OffscreenCanvas(inW, inH);
+  const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true });
+  if (!inputCtx) throw new Error('OffscreenCanvas 2D context unavailable');
+
+  inputCtx.drawImage(imageBitmap, 0, 0, inW, inH);
+  const inImageData = inputCtx.getImageData(0, 0, inW, inH);
+  const inData = inImageData.data;
+
+  // Extract RGB and Alpha
+  const planeSize = inW * inH;
+  const rPlane = new Float32Array(planeSize);
+  const gPlane = new Float32Array(planeSize);
+  const bPlane = new Float32Array(planeSize);
+  const alphaPlane = new Uint8ClampedArray(planeSize);
+
+  for (let i = 0; i < planeSize; i++) {
+    const p = i * 4;
+    rPlane[i] = inData[p] / 255.0;
+    gPlane[i] = inData[p + 1] / 255.0;
+    bPlane[i] = inData[p + 2] / 255.0;
+    alphaPlane[i] = inData[p + 3];
+  }
+
+  // Get or initialize session
+  const session = await getSession();
+
+  // Generate tile coordinates
+  const tiles: { left: number; top: number }[] = [];
+  for (let top = 0; top < inH; top += STRIDE) {
+    let actualTop = top;
+    if (actualTop + TILE_SIZE > inH) actualTop = Math.max(0, inH - TILE_SIZE);
+    for (let left = 0; left < inW; left += STRIDE) {
+      let actualLeft = left;
+      if (actualLeft + TILE_SIZE > inW) actualLeft = Math.max(0, inW - TILE_SIZE);
+      tiles.push({ left: actualLeft, top: actualTop });
+      if (actualLeft + TILE_SIZE >= inW) break;
+    }
+    if (actualTop + TILE_SIZE >= inH) break;
+  }
+
+  const outW = inW * 2;
+  const outH = inH * 2;
+  const outR = new Float32Array(outW * outH);
+  const outG = new Float32Array(outW * outH);
+  const outB = new Float32Array(outW * outH);
+  const weights = new Float32Array(outW * outH);
+
+  const tileInputBuf = new Float32Array(1 * 3 * 64 * 64);
+  const tileRStart = 0;
+  const tileGStart = 64 * 64;
+  const tileBStart = 2 * 64 * 64;
+
+  const totalTiles = tiles.length;
+  for (let t = 0; t < totalTiles; t++) {
+    const { left, top } = tiles[t];
+
+    // Populate 64x64 tile
+    for (let ty = 0; ty < 64; ty++) {
+      const sy = top + ty;
+      const sRow = sy * inW;
+      const tRow = ty * 64;
+      for (let tx = 0; tx < 64; tx++) {
+        const sx = left + tx;
+        const sIdx = sRow + sx;
+        const tIdx = tRow + tx;
+
+        tileInputBuf[tileRStart + tIdx] = rPlane[sIdx];
+        tileInputBuf[tileGStart + tIdx] = gPlane[sIdx];
+        tileInputBuf[tileBStart + tIdx] = bPlane[sIdx];
+      }
+    }
+
+    const inputTensor = new ort.Tensor('float32', tileInputBuf, [1, 3, 64, 64]);
+    const feeds: Record<string, ort.Tensor> = {};
+    feeds[session.inputNames[0]] = inputTensor;
+
+    const results = await session.run(feeds);
+    const outTensor = results[session.outputNames[0]];
+    const outData = outTensor.data as Float32Array;
+
+    // Blend into full canvas with weight mask
+    const outLeft = left * 2;
+    const outTop = top * 2;
+    const outTileR = 0;
+    const outTileG = 128 * 128;
+    const outTileB = 2 * 128 * 128;
+
+    for (let ty = 0; ty < 128; ty++) {
+      const oy = outTop + ty;
+      if (oy >= outH) continue;
+      const oRow = oy * outW;
+      const tRow = ty * 128;
+
+      for (let tx = 0; tx < 128; tx++) {
+        const ox = outLeft + tx;
+        if (ox >= outW) continue;
+
+        const w = getTileWeight(tx, ty, 128, OVERLAP * 2);
+        const oIdx = oRow + ox;
+        const tIdx = tRow + tx;
+
+        outR[oIdx] += outData[outTileR + tIdx] * w;
+        outG[oIdx] += outData[outTileG + tIdx] * w;
+        outB[oIdx] += outData[outTileB + tIdx] * w;
+        weights[oIdx] += w;
+      }
+    }
+
+    // Report progress
+    const percent = Math.round(25 + ((t + 1) / totalTiles) * 65);
+    self.postMessage({
+      type: 'progress',
+      step: 'Enhancing photo quality...',
+      percent,
+    });
+  }
+
+  // Normalize blended weights
+  for (let i = 0; i < outW * outH; i++) {
+    const w = weights[i];
+    if (w > 0) {
+      outR[i] /= w;
+      outG[i] /= w;
+      outB[i] /= w;
+    }
+  }
+
+  // Smooth 2x Bilinear upscaling for Alpha channel
+  const outAlpha = new Uint8ClampedArray(outW * outH);
+  for (let oy = 0; oy < outH; oy++) {
+    const sy = Math.min(inH - 1, oy / 2);
+    const y0 = Math.floor(sy);
+    const y1 = Math.min(inH - 1, y0 + 1);
+    const fy = sy - y0;
+
+    const oRow = oy * outW;
+    const sRow0 = y0 * inW;
+    const sRow1 = y1 * inW;
+
+    for (let ox = 0; ox < outW; ox++) {
+      const sx = Math.min(inW - 1, ox / 2);
+      const x0 = Math.floor(sx);
+      const x1 = Math.min(inW - 1, x0 + 1);
+      const fx = sx - x0;
+
+      const a00 = alphaPlane[sRow0 + x0];
+      const a10 = alphaPlane[sRow0 + x1];
+      const a01 = alphaPlane[sRow1 + x0];
+      const a11 = alphaPlane[sRow1 + x1];
+
+      const topA = a00 + fx * (a10 - a00);
+      const btmA = a01 + fx * (a11 - a01);
+      outAlpha[oRow + ox] = Math.round(topA + fy * (btmA - topA));
+    }
+  }
+
+  // Construct final 2x ImageData with mild natural detail sharpening
+  const outCanvas = new OffscreenCanvas(outW, outH);
+  const outCtx = outCanvas.getContext('2d');
+  if (!outCtx) throw new Error('Output canvas context unavailable');
+
+  const finalImgData = outCtx.createImageData(outW, outH);
+  const finalData = finalImgData.data;
+
+  for (let y = 0; y < outH; y++) {
+    const row = y * outW;
+    const upRow = (y > 0 ? y - 1 : y) * outW;
+    const downRow = (y < outH - 1 ? y + 1 : y) * outW;
+
+    for (let x = 0; x < outW; x++) {
+      const idx = row + x;
+      const leftIdx = row + (x > 0 ? x - 1 : x);
+      const rightIdx = row + (x < outW - 1 ? x + 1 : x);
+      const upIdx = upRow + x;
+      const downIdx = downRow + x;
+
+      // Mild natural sharpening: center 1.16, neighbors -0.04 (total weight 1.0)
+      const rCenter = outR[idx];
+      const rSurround = (outR[leftIdx] + outR[rightIdx] + outR[upIdx] + outR[downIdx]) * 0.25;
+      const rSharp = rCenter + (rCenter - rSurround) * 0.16;
+
+      const gCenter = outG[idx];
+      const gSurround = (outG[leftIdx] + outG[rightIdx] + outG[upIdx] + outG[downIdx]) * 0.25;
+      const gSharp = gCenter + (gCenter - gSurround) * 0.16;
+
+      const bCenter = outB[idx];
+      const bSurround = (outB[leftIdx] + outB[rightIdx] + outB[upIdx] + outB[downIdx]) * 0.25;
+      const bSharp = bCenter + (bCenter - bSurround) * 0.16;
+
+      const p = idx * 4;
+      finalData[p] = Math.max(0, Math.min(255, Math.round(rSharp * 255)));
+      finalData[p + 1] = Math.max(0, Math.min(255, Math.round(gSharp * 255)));
+      finalData[p + 2] = Math.max(0, Math.min(255, Math.round(bSharp * 255)));
+      finalData[p + 3] = outAlpha[idx];
+    }
+  }
+
+  outCtx.putImageData(finalImgData, 0, 0);
+  return await outCanvas.convertToBlob({ type: 'image/png' });
+}
+
+// Worker message listener
 self.onmessage = async (e: MessageEvent) => {
-  const { type, blob, strength = 1.0 } = e.data;
+  const { type, blob, baseUrl } = e.data;
+
+  if (baseUrl) {
+    runtimeAppBaseUrl = baseUrl;
+  }
 
   if (type === 'enhance') {
+    const startTime = performance.now();
+    self.postMessage({ type: 'progress', step: 'Enhancing photo...', percent: 15 });
+
     try {
-      const startTime = performance.now();
-      self.postMessage({ type: 'progress', step: 'Analyzing image clarity...', percent: 20 });
+      // Set a 12-second safety timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Swin2SR inference timeout')), 12000);
+      });
 
-      // Create bitmap
-      const imageBitmap = await createImageBitmap(blob);
-      const origW = imageBitmap.width;
-      const origH = imageBitmap.height;
+      const enhancedBlob = await Promise.race([
+        processEnhancement(blob),
+        timeoutPromise,
+      ]);
 
-      if (origW === 0 || origH === 0) {
-        self.postMessage({ type: 'success', blob, elapsedMs: 0 });
-        return;
-      }
-
-      // Render onto intermediate OffscreenCanvas
-      let workingW = origW;
-      let workingH = origH;
-      let canvas = new OffscreenCanvas(workingW, workingH);
-      let ctx = canvas.getContext('2d', { willReadFrequently: true });
-      if (!ctx) {
-        throw new Error('OffscreenCanvas 2D context unavailable');
-      }
-
-      ctx.drawImage(imageBitmap, 0, 0, workingW, workingH);
-      let imgData = ctx.getImageData(0, 0, workingW, workingH);
-      let buffer = imgData.data;
-
-      // Adaptive Super-Resolution Upscaling (If source is low-res / small passport image)
-      const maxDimension = Math.max(origW, origH);
-      if (maxDimension < 800) {
-        self.postMessage({ type: 'progress', step: 'Intelligently upscaling & synthesizing detail...', percent: 45 });
-        const upscaled = edgeDirected2xUpscale(buffer, workingW, workingH);
-        buffer = upscaled.data;
-        workingW = upscaled.width;
-        workingH = upscaled.height;
-
-        canvas = new OffscreenCanvas(workingW, workingH);
-        ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) throw new Error('OffscreenCanvas context creation failed after upscale');
-      }
-
-      self.postMessage({ type: 'progress', step: 'Restoring facial details & reducing noise...', percent: 65 });
-
-      // Run AI Studio Enhancement Pipeline
-      const enhancedBuffer = enhanceStudioPipeline(buffer, workingW, workingH, 1);
-
-      self.postMessage({ type: 'progress', step: 'Finalizing HD studio quality...', percent: 90 });
-
-      const finalImgData = new ImageData(enhancedBuffer, workingW, workingH);
-      ctx.putImageData(finalImgData, 0, 0);
-
-      // Convert to high-quality lossless PNG blob
-      const enhancedBlob = await canvas.convertToBlob({ type: 'image/png' });
-      const elapsedMs = performance.now() - startTime;
-
-      console.log(`[AI Photo Enhance Worker] Completed in ${elapsedMs.toFixed(1)}ms (${origW}x${origH} -> ${workingW}x${workingH}px)`);
+      const elapsedMs = Math.round(performance.now() - startTime);
+      console.log(`[Swin2SR Worker] 2x enhancement completed in ${elapsedMs}ms via ${activeBackend}`);
 
       self.postMessage({
         type: 'success',
         blob: enhancedBlob,
-        elapsedMs: Math.round(elapsedMs),
-        width: workingW,
-        height: workingH
+        elapsedMs,
+        backend: activeBackend,
       });
     } catch (err: any) {
-      console.error('[AI Photo Enhance Worker] Error:', err);
+      console.warn('[Swin2SR Worker] Enhancement error, immediately falling back to original cutout:', err);
+      // Immediately return original blob as guaranteed fallback
       self.postMessage({
-        type: 'error',
-        error: err?.message || 'Enhancement failed'
+        type: 'success',
+        blob,
+        elapsedMs: 0,
+        fallback: true,
       });
     }
   }

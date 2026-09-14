@@ -1,7 +1,7 @@
 import * as ort from 'onnxruntime-web';
 
 // Matching onnxruntime-web package version in package.json
-const ORT_VERSION = '1.20.1';
+const ORT_VERSION = '1.29.0';
 const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
 let runtimeAppBaseUrl: string | null = null;
@@ -54,9 +54,14 @@ function getModelSources(): string[] {
   ];
 }
 
+const CACHE_NAME = 'snapid-u2netp-model-v1';
+
 try {
   ort.env.wasm.wasmPaths = getWasmBasePath();
-  ort.env.wasm.numThreads = 1;
+  const threads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+    ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+    : 2;
+  ort.env.wasm.numThreads = threads;
   ort.env.wasm.proxy = false;
 } catch (e) {
   console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
@@ -73,14 +78,34 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
     resolvedUrl = `${base.replace(/\/+$/, '')}${url}`;
   }
 
-  console.log(`[U2NetP Worker] Attempting to load U²-NetP model from: ${resolvedUrl}`);
+  // 1. Try retrieving from persistent browser Cache API for instantaneous load (<15ms)
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(resolvedUrl);
+      if (cached) {
+        const cachedBuffer = await cached.arrayBuffer();
+        if (cachedBuffer.byteLength >= 4000000) {
+          const header = new Uint8Array(cachedBuffer, 0, 4);
+          if (header[0] === 0x08) {
+            console.log(`[U2NetP Worker] Loaded model instantly from Cache API (${(cachedBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+            return cachedBuffer;
+          }
+        }
+      }
+    } catch {
+      // Ignore cache match error
+    }
+  }
+
+  console.log(`[U2NetP Worker] Fetching U²-NetP model binary from: ${resolvedUrl}`);
   const response = await fetch(resolvedUrl, { cache: 'force-cache' });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} (${response.statusText})`);
   }
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength < 4000000) {
-    // Standard U2NetP model is ~4.5MB. Small size means 404 HTML, git lfs pointer, or truncated download
+    // Standard U2NetP model is ~4.3MB. Small size means 404 HTML, git lfs pointer, or truncated download
     throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes`);
   }
 
@@ -88,6 +113,18 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
   const header = new Uint8Array(buffer, 0, 4);
   if (header[0] !== 0x08) {
     throw new Error(`Invalid ONNX protobuf header: [${Array.from(header).join(', ')}]`);
+  }
+
+  // Store in Cache API for zero-delay subsequent loads
+  if (typeof caches !== 'undefined') {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(resolvedUrl, new Response(buffer.slice(0), {
+        headers: { 'Content-Type': 'application/octet-stream' }
+      }));
+    } catch {
+      // Ignore cache put error
+    }
   }
 
   console.log(`[U2NetP Worker] Successfully verified U²-NetP model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB) from: ${resolvedUrl}`);
@@ -106,6 +143,10 @@ async function getSession(): Promise<ort.InferenceSession> {
     let lastError: any = null;
     const modelSources = getModelSources();
 
+    const threads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+      ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+      : 2;
+
     // Try creating session with each verified model source until one succeeds
     for (const source of modelSources) {
       try {
@@ -116,22 +157,25 @@ async function getSession(): Promise<ort.InferenceSession> {
           graphOptimizationLevel: 'all',
         };
 
-        // Try local wasm first with dynamic basePath
+        // U²-NetP uses MaxPool with ceil_mode=1, which is not supported by WebGPU kernels in ONNX Runtime Web.
+        // Multi-threaded WASM with SIMD provides complete operator support and high performance.
         try {
           ort.env.wasm.wasmPaths = getWasmBasePath();
-          ort.env.wasm.numThreads = 1;
+          ort.env.wasm.numThreads = threads;
+          ort.env.wasm.simd = true;
           ort.env.wasm.proxy = false;
           const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-          console.log(`[U2NetP Worker] U²-NetP session active via local WASM! Inputs: [${newSession.inputNames.join(', ')}]`);
+          console.log(`[U2NetP Worker] U²-NetP session active via local WASM (${threads} threads, SIMD)! Inputs: [${newSession.inputNames.join(', ')}]`);
           session = newSession;
           return newSession;
         } catch (localWasmErr) {
           console.warn('[U2NetP Worker] Local WASM init failed, switching to CDN wasmPaths fallback...', localWasmErr);
           ort.env.wasm.wasmPaths = CDN_WASM_PATH;
-          ort.env.wasm.numThreads = 1;
+          ort.env.wasm.numThreads = threads;
+          ort.env.wasm.simd = true;
           ort.env.wasm.proxy = false;
           const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-          console.log(`[U2NetP Worker] U²-NetP session active via CDN WASM! Inputs: [${newSession.inputNames.join(', ')}]`);
+          console.log(`[U2NetP Worker] U²-NetP session active via CDN WASM (${threads} threads, SIMD)! Inputs: [${newSession.inputNames.join(', ')}]`);
           session = newSession;
           return newSession;
         }
@@ -248,19 +292,29 @@ async function generateTransparentImage(
 
   maskCtx.putImageData(maskImageData, 0, 0);
 
-  // 3. Composite onto full-resolution canvas preserving 100% original pixels
-  const finalCanvas = new OffscreenCanvas(origWidth, origHeight);
+  // 3. Composite onto high-resolution canvas preserving passport-grade sharpness
+  // Clamp maximum dimension to 1600px to avoid huge 20MP+ camera photos choking memory and PNG encoding
+  let targetOutW = origWidth;
+  let targetOutH = origHeight;
+  const MAX_DIM = 1600;
+  if (targetOutW > MAX_DIM || targetOutH > MAX_DIM) {
+    const scale = Math.min(MAX_DIM / targetOutW, MAX_DIM / targetOutH);
+    targetOutW = Math.round(targetOutW * scale);
+    targetOutH = Math.round(targetOutH * scale);
+  }
+
+  const finalCanvas = new OffscreenCanvas(targetOutW, targetOutH);
   const finalCtx = finalCanvas.getContext('2d');
   if (!finalCtx) throw new Error('Could not get final canvas context');
 
-  // Draw original high-res image
-  finalCtx.drawImage(imageBitmap, 0, 0, origWidth, origHeight);
+  // Draw original image scaled smoothly
+  finalCtx.drawImage(imageBitmap, 0, 0, targetOutW, targetOutH);
 
   // Blend mask smoothly using destination-in
   finalCtx.globalCompositeOperation = 'destination-in';
   finalCtx.imageSmoothingEnabled = true;
   finalCtx.imageSmoothingQuality = 'high';
-  finalCtx.drawImage(maskCanvas, 0, 0, origWidth, origHeight);
+  finalCtx.drawImage(maskCanvas, 0, 0, targetOutW, targetOutH);
 
   // 4. Convert to PNG blob
   const resultBlob = await finalCanvas.convertToBlob({ type: 'image/png' });
@@ -319,6 +373,7 @@ self.onmessage = async (e: MessageEvent) => {
       self.postMessage({ type: 'success', blob: finalBlob, inferenceTimeMs: Number(inferenceElapsed), totalTimeSec: Number(totalTime) });
     } catch (error: any) {
       console.error('[U2NetP Worker] Error during background removal:', error);
+      session = null;
       self.postMessage({ type: 'error', error: error?.message || String(error) });
     }
   }

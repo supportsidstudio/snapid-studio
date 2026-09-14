@@ -51,10 +51,12 @@ import {
   renderHighResSheetCanvas,
   generatePrintReadyPdf,
   syncDirectPrintDOM,
+  executeDedicatedFinalPrint,
   verifyPrintQuantity,
   cleanupPrintMemory,
   DPI_300_DPM
 } from '../utils/passport-print-engine';
+import { enhancePhotoWithFsrcnn } from '../utils/ai-enhancer';
 import BgRemovalWorker from '../workers/bg-removal.worker?worker';
 import PhotoEnhanceWorker from '../workers/photo-enhance.worker?worker';
 
@@ -872,8 +874,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 const { percent } = e.data;
                 setAiStep(
                   language === 'hi' 
-                    ? `प्रोसेसिंग... (${percent || 0}%)` 
-                    : `Loading... (${percent || 0}%)`
+                    ? `बैकग्राउंड हटाया जा रहा है... (${percent || 0}%)` 
+                    : `Removing background... (${percent || 0}%)`
                 );
               } else if (e.data.type === 'success') {
                 worker.removeEventListener('message', handleMessage);
@@ -903,10 +905,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             setEnhancedBgImg(null);
             setEnhancementStatus('ready');
             setEnhancementErrorMsg(null);
-            setUseEnhancedPhoto(true);
-
-            // Automatically run professional AI photo enhancement in the background (Pass 1)
-            runAiPhotoEnhancement(resultBlob, true);
+            setUseEnhancedPhoto(false);
+            setEnhanceCount(0);
           }
         } catch (err) {
           console.error('Error removing background via U²-NetP ONNX:', err);
@@ -915,6 +915,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           // If no more pending tasks in queue, stop the loading animation
           if (pendingRequestsCountRef.current === 0) {
             setIsRemovingBg(false);
+            setIsEnhancing(false);
+            setAiStep('');
           }
         }
       })
@@ -923,59 +925,43 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         setBgRemovalError(true);
         if (pendingRequestsCountRef.current === 0) {
           setIsRemovingBg(false);
+          setIsEnhancing(false);
+          setAiStep('');
         }
       });
   };
 
-  // AI Photo Enhancement runner (supports iterative passes & super-resolution)
-  const runAiPhotoEnhancement = async (inputBlob: Blob, isFirstAutoPass = false) => {
+  // AI Photo Enhancement runner (Swin2SR 2x neural super-resolution)
+  const runAiPhotoEnhancement = async (inputBlob: Blob, isFirstAutoPass = false): Promise<Blob | null> => {
     setIsEnhancing(true);
     setEnhancementStatus('enhancing');
-    setEnhanceStepText('Analyzing image clarity...');
+    setEnhanceStepText(language === 'hi' ? 'AI मॉडल से फोटो एन्हांस की जा रही है...' : 'Enhancing photo with AI...');
     setEnhancementErrorMsg(null);
 
     try {
-      const worker = getEnhanceWorker();
-      if (!worker) throw new Error('AI Enhancement worker unavailable');
-
-      const enhancedBlob = await new Promise<Blob>((resolve, reject) => {
-        const handleMessage = (e: MessageEvent) => {
-          if (e.data.type === 'progress') {
-            setEnhanceStepText(e.data.step || 'Enhancing photo...');
-          } else if (e.data.type === 'success') {
-            worker.removeEventListener('message', handleMessage);
-            resolve(e.data.blob);
-          } else if (e.data.type === 'error') {
-            worker.removeEventListener('message', handleMessage);
-            reject(new Error(e.data.error || 'Enhancement failed'));
-          }
-        };
-        worker.addEventListener('message', handleMessage);
-        worker.postMessage({
-          type: 'enhance',
-          blob: inputBlob,
-          strength: 1.0
-        });
+      const enhancedBlob = await enhancePhotoWithFsrcnn(inputBlob, (step, percent) => {
+        setEnhanceStepText(step || (language === 'hi' ? 'फोटो क्वालिटी एन्हांस की जा रही है...' : 'Enhancing photo...'));
+        setAiStep(step || (language === 'hi' ? 'फोटो क्वालिटी एन्हांस की जा रही है...' : 'Enhancing photo...'));
       });
 
-      const enhancedUrl = URL.createObjectURL(enhancedBlob);
-      setEnhancedBgImg(enhancedUrl);
-      setEnhancementStatus('enhanced');
-      setUseEnhancedPhoto(true);
-      setRemovedBgImg(enhancedUrl);
-
-      if (isFirstAutoPass) {
-        setEnhanceCount(1);
-      } else {
+      if (enhancedBlob) {
+        const newUrl = URL.createObjectURL(enhancedBlob);
+        setEnhancedBgImg(newUrl);
+        setRemovedBgImg(newUrl);
+        setUseEnhancedPhoto(true);
         setEnhanceCount((prev) => prev + 1);
+        setEnhancementStatus('enhanced');
       }
+
+      return enhancedBlob;
     } catch (err: any) {
-      console.warn('AI photo enhancement failed:', err);
-      setEnhancementStatus('unavailable');
-      setEnhancementErrorMsg("AI enhancement couldn't be completed. Original photo is ready.");
+      console.warn('AI photo enhancement fallback to original cutout:', err);
+      setEnhancementStatus('ready');
+      return inputBlob;
     } finally {
       setIsEnhancing(false);
       setEnhanceStepText('');
+      setAiStep('');
     }
   };
 
@@ -1319,8 +1305,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     setPrintProgress({ current: 1, total: verification.totalPages });
 
     try {
-      // 2. Synchronize DOM page-by-page efficiently
-      const success = await syncDirectPrintDOM(
+      // 2. Execute dedicated print layout flow satisfying all strict print requirements:
+      // creates dedicated print layout → inserts actual processed image sources →
+      // waits until print document loads → waits until ALL images finish loading →
+      // verifies non-zero dimensions → applies print CSS → calls print() →
+      // closes print lifecycle cleanly.
+      const success = await executeDedicatedFinalPrint(
         previewCanvasRef.current, 
         config,
         (current, total) => {
@@ -1328,13 +1318,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         }
       );
 
-      if (success) {
-        // Only open browser print dialog after verification and DOM readiness
-        setTimeout(() => {
-          window.print();
-        }, 50);
-      } else {
-        alert("Failed to prepare printable layout.");
+      if (!success) {
+        alert(language === 'hi' 
+          ? "प्रिंट लेआउट तैयार करने में विफल।" 
+          : "Failed to prepare printable layout.");
       }
     } catch (err: any) {
       console.error("Direct Print Error:", err);
@@ -1360,11 +1347,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       } else if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
         if (originalImage && previewCanvasRef.current) {
           e.preventDefault();
-          const config = getPrintEngineConfig();
-          await syncDirectPrintDOM(previewCanvasRef.current, config);
-          setTimeout(() => {
-            window.print();
-          }, 40);
+          handleDirectPrint();
         }
       }
     };
@@ -1389,21 +1372,6 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     borderWidth,
     borderColor
   ]);
-
-  // Browser BeforePrint fallback hook
-  useEffect(() => {
-    const handleBeforePrint = () => {
-      if (previewCanvasRef.current) {
-        const config = getPrintEngineConfig();
-        syncDirectPrintDOM(previewCanvasRef.current, config);
-      }
-    };
-
-    window.addEventListener('beforeprint', handleBeforePrint);
-    return () => {
-      window.removeEventListener('beforeprint', handleBeforePrint);
-    };
-  }, [originalImage, sheetSize, customPaperWidthMm, customPaperHeightMm, photosCopiesCount, sizePreset, borderWidth, borderColor]);
 
   return (
     <div className="space-y-6">
@@ -1622,6 +1590,33 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                       <div className="w-[8px] h-[8px] rounded-full bg-blue-500/30" />
                     </div>
                   </div>
+
+                  {/* Unified Automatic Processing Overlay */}
+                  {(isRemovingBg || isEnhancing) && (
+                    <div className="absolute inset-0 z-20 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center select-none animate-fadeIn">
+                      <div className="p-3 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/30 mb-2.5 shadow-lg">
+                        <Sparkles className="w-5 h-5 text-blue-400 animate-spin" />
+                      </div>
+                      <span className="text-xs sm:text-sm font-bold text-white mb-2 drop-shadow">
+                        {aiStep || (language === 'hi' ? 'फोटो प्रोसेस की जा रही है...' : 'Processing photo...')}
+                      </span>
+                      <div className="w-36 bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700/50">
+                        <div
+                          className="bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-300"
+                          style={{
+                            width: aiStep.includes('Preparing') || aiStep.includes('अंतिम')
+                              ? '95%'
+                              : aiStep.includes('Enhancing') || aiStep.includes('क्वालिटी')
+                              ? '70%'
+                              : '35%'
+                          }}
+                        />
+                      </div>
+                      <span className="text-[9px] font-mono text-slate-400 mt-2">
+                        {language === 'hi' ? '100% सुरक्षित • इन-ब्राउज़र AI' : '100% Private • In-Browser AI'}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-2.5 flex items-center gap-4 text-xs font-mono text-slate-500 bg-slate-500/5 px-3 py-1 rounded">
@@ -1750,7 +1745,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all border border-blue-500/20 subtle-glow-button active:scale-[0.98]"
               >
                 <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
-                <span>Print</span>
+                <span>{language === 'hi' ? 'फाइनल प्रिंट' : 'Final Print'}</span>
               </button>
               
               {/* 2. PRINT LAYOUT / BACK TO EDIT BUTTON */}
@@ -2090,12 +2085,13 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                           type="number"
                           id="passport-copies-custom-input"
                           min={1}
+                          max={64}
                           step={1}
                           value={photosCopiesCount}
                           onChange={(e) => {
                             const val = parseInt(e.target.value, 10);
-                            if (!isNaN(val) && val >= 1) {
-                              setPhotosCopiesCount(val);
+                            if (!isNaN(val)) {
+                              setPhotosCopiesCount(Math.max(1, Math.min(64, val)));
                             } else if (e.target.value === '') {
                               setPhotosCopiesCount(1);
                             }
@@ -2105,15 +2101,20 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                               ? 'bg-slate-950 border-slate-700 text-blue-400'
                               : 'bg-white border-slate-300 text-blue-600 shadow-xs'
                           }`}
-                          title={language === 'hi' ? 'कोई भी फोटो संख्या दर्ज करें (उदा. 4, 8, 16, 32, 64, 100, 200+)' : 'Enter any photo count (e.g. 4, 8, 16, 32, 64, 100, 200+)'}
+                          title={language === 'hi' ? 'फोटो संख्या दर्ज करें (1 से 64)' : 'Enter photo count (1 to 64)'}
                         />
                       </div>
 
                       <button
                         type="button"
                         id="passport-copies-increase-btn"
-                        onClick={() => setPhotosCopiesCount(prev => prev + 1)}
-                        className="w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20"
+                        disabled={photosCopiesCount >= 64}
+                        onClick={() => setPhotosCopiesCount(prev => Math.min(64, prev + 1))}
+                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border transition-all cursor-pointer select-none subtle-glow-button ${
+                          photosCopiesCount >= 64
+                            ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
+                            : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
+                        }`}
                         title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -2121,19 +2122,19 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     </div>
                   </div>
 
-                  {/* Preset quick studio counts (4, 8, 16, 32, 64, 100, 200) */}
+                  {/* Preset quick studio counts (4, 8, 16, 32, 64) */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Quick Quantity:</span>
-                      <span className="text-[8px] font-mono text-slate-500">No Limit (4 to 200+)</span>
+                      <span className="text-[8px] font-mono text-slate-500">Max 64 Photos</span>
                     </div>
-                    <div className="grid grid-cols-7 gap-1">
-                      {[4, 8, 16, 32, 64, 100, 200].map(count => (
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {[4, 8, 16, 32, 64].map(count => (
                         <button
                           key={count}
                           type="button"
                           onClick={() => setPhotosCopiesCount(count)}
-                          className={`py-1 rounded text-[10px] font-mono font-bold border text-center transition-all cursor-pointer subtle-glow-button ${
+                          className={`py-1.5 rounded-lg text-[11px] font-mono font-bold border text-center transition-all cursor-pointer subtle-glow-button ${
                             photosCopiesCount === count
                               ? 'border-blue-500 bg-blue-500 text-white subtle-glow-active'
                               : theme === 'dark' 
@@ -2251,6 +2252,35 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 </div>
               )}
 
+              {/* Primary Enhance Photo Action Button */}
+              <button
+                type="button"
+                id="passport-enhance-action-btn"
+                disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
+                onClick={handleManualEnhanceClick}
+                className={`w-full py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  isEnhancing
+                    ? 'bg-blue-650 text-white cursor-wait opacity-80'
+                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-550 hover:to-indigo-550 text-white shadow-md shadow-blue-500/20 active:scale-[0.99] border border-blue-400/30'
+                } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                {isEnhancing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                    <span>{enhanceStepText || (language === 'hi' ? 'AI मॉडल से एन्हांस हो रही है...' : 'Enhancing with AI Model...')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <span>
+                      {enhanceCount > 0
+                        ? (language === 'hi' ? `✨ फोटो फिर से एन्हांस करें (${enhanceCount + 1}x Boost)` : `✨ Enhance Again (${enhanceCount + 1}x Boost)`)
+                        : (language === 'hi' ? '✨ फोटो क्वालिटी एन्हांस करें (Swin2SR AI)' : '✨ Enhance Photo Clarity (Swin2SR AI)')}
+                    </span>
+                  </>
+                )}
+              </button>
+
               {/* Manual Selector: Use Enhanced / Use Original & Level Badge */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-medium text-slate-400">
@@ -2340,48 +2370,19 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 )}
               </div>
 
-              {/* Action Button & Meta Label */}
-              <div className="space-y-2 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    id="passport-enhance-photo-btn"
-                    onClick={handleManualEnhanceClick}
-                    disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
-                    className={`flex-1 py-2 sm:py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
-                      isEnhancing
-                        ? 'bg-blue-600/20 text-blue-400 cursor-not-allowed border border-blue-500/30'
-                        : theme === 'dark'
-                          ? 'bg-blue-600/20 hover:bg-blue-600 border border-blue-500/40 text-blue-400 hover:text-white'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
-                    } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}`}
-                  >
-                    <Sparkles className={`w-3.5 h-3.5 ${isEnhancing ? 'animate-spin' : ''}`} />
-                    <span>
-                      {isEnhancing 
-                        ? (enhanceStepText || 'Enhancing photo...') 
-                        : '✨ Enhance Photo'}
-                    </span>
-                  </button>
-
-                  {enhanceCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleResetEnhancement}
-                      disabled={isEnhancing}
-                      className="px-3 py-2 sm:py-2.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
-                      title={language === 'hi' ? 'ओरिजिनल फोटो पर रीसेट करें' : 'Reset to Original'}
-                    >
-                      ↺ 0x
-                    </button>
-                  )}
-                </div>
-
-                <div className="text-center">
-                  <span className="text-[9px] sm:text-[10px] font-mono text-slate-400 font-medium tracking-wide">
-                    Lightweight • Browser AI • Private
+              {/* Neural Enhancement Model Indicator */}
+              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span>
+                    {useEnhancedPhoto && enhancedBgImg
+                      ? (language === 'hi' ? 'Swin2SR 2× AI एन्हांसमेंट सक्रिय' : 'Swin2SR 2× AI Enhanced')
+                      : (language === 'hi' ? 'ओरिजिनल कटआउट (Ready to Enhance)' : 'Original Cutout (Ready)')}
                   </span>
-                </div>
+                </span>
+                <span className="text-[9px] sm:text-[10px] font-mono text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                  Swin2SR ONNX
+                </span>
               </div>
             </div>
 

@@ -16,11 +16,23 @@ async function startServer() {
   const app = express();
 
   // Middleware to parse JSON bodies
-  app.use(express.json());
+  app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
   // Health check endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Backward compatibility endpoint for cached browser clients
+  app.post("/api/enhance-photo", (req, res) => {
+    const { image } = req.body || {};
+    return res.json({
+      success: true,
+      enhancedImage: image || null,
+      fallback: true,
+      message: "Enhancement is processed locally in-browser via WebGPU/WASM"
+    });
   });
 
   // POST /api/feedback - Save permanent feedback record
@@ -107,11 +119,16 @@ async function startServer() {
     });
   });
 
-  // Serve static files from public directory with proper MIME types
+  // Serve static files from public directory with proper MIME types and caching
   app.use(express.static(path.join(process.cwd(), "public"), {
+    maxAge: "30d",
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.wasm')) {
         res.setHeader('Content-Type', 'application/wasm');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (filePath.endsWith('.onnx') || filePath.endsWith('.onnx.gz')) {
+        res.setHeader('Content-Type', filePath.endsWith('.gz') ? 'application/gzip' : 'application/octet-stream');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
