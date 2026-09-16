@@ -113,13 +113,13 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
   };
 
   return (
-    <div className="space-y-6 max-w-4xl animate-fade-in">
+    <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-black font-display tracking-tight text-inherit flex items-center gap-2">
           <Mail className="w-6 h-6 text-blue-500" />
           <span>{t.contactTitle}</span>
         </h1>
-        <p className="text-xs text-slate-400 mt-1">{t.contactTagline}</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.contactTagline}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -134,11 +134,11 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
               </div>
               <div>
                 <h3 className="font-extrabold text-sm text-inherit">SnapID Help Desk</h3>
-                <p className="text-[10px] text-slate-400">Online & Offline Support Interface</p>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400">Online & Offline Support Interface</p>
               </div>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed font-medium">
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
               {language === 'hi'
                 ? 'यदि आपके पास कोई प्रश्न, सुझाव या सहयोग अनुरोध है, तो कृपया बेझिझक संदेश भेजें या सीधे ईमेल करें।'
                 : 'Have questions, visual bugs, custom feature ideas or business support needs? Get in touch with our tech desk anytime.'}
@@ -147,9 +147,9 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
 
           {/* Email Card Highlight */}
           <div className={`p-4 rounded-xl border ${
-            theme === 'dark' ? 'bg-slate-900/40 border-slate-850' : 'bg-slate-50 border-slate-150'
+            theme === 'dark' ? 'bg-slate-900/40 border-slate-850' : 'bg-slate-50 border-slate-200'
           } space-y-2`}>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
               Support Email Address
             </span>
             <div className="flex items-center justify-between gap-2 bg-slate-950/20 px-3 py-2 rounded-lg border border-inherit">
@@ -159,13 +159,13 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
               <button
                 type="button"
                 onClick={handleCopyEmail}
-                className="p-1 rounded bg-blue-500/10 hover:bg-blue-500/15 text-blue-500 transition-all shrink-0"
+                className="p-1 rounded bg-blue-500/10 hover:bg-blue-500/15 text-blue-500 shrink-0 cursor-pointer"
                 title="Copy Address"
               >
                 {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
               </button>
             </div>
-            <p className="text-[10px] text-slate-400">
+            <p className="text-[10px] text-slate-500 dark:text-slate-400">
               {language === 'hi' 
                 ? 'हम आमतौर पर 12-24 घंटों में जवाब देते हैं।' 
                 : 'We respond directly within 12-24 business hours.'}
@@ -185,7 +185,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
               <h3 className="font-bold text-sm text-inherit">
                 {language === 'hi' ? 'संदेश सफलतापूर्वक भेजा गया!' : 'Message Sent Successfully!'}
               </h3>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-sm">
                 {language === 'hi' 
                   ? 'आपका संदेश सफलतापूर्वक भेज दिया गया है। हम जल्द ही आपसे संपर्क करेंगे।' 
                   : 'Your message has been successfully transmitted. Our team will review your message shortly.'}
@@ -197,8 +197,8 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                     setSubmitted(false);
                     setMessage('');
                   }}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-colors ${
-                    theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:bg-slate-850' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                  className={`px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                    theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:bg-slate-850' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
                   }`}
                 >
                   {language === 'hi' ? 'नया लिखें' : 'Write Another'}
@@ -210,7 +210,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
               {/* Optional user details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-[10px] uppercase font-mono font-bold text-slate-400 block mb-1.5">
+                  <label className="text-[10px] uppercase font-mono font-bold text-slate-500 dark:text-slate-400 block mb-1.5">
                     {t.contactNameLabel}
                   </label>
                   <input
@@ -218,7 +218,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Your Name"
-                    className={`w-full px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none transition-all ${
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none ${
                       theme === 'dark' 
                         ? 'bg-slate-900/50 border-slate-800 focus:border-blue-500 focus:bg-slate-900 text-white' 
                         : 'bg-slate-50 border-slate-200 focus:border-blue-500 focus:bg-white text-slate-900'
@@ -226,7 +226,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] uppercase font-mono font-bold text-slate-400 block mb-1.5">
+                  <label className="text-[10px] uppercase font-mono font-bold text-slate-500 dark:text-slate-400 block mb-1.5">
                     {t.contactEmailLabel}
                   </label>
                   <input
@@ -234,7 +234,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="e.g. name@example.com"
-                    className={`w-full px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none transition-all ${
+                    className={`w-full px-3 py-2 rounded-xl text-xs font-semibold border focus:outline-none ${
                       theme === 'dark' 
                         ? 'bg-slate-900/50 border-slate-800 focus:border-blue-500 focus:bg-slate-900 text-white' 
                         : 'bg-slate-50 border-slate-200 focus:border-blue-500 focus:bg-white text-slate-900'
@@ -245,7 +245,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
 
               {/* Message block requirements */}
               <div>
-                <label className="text-[10px] uppercase font-mono font-bold text-slate-400 block mb-1.5">
+                <label className="text-[10px] uppercase font-mono font-bold text-slate-500 dark:text-slate-400 block mb-1.5">
                   {language === 'hi' ? 'आपका संदेश / कमेंट' : 'Your Comment / Message'}
                 </label>
                 <textarea
@@ -254,7 +254,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder={language === 'hi' ? 'यहाँ अपना सन्देश या कमेंट टाइप करें...' : 'Write your detailed comment or inquiry here...'}
                   rows={5}
-                  className={`w-full px-3 py-2 rounded-xl text-xs font-medium border focus:outline-none transition-all resize-none ${
+                  className={`w-full px-3 py-2 rounded-xl text-xs font-medium border focus:outline-none resize-none ${
                     theme === 'dark' 
                       ? 'bg-slate-900/50 border-slate-800 focus:border-blue-500 focus:bg-slate-900 text-white' 
                       : 'bg-slate-50 border-slate-200 focus:border-blue-500 focus:bg-white text-slate-900'
@@ -272,7 +272,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                 <button
                   type="submit"
                   disabled={isSending || !message.trim()}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-550 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-white flex items-center justify-center gap-2 shadow-md shadow-blue-950/20"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-550 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center gap-2 shadow-md shadow-blue-950/20 cursor-pointer"
                 >
                   <Send className={`w-4 h-4 ${isSending ? 'animate-pulse' : ''}`} />
                   <span>{isSending ? (language === 'hi' ? 'भेजा जा रहा है...' : 'Sending Message...') : t.contactSendBtn}</span>

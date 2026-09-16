@@ -720,16 +720,16 @@ export default function PhotoSignatureResizerSection({
   return (
     <section 
       id="photo-signature-resizer" 
-      className="space-y-6 scroll-mt-20 animate-fade-in"
+      className="space-y-6 scroll-mt-20"
     >
       {/* Section Header Card */}
-      <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden transition-all subtle-glow-card ${
+      <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden subtle-glow-card ${
         theme === 'dark'
           ? 'bg-gradient-to-r from-blue-950/25 via-slate-900/90 to-slate-950 border-slate-800/80 shadow-xl'
           : 'bg-gradient-to-r from-blue-50/70 via-white to-slate-50 border-slate-200 shadow-sm'
       }`}>
-        <div className="absolute -right-16 -top-16 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -right-16 -top-16 w-60 h-60 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 w-60 h-60 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="max-w-2xl">
@@ -759,7 +759,7 @@ export default function PhotoSignatureResizerSection({
             <button
               type="button"
               onClick={() => handleToolModeChange('photo')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer subtle-glow-button ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer subtle-glow-button ${
                 toolMode === 'photo'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 subtle-glow-active'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -768,10 +768,11 @@ export default function PhotoSignatureResizerSection({
               <User className="w-4 h-4" />
               <span>{language === 'hi' ? 'फोटो (Photo)' : 'Photo'}</span>
             </button>
+
             <button
               type="button"
               onClick={() => handleToolModeChange('signature')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer subtle-glow-button ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer subtle-glow-button ${
                 toolMode === 'signature'
                   ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20 subtle-glow-active'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -786,7 +787,7 @@ export default function PhotoSignatureResizerSection({
 
       {/* Error Banner */}
       {errorMessage && (
-        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs sm:text-sm flex items-center gap-3 animate-fade-in">
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-500 text-xs sm:text-sm flex items-center gap-3">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <span className="flex-1 font-medium">{errorMessage}</span>
           <button 
@@ -817,20 +818,20 @@ export default function PhotoSignatureResizerSection({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
-          className={`relative overflow-hidden group border-2 rounded-3xl p-8 sm:p-14 text-center cursor-pointer transition-all duration-300 ${
+          className={`relative overflow-hidden group border-2 rounded-3xl p-8 sm:p-14 text-center cursor-pointer ${
             isDragging
               ? 'border-blue-500 bg-blue-500/10 scale-[0.99] shadow-[0_0_30px_rgba(59,130,246,0.3)]'
               : theme === 'dark'
-              ? 'border-blue-500/50 bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.18)] hover:border-blue-400 hover:shadow-[0_0_32px_rgba(59,130,246,0.32)]'
-              : 'border-blue-300/80 bg-gradient-to-br from-blue-50/80 via-sky-50/40 to-indigo-50/30 shadow-[0_4px_22px_rgba(37,99,235,0.12)] hover:border-blue-500 hover:shadow-[0_6px_28px_rgba(37,99,235,0.22)]'
+              ? 'border-blue-500/50 bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.18)] hover:border-blue-400'
+              : 'border-blue-300/80 bg-gradient-to-br from-blue-50/80 via-sky-50/40 to-indigo-50/30 shadow-[0_4px_22px_rgba(37,99,235,0.12)] hover:border-blue-500'
           }`}
         >
           <div className="relative z-10 max-w-md mx-auto flex flex-col items-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4 group-hover:scale-110 transition-transform duration-300">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4 group-hover:scale-105 active:scale-95">
               {toolMode === 'signature' ? (
                 <PenTool className="w-8 h-8" />
               ) : (
-                <Upload className="w-8 h-8 animate-bounce" />
+                <Upload className="w-8 h-8" />
               )}
             </div>
 
@@ -860,7 +861,7 @@ export default function PhotoSignatureResizerSection({
         /* ========================================================
             DEDICATED RESIZE EDITOR / PANEL (Opens immediately on upload)
            ======================================================== */
-        <div className={`rounded-3xl border p-5 sm:p-8 space-y-6 transition-all animate-fade-in subtle-glow-card ${
+        <div className={`rounded-3xl border p-5 sm:p-8 space-y-6 subtle-glow-card ${
           theme === 'dark' 
             ? 'bg-slate-900/90 border-slate-800 shadow-2xl shadow-blue-950/20' 
             : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/60'
@@ -950,7 +951,7 @@ export default function PhotoSignatureResizerSection({
                     onClick={() => {
                       setResizeMode('pixels');
                     }}
-                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
+                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 cursor-pointer subtle-glow-button ${
                       resizeMode === 'pixels'
                         ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
                         : theme === 'dark'
@@ -971,7 +972,7 @@ export default function PhotoSignatureResizerSection({
                     onClick={() => {
                       setResizeMode('percentage');
                     }}
-                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 transition-all cursor-pointer subtle-glow-button ${
+                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 cursor-pointer subtle-glow-button ${
                       resizeMode === 'percentage'
                         ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
                         : theme === 'dark'
@@ -1006,7 +1007,7 @@ export default function PhotoSignatureResizerSection({
                         max="10000"
                         value={width || ''}
                         onChange={(e) => handleWidthChange(e.target.value)}
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none transition-all subtle-element-glow ${
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none subtle-element-glow ${
                           theme === 'dark'
                             ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             : 'bg-white border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -1019,7 +1020,7 @@ export default function PhotoSignatureResizerSection({
                       <button
                         type="button"
                         onClick={() => setAspectRatioLocked(!aspectRatioLocked)}
-                        className={`p-2.5 rounded-xl border transition-all cursor-pointer subtle-glow-button ${
+                        className={`p-2.5 rounded-xl border cursor-pointer subtle-glow-button ${
                           aspectRatioLocked
                             ? 'bg-blue-600/15 border-blue-500/40 text-blue-500 hover:bg-blue-600/25 subtle-glow-active'
                             : theme === 'dark'
@@ -1043,7 +1044,7 @@ export default function PhotoSignatureResizerSection({
                         max="10000"
                         value={height || ''}
                         onChange={(e) => handleHeightChange(e.target.value)}
-                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none transition-all subtle-element-glow ${
+                        className={`w-full px-3.5 py-2.5 rounded-xl text-sm font-mono font-bold border outline-none subtle-element-glow ${
                           theme === 'dark'
                             ? 'bg-slate-900 border-slate-700 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                             : 'bg-white border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -1139,7 +1140,7 @@ export default function PhotoSignatureResizerSection({
                       key={type}
                       type="button"
                       onClick={() => setFileType(type)}
-                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all cursor-pointer flex flex-col items-center justify-center gap-1 subtle-glow-button ${
+                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border cursor-pointer flex flex-col items-center justify-center gap-1 subtle-glow-button ${
                         fileType === type
                           ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
                           : theme === 'dark'
@@ -1165,7 +1166,7 @@ export default function PhotoSignatureResizerSection({
               </div>
 
               {/* 5. Target File Size (KB optimization 10 - 200 KB) */}
-              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 transition-all subtle-glow-card ${
+              <div className={`p-4 sm:p-5 rounded-2xl border space-y-4 subtle-glow-card ${
                 useTargetKB
                   ? 'border-blue-500/60 bg-blue-500/5 ring-1 ring-blue-500/20'
                   : theme === 'dark'
@@ -1199,7 +1200,7 @@ export default function PhotoSignatureResizerSection({
                         setTargetKB(50);
                       }
                     }}
-                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer subtle-glow-button ${
+                    className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border cursor-pointer subtle-glow-button ${
                       useTargetKB
                         ? 'bg-blue-600 text-white border-blue-500 shadow-sm subtle-glow-active'
                         : theme === 'dark'
@@ -1272,7 +1273,7 @@ export default function PhotoSignatureResizerSection({
                         key={kb}
                         type="button"
                         onClick={() => handleQuickKBClick(kb)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer subtle-glow-button ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border cursor-pointer subtle-glow-button ${
                           useTargetKB && targetKB === kb
                             ? 'bg-blue-600 border-blue-500 text-white shadow-xs scale-105 subtle-glow-active'
                             : theme === 'dark'
@@ -1421,7 +1422,7 @@ export default function PhotoSignatureResizerSection({
               {/* Bottom Action Buttons: Save/Download */}
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
                 {downloadSuccess && (
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-semibold flex items-center gap-2 animate-fade-in subtle-glow-card">
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 text-xs font-semibold flex items-center gap-2 subtle-glow-card">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     <span>
                       {language === 'hi' ? 'इमेज सफलतापूर्वक डाउनलोड हो गई!' : 'Image downloaded successfully!'}
@@ -1433,7 +1434,7 @@ export default function PhotoSignatureResizerSection({
                   type="button"
                   onClick={handleDownload}
                   disabled={isProcessing || !resizedBlob}
-                  className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] subtle-glow-button"
+                  className="w-full py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01] active:scale-[0.99] subtle-glow-button"
                 >
                   <Download className="w-4 h-4" />
                   <span>{language === 'hi' ? 'सेव / डाउनलोड करें (Download)' : 'Save / Download'}</span>
@@ -1448,7 +1449,7 @@ export default function PhotoSignatureResizerSection({
 
       {/* Full Size Preview Modal to inspect crispness / pixel clarity */}
       {previewModalOpen && resizedImageUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className={`relative max-w-3xl w-full max-h-[90vh] rounded-2xl border flex flex-col overflow-hidden shadow-2xl ${
             theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}>

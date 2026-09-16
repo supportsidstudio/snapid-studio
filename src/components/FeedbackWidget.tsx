@@ -247,7 +247,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
 
             {/* Content Body: Success Screen OR Input Form */}
             {isSubmitted ? (
-              <div className="py-4 text-center space-y-3 animate-fade-in">
+              <div className="py-4 text-center space-y-3">
                 <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 flex items-center justify-center mx-auto shadow-xs">
                   <CheckCircle2 className="w-6 h-6" />
                 </div>
@@ -267,14 +267,14 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-sm transition-all cursor-pointer hover:shadow-[0_0_12px_rgba(59,130,246,0.4)]"
+                    className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-sm cursor-pointer hover:shadow-[0_0_12px_rgba(59,130,246,0.4)]"
                   >
                     {isHindi ? 'ठीक है (Done)' : 'Done'}
                   </button>
                   <button
                     type="button"
                     onClick={handleResetForm}
-                    className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-0.5 transition-colors cursor-pointer"
+                    className="text-[10px] font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-0.5 cursor-pointer"
                   >
                     {isHindi ? 'अन्य फीडबैक भेजें' : 'Send Another Feedback'}
                   </button>
@@ -290,7 +290,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                       {isHindi ? 'आपका अनुभव कैसा रहा?' : 'How was your experience?'}
                     </label>
                     {rating > 0 && (
-                      <span className="text-[11px] font-extrabold text-amber-500 dark:text-amber-400 animate-fade-in flex items-center gap-1">
+                      <span className="text-[11px] font-extrabold text-amber-500 dark:text-amber-400 flex items-center gap-1">
                         <span>{rating} / 5</span>
                         <span className="text-[10px] text-slate-400 font-normal">
                           ({category ? (isHindi ? CATEGORIES.find(c => c.id === category)?.labelHi : category) : ''})
@@ -309,11 +309,11 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                           onMouseEnter={() => setHoverRating(star)}
                           onMouseLeave={() => setHoverRating(0)}
                           onClick={() => handleSelectRating(star)}
-                          className="p-1 transition-transform hover:scale-125 active:scale-95 cursor-pointer focus:outline-none"
+                          className="p-1 cursor-pointer focus:outline-none"
                           title={`${star} Star${star > 1 ? 's' : ''}`}
                         >
                           <Star
-                            className={`w-6 h-6 sm:w-7 sm:h-7 transition-all duration-150 ${
+                            className={`w-6 h-6 sm:w-7 sm:h-7 ${
                               isHighlighted
                                 ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.65)]'
                                 : theme === 'dark'
@@ -343,7 +343,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                           onClick={() => handleSelectCategory(cat.id)}
                           onMouseEnter={() => setHoverRating(cat.defaultStar)}
                           onMouseLeave={() => setHoverRating(0)}
-                          className={`py-1.5 px-0.5 rounded-xl text-center border transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                          className={`py-1.5 px-0.5 rounded-xl text-center border cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
                             isCatSelected
                               ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-400/40 shadow-[0_0_10px_rgba(59,130,246,0.35)] scale-102'
                               : theme === 'dark'
@@ -385,7 +385,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                         ? 'यहाँ अपना फीडबैक लिखें...' 
                         : 'Write your experience here...'
                     }
-                    className={`w-full p-2 rounded-lg text-xs border outline-none transition-all resize-none ${
+                    className={`w-full p-2 rounded-lg text-xs border outline-none resize-none ${
                       theme === 'dark'
                         ? 'bg-slate-950/70 border-slate-700/80 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                         : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -404,7 +404,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder={isHindi ? 'उदा. राहुल / Anonymous' : 'e.g. Rahul / Anonymous'}
-                    className={`w-full px-2.5 py-1.5 rounded-lg text-xs border outline-none transition-all ${
+                    className={`w-full px-2.5 py-1.5 rounded-lg text-xs border outline-none ${
                       theme === 'dark'
                         ? 'bg-slate-950/70 border-slate-700/80 text-white placeholder-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
                         : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
@@ -414,7 +414,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
 
                 {/* Error Banner */}
                 {errorMessage && (
-                  <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[11px] font-medium flex items-center gap-1.5 animate-fade-in">
+                  <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[11px] font-medium flex items-center gap-1.5">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                     <span>{errorMessage}</span>
                   </div>
@@ -424,7 +424,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                 <button
                   type="submit"
                   disabled={isSubmitting || rating === 0}
-                  className={`w-full py-2.5 px-3 rounded-lg text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  className={`w-full py-2.5 px-3 rounded-lg text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
                     rating === 0
                       ? 'bg-slate-600/50 opacity-50 cursor-not-allowed'
                       : 'bg-blue-600 hover:bg-blue-500 shadow-md shadow-blue-600/30 hover:shadow-[0_0_16px_rgba(59,130,246,0.45)] active:scale-[0.99]'
@@ -455,10 +455,10 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
         ref={buttonRef}
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`group relative z-10 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-extrabold text-xs tracking-wide text-white transition-all duration-200 cursor-pointer flex items-center gap-2 select-none ${
+        className={`group relative z-10 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl font-extrabold text-xs tracking-wide text-white cursor-pointer flex items-center gap-2 select-none ${
           isOpen
             ? 'bg-slate-800 hover:bg-slate-700 border-b-2 border-slate-900 shadow-md'
-            : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-b-2 border-indigo-900 shadow-[0_6px_18px_rgba(37,99,235,0.35)] hover:shadow-[0_8px_24px_rgba(37,99,235,0.5)] hover:-translate-y-0.5 active:translate-y-0 active:border-b'
+            : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-b-2 border-indigo-900 shadow-[0_6px_18px_rgba(37,99,235,0.35)] hover:shadow-[0_8px_24px_rgba(37,99,235,0.5)] active:border-b'
         }`}
         title={isOpen ? (isHindi ? 'फीडबैक बंद करें' : 'Close Feedback') : (isHindi ? 'फीडबैक दें' : 'Give Feedback')}
         aria-expanded={isOpen}

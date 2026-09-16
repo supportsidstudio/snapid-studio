@@ -102,7 +102,7 @@ export default function UserFeedbackSection({
       {/* ========================================================
           SECTION HEADER
          ======================================================== */}
-      <div className={`p-6 sm:p-7 rounded-3xl border relative overflow-hidden transition-all ${
+      <div className={`p-6 sm:p-7 rounded-3xl border relative overflow-hidden ${
         theme === 'dark'
           ? 'bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950/30 border-slate-900 shadow-xl'
           : 'bg-gradient-to-r from-white via-slate-50 to-blue-50/40 border-slate-200 shadow-sm'
@@ -123,7 +123,7 @@ export default function UserFeedbackSection({
               <span>{isHindi ? 'हमारे उपयोगकर्ता क्या कहते हैं' : 'What Our Users Say'}</span>
             </h2>
 
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1.5 max-w-xl leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1.5 max-w-xl leading-relaxed">
               {isHindi 
                 ? 'SnapID Studio का उपयोग करने वाले लोगों से वास्तविक फीडबैक' 
                 : 'Real feedback from people using SnapID Studio'}
@@ -136,7 +136,7 @@ export default function UserFeedbackSection({
               onClick={fetchFeedbacks}
               disabled={isLoading}
               title={isHindi ? 'ताज़ा करें' : 'Refresh Feedback'}
-              className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+              className={`p-2.5 rounded-xl border cursor-pointer ${
                 theme === 'dark'
                   ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
                   : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-xs'
@@ -148,7 +148,7 @@ export default function UserFeedbackSection({
             <button
               type="button"
               onClick={handleOpenPopup}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition-all cursor-pointer hover:shadow-[0_0_18px_rgba(59,130,246,0.4)] active:scale-95"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/25 cursor-pointer active:scale-95"
             >
               <MessageCircle className="w-4 h-4" />
               <span>{isHindi ? '💬 फीडबैक दें' : '💬 Leave Feedback'}</span>
@@ -206,7 +206,7 @@ export default function UserFeedbackSection({
           <button
             type="button"
             onClick={handleOpenPopup}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md cursor-pointer"
           >
             <MessageCircle className="w-4 h-4" />
             <span>{isHindi ? '💬 फीडबैक दें' : '💬 Leave Feedback'}</span>
@@ -222,10 +222,10 @@ export default function UserFeedbackSection({
             return (
               <div
                 key={item.id}
-                className={`group relative rounded-2xl p-5 border flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 ${
+                className={`group relative rounded-2xl p-5 border flex flex-col justify-between ${
                   theme === 'dark'
-                    ? 'bg-slate-950/80 border-slate-900/90 hover:border-blue-500/40 shadow-[0_8px_20px_rgba(0,0,0,0.5)] hover:shadow-[0_12px_28px_rgba(59,130,246,0.15)] ring-1 ring-white/5 hover:ring-blue-500/20'
-                    : 'bg-white border-slate-200/90 hover:border-blue-400/60 shadow-[0_4px_16px_rgba(15,23,42,0.06)] hover:shadow-[0_10px_24px_rgba(59,130,246,0.12)] ring-1 ring-slate-100 hover:ring-blue-400/20'
+                    ? 'bg-slate-950/80 border-slate-900/90 hover:border-blue-500/40 shadow-[0_8px_20px_rgba(0,0,0,0.5)] ring-1 ring-white/5'
+                    : 'bg-white border-slate-200/90 hover:border-blue-400/60 shadow-[0_4px_16px_rgba(15,23,42,0.06)] ring-1 ring-slate-100'
                 }`}
               >
                 <div>

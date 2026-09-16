@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import PassportSection from './components/PassportSection';
 import DocumentsSection from './components/DocumentsSection';
@@ -7,21 +7,19 @@ import HelpAboutLegal from './components/HelpAboutLegal';
 import ContactSection from './components/ContactSection';
 import FeedbackWidget from './components/FeedbackWidget';
 import UserFeedbackSection from './components/UserFeedbackSection';
+import HomeDashboard from './components/HomeDashboard';
 import { AppTab, AppTheme, AppLanguage } from './types';
 import { translations } from './translations';
 import { 
-  User, 
-  FileText, 
+  Sun, 
+  Moon, 
+  Languages,
+  Search,
+  User,
+  FileText,
   Sliders,
-  ChevronRight, 
-  Sparkles, 
-  CheckCircle, 
-  ShieldCheck, 
-  Printer,
-  Info,
-  Sun,
-  Moon,
-  Languages
+  Sparkles,
+  HelpCircle
 } from 'lucide-react';
 
 export default function App() {
@@ -40,6 +38,17 @@ export default function App() {
     const saved = localStorage.getItem('snapid_active_tab');
     return (saved as AppTab) || 'home';
   });
+
+  // Collapsible sidebar state (persisted across page navigation)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    const saved = localStorage.getItem('snapid_sidebar_collapsed');
+    return saved === 'true';
+  });
+
+  // Search state in top header
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   // Persist selections
   useEffect(() => {
@@ -60,21 +69,107 @@ export default function App() {
     localStorage.setItem('snapid_active_tab', currentTab);
   }, [currentTab]);
 
-  const handleToggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
+  useEffect(() => {
+    localStorage.setItem('snapid_sidebar_collapsed', String(isSidebarCollapsed));
+  }, [isSidebarCollapsed]);
 
-  const handleToggleLanguage = () => {
+  // Close search popup on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const nextTheme: AppTheme = prev === 'dark' ? 'light' : 'dark';
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      try {
+        localStorage.setItem('snapid_theme', nextTheme);
+      } catch (e) {}
+      return nextTheme;
+    });
+  }, []);
+
+  const handleToggleLanguage = useCallback(() => {
     setLanguage(prev => prev === 'en' ? 'hi' : 'en');
-  };
+  }, []);
 
-  const t = translations[language];
+  const handleToggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed(prev => !prev);
+  }, []);
 
-  // Render the core page based on tab
-  const renderTabContent = () => {
+  const handleSelectTab = useCallback((tab: AppTab) => {
+    setCurrentTab(tab);
+  }, []);
+
+  const isDark = theme === 'dark';
+
+  // Search tools list
+  const searchableTools = [
+    {
+      id: 'passport' as AppTab,
+      title: 'Passport Size Photo Maker',
+      desc: '4x6, A4, single sheets, Indian & global passport specs, AI background removal',
+      icon: User,
+      badge: 'Popular'
+    },
+    {
+      id: 'documents' as AppTab,
+      title: 'Standard Indian Documents',
+      desc: 'Aadhaar, PAN Card, Voter ID, Driving Licence, Jan Aadhaar card printing',
+      icon: FileText,
+      badge: 'eMitra / CSC'
+    },
+    {
+      id: 'resizer' as AppTab,
+      title: 'Photo & Signature Resizer',
+      desc: 'Compress to 10KB–200KB, resize px/mm, UPSC, SSC, IBPS exam form specs',
+      icon: Sliders,
+      badge: 'Govt Specs'
+    },
+    {
+      id: 'passport' as AppTab,
+      title: 'AI Background Removal',
+      desc: 'Automatic cutout with white, blue, red studio background colors',
+      icon: Sparkles,
+      badge: '100% Offline'
+    },
+    {
+      id: 'help' as AppTab,
+      title: 'Help, FAQ & Print Guides',
+      desc: 'Printer margin settings, 300 DPI layout guide, paper dimensions',
+      icon: HelpCircle,
+      badge: 'Guide'
+    }
+  ];
+
+  const filteredTools = searchQuery.trim() === ''
+    ? searchableTools
+    : searchableTools.filter(item => 
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.desc.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+  // Memoized main page content - skips re-rendering entire tab when sidebar collapses or opens
+  const mainContent = useMemo(() => {
     switch (currentTab) {
       case 'home':
-        return renderHomeDashboard();
+        return (
+          <HomeDashboard 
+            onSelectTab={handleSelectTab} 
+            language={language} 
+            theme={theme} 
+          />
+        );
       case 'passport':
         return <PassportSection language={language} theme={theme} />;
       case 'documents':
@@ -91,7 +186,7 @@ export default function App() {
             tab={currentTab} 
             language={language} 
             theme={theme} 
-            onChangeTab={setCurrentTab}
+            onChangeTab={handleSelectTab}
           />
         );
       case 'contact':
@@ -99,234 +194,169 @@ export default function App() {
       case 'feedback':
         return <UserFeedbackSection language={language} theme={theme} />;
       default:
-        return renderHomeDashboard();
+        return (
+          <HomeDashboard 
+            onSelectTab={handleSelectTab} 
+            language={language} 
+            theme={theme} 
+          />
+        );
     }
-  };
-
-  // Modern Home element
-  const renderHomeDashboard = () => (
-    <div className="space-y-8 animate-fade-in">
-      {/* Top Welcome Title Card */}
-      <div className={`p-8 rounded-3xl border relative overflow-hidden ${
-        theme === 'dark' 
-          ? 'bg-gradient-to-r from-blue-950/20 via-slate-950 to-slate-950 border-slate-900 shadow-xl' 
-          : 'bg-gradient-to-r from-blue-50/20 via-white to-white border-slate-200 shadow-sm'
-      }`}>
-        {/* Glow vector shapes */}
-        <div className="absolute -right-16 -top-16 w-60 h-60 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 w-60 h-60 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 max-w-2xl">
-          <span className="text-xs font-bold text-blue-500 uppercase tracking-widest bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/15">
-            Active Workspace
-          </span>
-          <h1 className="text-3xl lg:text-4xl font-black font-display tracking-tight mt-4 leading-tight">
-            {t.welcomeTitle}
-          </h1>
-          <p className="text-slate-400 text-sm mt-3.5 leading-relaxed">
-            {t.welcomeDesc}
-          </p>
-        </div>
-      </div>
-
-      {/* Main Three Feature Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Card 1: Passport Size Photo Section */}
-        <div className={`rounded-2xl border p-6 flex flex-col justify-between transition-all group ${
-          theme === 'dark'
-            ? 'bg-slate-950/70 border-slate-900 hover:border-slate-800'
-            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
-        }`}>
-          <div>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${
-              theme === 'dark' ? 'bg-blue-600/10 text-blue-400' : 'bg-blue-50 text-blue-600'
-            }`}>
-              <User className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold font-display tracking-tight group-hover:text-blue-550 transition-colors">
-              {t.cardPassportTitle}
-            </h3>
-            <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
-              {t.cardPassportDesc}
-            </p>
-          </div>
-
-          <button
-            onClick={() => setCurrentTab('passport')}
-            className="mt-6 inline-flex items-center justify-between px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-500/5 group/btn cursor-pointer transition-colors"
-          >
-            <span>{t.getStarted}</span>
-            <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
-          </button>
-        </div>
-
-        {/* Card 2: Documents Section */}
-        <div className={`rounded-2xl border p-6 flex flex-col justify-between transition-all group ${
-          theme === 'dark'
-            ? 'bg-slate-950/70 border-slate-900 hover:border-slate-800'
-            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
-        }`}>
-          <div>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${
-              theme === 'dark' ? 'bg-cyan-600/10 text-cyan-400' : 'bg-cyan-50 text-cyan-700'
-            }`}>
-              <FileText className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold font-display tracking-tight group-hover:text-cyan-550 transition-colors">
-              {t.cardDocsTitle}
-            </h3>
-            <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
-              {t.cardDocsDesc}
-            </p>
-          </div>
-
-          <button
-            onClick={() => setCurrentTab('documents')}
-            className="mt-6 inline-flex items-center justify-between px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white border border-slate-805 font-semibold text-xs shadow-md group/btn cursor-pointer transition-colors"
-          >
-            <span>{t.getStarted}</span>
-            <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform text-slate-400" />
-          </button>
-        </div>
-
-        {/* Card 3: Photo Resizer */}
-        <div className={`rounded-2xl border p-6 flex flex-col justify-between transition-all group ${
-          theme === 'dark'
-            ? 'bg-slate-950/70 border-slate-900 hover:border-slate-800'
-            : 'bg-white border-slate-200 hover:border-slate-300 shadow-sm'
-        }`}>
-          <div>
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 ${
-              theme === 'dark' ? 'bg-indigo-600/10 text-indigo-400' : 'bg-indigo-50 text-indigo-700'
-            }`}>
-              <Sliders className="w-6 h-6" />
-            </div>
-            <h3 className="text-xl font-bold font-display tracking-tight group-hover:text-indigo-500 transition-colors">
-              {(t as any).cardResizerTitle || 'Photo Resizer'}
-            </h3>
-            <p className="text-xs text-slate-400 mt-2.5 leading-relaxed">
-              {(t as any).cardResizerDesc || 'Resize dimensions (px/%), compress to target KB (10–200 KB), and adjust quality for photos and signatures.'}
-            </p>
-          </div>
-
-          <button
-            onClick={() => setCurrentTab('resizer')}
-            className="mt-6 inline-flex items-center justify-between px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md group/btn cursor-pointer transition-colors"
-          >
-            <span>{t.getStarted}</span>
-            <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform text-white" />
-          </button>
-        </div>
-      </div>
-
-      {/* Bottom specs summary dictionary */}
-      <div className={`p-6 rounded-2xl border ${
-        theme === 'dark' ? 'bg-slate-950 border-slate-900 text-slate-400' : 'bg-white border-slate-200'
-      }`}>
-        <h3 className={`font-bold text-sm mb-3.5 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
-          <Printer className="w-4 h-4 text-blue-500" />
-          <span>ISO standard specs dimensions guide</span>
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-slate-500/5 space-y-1">
-            <span className={`font-semibold block ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>ID-1 (PVC standard)</span>
-            <span className="text-slate-400">85.60 mm x 53.98 mm</span>
-            <span className="text-[10px] text-slate-400 block font-mono">Aadhaar, PAN, Voter ID, DL, Jan Aadhaar</span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-500/5 space-y-1">
-            <span className={`font-semibold block ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>US / India Passport</span>
-            <span className="text-slate-400">2" x 2" (51.0 mm x 51.0 mm)</span>
-            <span className="text-[10px] text-slate-400 block font-mono">Standard Square Profile Portrait</span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-500/5 space-y-1">
-            <span className={`font-semibold block ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>UK / EU Passport</span>
-            <span className="text-slate-400">35.0 mm x 45.0 mm</span>
-            <span className="text-[10px] text-slate-400 block font-mono">Standard Tall Profile Portrait</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  }, [currentTab, language, theme, handleSelectTab]);
 
   return (
     <div className={`min-h-screen flex flex-col lg:flex-row font-sans ${
-      theme === 'dark' 
+      isDark 
         ? 'bg-slate-950 text-slate-100' 
         : 'bg-slate-50 text-slate-800'
     }`}>
       
-      {/* Sidebar Section */}
+      {/* Sidebar Section (Collapsible on Desktop, Drawer on Mobile) */}
       <Sidebar
         currentTab={currentTab}
-        onChangeTab={setCurrentTab}
+        onChangeTab={handleSelectTab}
         theme={theme}
         onToggleTheme={handleToggleTheme}
         language={language}
         onToggleLanguage={handleToggleLanguage}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={handleToggleSidebar}
       />
 
       {/* Main content viewport space */}
       <main className="flex-1 min-w-0 flex flex-col relative">
         
-        {/* Top-Right Premium Quick Controls Header Bar (Desktop Only) */}
-        <div className={`w-full hidden lg:flex justify-end items-center px-4 py-3 md:px-8 md:py-4 gap-3 shrink-0 ${
-          theme === 'dark' 
-            ? 'bg-slate-950/20 border-b border-slate-900/50' 
-            : 'bg-slate-50/20 border-b border-slate-200/50'
-        } backdrop-blur-md sticky top-0 z-30`}>
+        {/* Top Header Bar (Desktop Only) - Matching Reference: Search + Language + Theme, NO LOGIN/PROFILE ICON */}
+        <header className={`w-full hidden lg:flex justify-between items-center px-6 py-2.5 shrink-0 border-b backdrop-blur-md sticky top-0 z-30 ${
+          isDark 
+            ? 'bg-[#060b18]/85 border-slate-900/80 shadow-[0_4px_20px_rgba(0,0,0,0.4)]' 
+            : 'bg-white/85 border-slate-200/80 shadow-xs'
+        }`}>
           
-          {/* Quick Language Toggle */}
-          <button
-            onClick={handleToggleLanguage}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer ${
-              theme === 'dark'
-                ? 'bg-slate-900/90 hover:bg-slate-850 text-slate-200 hover:text-white shadow-[0_4px_12px_rgba(0,0,0,0.5)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.7)]'
-                : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_16px_rgba(15,23,42,0.12)]'
-            }`}
-            title={language === 'en' ? 'हिन्दी में बदलें' : 'Switch to English'}
-          >
-            <Languages className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            <span className="font-sans tracking-wide text-[11px]">
-              {language === 'en' ? 'हिन्दी' : 'English'}
-            </span>
-          </button>
+          {/* Header Left / Center: Sleek Interactive Search Bar */}
+          <div ref={searchRef} className="relative w-80 md:w-96">
+            <div className={`flex items-center gap-2.5 px-3.5 py-1.5 rounded-xl border text-xs ${
+              isDark
+                ? 'bg-[#0b1633]/90 border-blue-500/25 focus-within:border-cyan-400 focus-within:shadow-[0_0_15px_rgba(6,182,212,0.25)] text-slate-200'
+                : 'bg-slate-100/90 border-slate-250 focus-within:border-blue-500 focus-within:bg-white focus-within:shadow-xs text-slate-800'
+            }`}>
+              <Search className="w-4 h-4 text-cyan-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                placeholder={language === 'hi' ? 'टूल्स, दस्तावेज़, साइज़ खोजें...' : 'Search tools, features...'}
+                className={`w-full bg-transparent outline-none text-xs placeholder:text-slate-500 ${
+                  isDark ? 'text-slate-200' : 'text-slate-800'
+                }`}
+              />
+              <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-slate-500/15 text-slate-400 shrink-0 border border-slate-500/20">
+                Ctrl + K
+              </span>
+            </div>
 
-          {/* Quick Theme Toggle */}
-          <button
-            onClick={handleToggleTheme}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-300 cursor-pointer ${
-              theme === 'dark'
-                ? 'bg-slate-900/90 hover:bg-slate-850 text-slate-200 hover:text-white shadow-[0_4px_12px_rgba(0,0,0,0.5)] hover:shadow-[0_6px_16px_rgba(0,0,0,0.7)]'
-                : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-[0_4px_12px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_16px_rgba(15,23,42,0.12)]'
-            }`}
-            title={theme === 'dark' ? 'Switch to White Mode' : 'Switch to Dark Mode'}
-          >
-            {theme === 'dark' ? (
-              <>
-                <Sun className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>White Mode</span>
-              </>
-            ) : (
-              <>
-                <Moon className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                <span>Dark Mode</span>
-              </>
+            {/* Quick Search Results Dropdown */}
+            {isSearchOpen && (
+              <div className={`absolute left-0 right-0 mt-2 rounded-2xl border shadow-xl backdrop-blur-xl p-2 z-50 ${
+                isDark 
+                  ? 'bg-slate-950/95 border-blue-500/25 text-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.7)]' 
+                  : 'bg-white/95 border-slate-200 text-slate-800 shadow-lg'
+              }`}>
+                <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider font-mono text-slate-400">
+                  {searchQuery.trim() ? 'Matching Tools' : 'Quick Navigation'}
+                </div>
+                <div className="space-y-1 mt-1 max-h-64 overflow-y-auto">
+                  {filteredTools.map((tool, idx) => {
+                    const IconComp = tool.icon;
+                    return (
+                      <button
+                        key={`${tool.id}-${idx}`}
+                        onClick={() => {
+                          setCurrentTab(tool.id);
+                          setIsSearchOpen(false);
+                          setSearchQuery('');
+                        }}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left cursor-pointer ${
+                          isDark 
+                            ? 'hover:bg-slate-900/90 text-slate-200' 
+                            : 'hover:bg-blue-50/70 text-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                            <IconComp className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold block truncate">{tool.title}</span>
+                            <span className="text-[10px] text-slate-400 block truncate">{tool.desc}</span>
+                          </div>
+                        </div>
+                        <span className="text-[9px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 shrink-0">
+                          {tool.badge}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
-          </button>
-        </div>
+          </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 md:p-8 max-w-7xl w-full mx-auto space-y-8 flex flex-col justify-between">
+          {/* Header Right: Language selector + Theme toggle (NO LOGIN/PROFILE ICON) */}
+          <div className="flex items-center gap-3">
+            {/* Quick Language Toggle */}
+            <button
+              onClick={handleToggleLanguage}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold cursor-pointer ${
+                isDark
+                  ? 'bg-[#0b1633]/90 hover:bg-[#0f2048] text-slate-200 hover:text-white border border-blue-500/25 shadow-xs'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 shadow-xs'
+              }`}
+              title={language === 'en' ? 'हिन्दी में बदलें' : 'Switch to English'}
+            >
+              <Languages className={`w-3.5 h-3.5 shrink-0 ${isDark ? 'text-cyan-400' : 'text-blue-600'}`} />
+              <span className="font-sans text-xs">
+                {language === 'en' ? 'English' : 'हिन्दी'}
+              </span>
+              <span className="text-[10px] text-slate-400">▾</span>
+            </button>
+
+            {/* Quick Theme Toggle */}
+            <button
+              onClick={handleToggleTheme}
+              className={`flex items-center justify-center w-8 h-8 rounded-xl cursor-pointer ${
+                isDark
+                  ? 'bg-[#0b1633]/90 hover:bg-[#0f2048] text-amber-400 border border-blue-500/25 shadow-xs'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 shadow-xs'
+              }`}
+              title={isDark ? 'Switch to White Mode' : 'Switch to Dark Mode'}
+            >
+              {isDark ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-indigo-500" />
+              )}
+            </button>
+          </div>
+
+        </header>
+
+        {/* Main Content Area: Dynamically expands when sidebar is collapsed, compact padding */}
+        <div className={`flex-1 overflow-y-auto px-4 py-4 md:px-6 md:py-4 w-full mx-auto space-y-4 flex flex-col justify-between ${
+          isSidebarCollapsed ? 'max-w-[1550px]' : 'max-w-7xl'
+        }`}>
           <div className="flex-1">
-            {renderTabContent()}
+            {mainContent}
           </div>
           
           <footer className={`pt-6 pb-2 border-t text-[11px] font-sans flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 ${
-            theme === 'dark' 
+            isDark 
               ? 'border-slate-900 text-slate-400' 
-              : 'border-slate-200 text-slate-550'
+              : 'border-slate-200 text-slate-600'
           }`}>
             <div className="flex items-center gap-1.5 font-medium">
               <span>© 2026</span>

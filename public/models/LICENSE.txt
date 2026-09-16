@@ -9,3 +9,15 @@
 - **Original Authors & Repository**: Xuebin Qin, Zichen Zhang, Chenyang Huang, Masood Dehghan, Osmar R. Zaiane, Martin Jagersand (University of Alberta)
 - **Repository Reference**: https://github.com/xuebinqin/U-2-Net / https://huggingface.co/edgetools/u2netp
 - **License Term**: Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+
+## Real-ESRGAN General x4v3 (Compact SRVGGNet)
+- **Model Name**: Real-ESRGAN General x4v3 (Compact Super-Resolution)
+- **Format**: ONNX (`model.onnx`)
+- **Size**: ~4.7 MiB
+- **Architecture**: SRVGGNetCompact
+- **Input**: NCHW [1, 3, H, W] RGB float32 [0, 1]
+- **Output**: NCHW [1, 3, 4*H, 4*W] RGB float32 [0, 1]
+- **License**: BSD 3-Clause License
+- **Original Authors**: Xintao Wang, Liangbin Xie, Chao Dong, Ying Shan (Tencent ARC Lab, Shenzhen Institutes of Advanced Technology)
+- **Export & Reference**: https://github.com/xinntao/Real-ESRGAN / https://huggingface.co/CoderViking/realesr-general-x4v3-onnx
+

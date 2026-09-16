@@ -2081,7 +2081,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         <h1 className="text-xl sm:text-2xl font-black font-display tracking-tight text-inherit">
           {t.docSectionTitle}
         </h1>
-        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-500'}`}>
+        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
           {t.docSectionSubtitle}
         </p>
       </div>
@@ -2090,7 +2090,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       <div className={`p-4 rounded-2xl border ${
         theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
       } space-y-3`}>
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
+        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
           {t.docSelectLabel}
         </span>
         <div className="flex flex-wrap gap-2">
@@ -2098,12 +2098,12 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             <button
               key={doc.id}
               onClick={() => setActiveDocType(doc.id)}
-              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer max-w-full truncate ${
+              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold border cursor-pointer max-w-full truncate ${
                 activeDocType === doc.id
                   ? 'border-blue-500 bg-blue-500/10 text-blue-500 shadow-sm'
                   : theme === 'dark' 
                     ? 'border-slate-800 hover:border-slate-750 text-slate-400 hover:text-white bg-slate-900/30'
-                    : 'border-slate-200 hover:border-slate-300 text-slate-650 hover:text-slate-900 bg-slate-50'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
               }`}
               title={language === 'hi' ? doc.nameHi : doc.nameEn}
             >
@@ -2125,10 +2125,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           }`}>
             <button
               onClick={() => setPreviewTab('individual')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold cursor-pointer ${
                 previewTab === 'individual'
                   ? theme === 'dark' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-inherit'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-inherit'
               }`}
             >
               <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500" />
@@ -2136,10 +2136,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             </button>
             <button
               onClick={() => setPreviewTab('assembly')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold cursor-pointer ${
                 previewTab === 'assembly'
                   ? theme === 'dark' ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-inherit'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-inherit'
               }`}
             >
               <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-cyan-500" />
@@ -2161,10 +2161,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     <button
                       type="button"
                       onClick={() => setActiveSide('front')}
-                      className={`px-4.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      className={`px-4.5 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
                         activeSide === 'front'
                           ? 'border-blue-500 bg-blue-500/10 text-blue-500'
-                          : theme === 'dark' ? 'border-slate-800 text-slate-400 bg-slate-900/40' : 'border-slate-200 text-slate-650 bg-slate-50'
+                          : theme === 'dark' ? 'border-slate-800 text-slate-400 bg-slate-900/40' : 'border-slate-200 text-slate-700 bg-slate-50'
                       }`}
                     >
                       {t.frontSide} Side
@@ -2172,10 +2172,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     <button
                       type="button"
                       onClick={() => setActiveSide('back')}
-                      className={`px-4.5 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                      className={`px-4.5 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
                         activeSide === 'back'
                           ? 'border-blue-500 bg-blue-500/10 text-blue-500'
-                          : theme === 'dark' ? 'border-slate-800 text-slate-400 bg-slate-900/40' : 'border-slate-200 text-slate-650 bg-slate-50'
+                          : theme === 'dark' ? 'border-slate-800 text-slate-400 bg-slate-900/40' : 'border-slate-200 text-slate-700 bg-slate-50'
                       }`}
                     >
                       {language === 'hi' ? 'पीछे' : 'Back'} Side
@@ -2193,7 +2193,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         }
                       }}
                       disabled={!frontOriginal}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 cursor-pointer ${
                         frontOriginal 
                           ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-500 hover:bg-emerald-500/10' 
                           : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
@@ -2211,7 +2211,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         }
                       }}
                       disabled={!backOriginal}
-                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 cursor-pointer ${
                         backOriginal 
                           ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-500 hover:bg-emerald-500/10' 
                           : 'opacity-40 cursor-not-allowed border-slate-800 text-slate-500'
@@ -2283,7 +2283,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                           handleDrop(activeSide, e.dataTransfer.files[0]);
                         }
                       }}
-                      className={`text-center p-8 border-2 border-dashed rounded-xl max-w-sm transition-all duration-200 cursor-pointer ${
+                      className={`text-center p-8 border-2 border-dashed rounded-xl max-w-sm cursor-pointer ${
                         isDragOverStage 
                           ? 'border-blue-500 bg-blue-500/10 scale-[1.03] ring-4 ring-blue-500/10'
                           : theme === 'dark'
@@ -2295,7 +2295,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                       <h4 className={`font-bold text-sm leading-snug transition-colors ${isDragOverStage ? 'text-blue-500' : ''}`}>
                         {isDragOverStage ? 'Drop to Upload Document!' : `Please Upload Scanned ${activeSide === 'front' ? 'Front' : 'Back'} Image`}
                       </h4>
-                      <p className="text-xs text-slate-400 mt-1.5 max-w-xs mb-3 font-medium">
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 max-w-xs mb-3 font-medium">
                         Drag & drop file here or use the file upload selector on the right sidebar.
                       </p>
                     </div>
@@ -2315,7 +2315,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         setCropModalSide(activeSide);
                         setCropModalOpen(true);
                       }}
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-555 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/15 hover:shadow-lg transition-all cursor-pointer active:scale-95 shrink-0"
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-555 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/15 hover:shadow-lg cursor-pointer active:scale-95 shrink-0"
                     >
                       <Sliders className="w-3.5 h-3.5 text-white" />
                       <span>{language === 'hi' ? 'मैन्युअल क्रॉप करें' : 'Manual Crop Document'}</span>
@@ -2336,7 +2336,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   className="w-auto h-auto max-h-[350px] max-w-full block mx-auto object-contain bg-white shrink-0"
                 />
               </div>
-              <p className="text-xs text-slate-400 mt-3 font-medium text-center">
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-3 font-medium text-center">
                 Page assembly preset: {layoutStyle} • Placed on physical 210x297mm A4 Canvas
               </p>
             </div>
@@ -2349,7 +2349,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               type="button"
               id="snapid-doc-print-btn"
               onClick={handleDirectPrintDoc}
-              className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all border border-blue-500/20 subtle-glow-button active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer border border-blue-500/20 subtle-glow-button active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={!frontImage && !backImage}
             >
               <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
@@ -2367,7 +2367,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   setPreviewTab('assembly');
                 }
               }}
-              className={`w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base border flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer transition-all subtle-glow-button active:scale-[0.98] ${
+              className={`w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base border flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer subtle-glow-button active:scale-[0.98] ${
                 previewTab === 'assembly'
                   ? 'bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25'
                   : theme === 'dark' 
@@ -2432,7 +2432,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         <div className="xl:col-span-4 space-y-6">
           
           {/* Panel: Upload front / back panels */}
-          <div className={`p-5 sm:p-6 rounded-3xl border transition-all duration-300 ${
+          <div className={`p-5 sm:p-6 rounded-3xl border ${
             theme === 'dark' 
               ? 'bg-slate-950/90 border-slate-800 shadow-2xl shadow-blue-950/20' 
               : 'bg-white border-slate-200/90 shadow-xl shadow-slate-200/60'
@@ -2482,7 +2482,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     handleDrop('front', e.dataTransfer.files[0]);
                   }
                 }}
-                className={`transition-all duration-300 rounded-2xl ${
+                className={`rounded-2xl ${
                   isDragOverFront
                     ? 'ring-4 ring-blue-500 ring-offset-2 scale-[1.02]'
                     : ''
@@ -2520,7 +2520,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   </div>
                 ) : frontImage ? (
                   /* Loaded state card */
-                  <div className={`p-3.5 rounded-2xl border transition-all ${
+                  <div className={`p-3.5 rounded-2xl border ${
                     theme === 'dark'
                       ? 'bg-slate-900/80 border-slate-800 shadow-md shadow-black/20'
                       : 'bg-slate-50/90 border-slate-200 shadow-md shadow-slate-200/50'
@@ -2549,13 +2549,13 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                             setCropModalSide('front');
                             setCropModalOpen(true);
                           }}
-                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap"
+                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap"
                           title="Manual Crop"
                         >
                           <Crop className="w-3 h-3 shrink-0" />
                           <span>{language === 'hi' ? 'क्रॉप' : 'Crop'}</span>
                         </button>
-                        <label className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-blue-500/20 flex items-center gap-1 whitespace-nowrap">
+                        <label className="text-[11px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg border border-blue-500/20 flex items-center gap-1 whitespace-nowrap">
                           <RefreshCw className="w-3 h-3 shrink-0" />
                           <span>{language === 'hi' ? 'बदलें' : 'Change'}</span>
                           <input 
@@ -2573,7 +2573,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         <button
                           type="button"
                           onClick={() => handleRemoveImage('front')}
-                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 cursor-pointer p-1.5 rounded-lg transition-all border border-rose-500/20 shrink-0"
+                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 cursor-pointer p-1.5 rounded-lg border border-rose-500/20 shrink-0"
                           title="Remove Front Image"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2583,12 +2583,12 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   </div>
                 ) : (
                   /* Glowing Empty Upload Zone */
-                  <label className={`relative overflow-hidden group border-2 rounded-2xl p-6 sm:p-7 text-center block cursor-pointer transition-all duration-300 ${
+                  <label className={`relative overflow-hidden group border-2 rounded-2xl p-6 sm:p-7 text-center block cursor-pointer ${
                     isDragOverFront
                       ? 'border-blue-500 bg-blue-500/10 scale-[1.02]'
                       : theme === 'dark' 
-                        ? 'border-blue-500/70 bg-gradient-to-br from-slate-900/90 via-blue-950/25 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.25)] hover:border-blue-400 hover:shadow-[0_0_36px_rgba(59,130,246,0.5)]' 
-                        : 'border-blue-400/90 bg-gradient-to-br from-blue-50/90 via-sky-50/50 to-indigo-50/40 shadow-[0_6px_25px_rgba(37,99,235,0.18)] hover:border-blue-600 hover:shadow-[0_8px_32px_rgba(37,99,235,0.32)]'
+                        ? 'border-blue-500/70 bg-gradient-to-br from-slate-900/90 via-blue-950/25 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.25)] hover:border-blue-400' 
+                        : 'border-blue-400/90 bg-gradient-to-br from-blue-50/90 via-sky-50/50 to-indigo-50/40 shadow-[0_6px_25px_rgba(37,99,235,0.18)] hover:border-blue-600'
                   }`}>
                     <div className="relative z-10 flex flex-col items-center justify-center space-y-2.5">
                       <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/35 group-hover:scale-110 transition-transform duration-300">
@@ -2651,7 +2651,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     handleDrop('back', e.dataTransfer.files[0]);
                   }
                 }}
-                className={`transition-all duration-300 rounded-2xl ${
+                className={`rounded-2xl ${
                   isDragOverBack
                     ? 'ring-4 ring-indigo-500 ring-offset-2 scale-[1.02]'
                     : ''
@@ -2689,7 +2689,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   </div>
                 ) : backImage ? (
                   /* Loaded state card */
-                  <div className={`p-3.5 rounded-2xl border transition-all ${
+                  <div className={`p-3.5 rounded-2xl border ${
                     theme === 'dark'
                       ? 'bg-slate-900/80 border-slate-800 shadow-md shadow-black/20'
                       : 'bg-slate-50/90 border-slate-200 shadow-md shadow-slate-200/50'
@@ -2718,13 +2718,13 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                             setCropModalSide('back');
                             setCropModalOpen(true);
                           }}
-                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap"
+                          className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg border border-emerald-500/20 flex items-center gap-1 whitespace-nowrap"
                           title="Manual Crop"
                         >
                           <Crop className="w-3 h-3 shrink-0" />
                           <span>{language === 'hi' ? 'क्रॉप' : 'Crop'}</span>
                         </button>
-                        <label className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg transition-all border border-indigo-500/20 flex items-center gap-1 whitespace-nowrap">
+                        <label className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 active:scale-95 cursor-pointer px-2.5 py-1.5 rounded-lg border border-indigo-500/20 flex items-center gap-1 whitespace-nowrap">
                           <RefreshCw className="w-3 h-3 shrink-0" />
                           <span>{language === 'hi' ? 'बदलें' : 'Change'}</span>
                           <input 
@@ -2742,7 +2742,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         <button
                           type="button"
                           onClick={() => handleRemoveImage('back')}
-                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 cursor-pointer p-1.5 rounded-lg transition-all border border-rose-500/20 shrink-0"
+                          className="text-[11px] font-bold text-rose-500 hover:text-rose-600 bg-rose-500/10 hover:bg-rose-500/20 active:scale-95 cursor-pointer p-1.5 rounded-lg border border-rose-500/20 shrink-0"
                           title="Remove Back Image"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2752,12 +2752,12 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   </div>
                 ) : (
                   /* Glowing Empty Upload Zone */
-                  <label className={`relative overflow-hidden group border-2 rounded-2xl p-6 sm:p-7 text-center block cursor-pointer transition-all duration-300 ${
+                  <label className={`relative overflow-hidden group border-2 rounded-2xl p-6 sm:p-7 text-center block cursor-pointer ${
                     isDragOverBack
                       ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
                       : theme === 'dark' 
-                        ? 'border-indigo-500/70 bg-gradient-to-br from-slate-900/90 via-indigo-950/25 to-slate-900/90 shadow-[0_0_24px_rgba(99,102,241,0.25)] hover:border-indigo-400 hover:shadow-[0_0_36px_rgba(99,102,241,0.5)]' 
-                        : 'border-indigo-400/90 bg-gradient-to-br from-indigo-50/90 via-purple-50/40 to-blue-50/40 shadow-[0_6px_25px_rgba(99,102,241,0.18)] hover:border-indigo-600 hover:shadow-[0_8px_32px_rgba(99,102,241,0.32)]'
+                        ? 'border-indigo-500/70 bg-gradient-to-br from-slate-900/90 via-indigo-950/25 to-slate-900/90 shadow-[0_0_24px_rgba(99,102,241,0.25)] hover:border-indigo-400' 
+                        : 'border-indigo-400/90 bg-gradient-to-br from-indigo-50/90 via-purple-50/40 to-blue-50/40 shadow-[0_6px_25px_rgba(99,102,241,0.18)] hover:border-indigo-600'
                   }`}>
                     <div className="relative z-10 flex flex-col items-center justify-center space-y-2.5">
                       <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 text-white flex items-center justify-center shadow-lg shadow-indigo-500/35 group-hover:scale-110 transition-transform duration-300">
@@ -2830,18 +2830,18 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 <button
                   key={preset.id}
                   onClick={() => setLayoutStyle(preset.id)}
-                  className={`w-full text-left p-3 rounded-xl border transition-all flex flex-col gap-0.5 cursor-pointer ${
+                  className={`w-full text-left p-3 rounded-xl border flex flex-col gap-0.5 cursor-pointer ${
                     layoutStyle === preset.id
                       ? 'border-blue-500 bg-blue-500/5 text-blue-500'
                       : theme === 'dark' 
                         ? 'border-slate-800 hover:border-slate-750 text-slate-300 hover:text-white bg-slate-900/30'
-                        : 'border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-slate-50'
+                        : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
                   }`}
                 >
                   <span className="text-xs font-bold">
                     {language === 'hi' ? preset.labelHi : preset.labelEn}
                   </span>
-                  <span className="text-[10px] text-slate-400 leading-normal line-clamp-2">
+                  <span className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal line-clamp-2">
                     {language === 'hi' ? preset.descHi : preset.descEn}
                   </span>
                 </button>
@@ -2859,7 +2859,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               <Download className="w-4 h-4 text-blue-500" />
               <span>{language === 'hi' ? 'प्रिंट और डाउनलोड सेंटर (Print & Download)' : 'Print & Download Options'}</span>
             </h4>
-            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+            <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
               {language === 'hi'
                 ? 'दस्तावेज़ शीट लेआउट तैयार करें और उच्च-गुणवत्ता वाली PNG इमेज या PDF फ़ॉर्मेट तुरंत डाउनलोड करके आसानी से प्रिंट करें।'
                 : 'Prepare document layouts and download high-quality PNG or PDF formatting immediately for clean, professional printing.'}
@@ -2870,7 +2870,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               <button
                 type="button"
                 onClick={downloadAssemblyPng}
-                className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer transition-all ${
+                className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer ${
                   theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
                 }`}
               >
@@ -2878,14 +2878,14 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <ImageIcon className="w-4 h-4 text-pink-400 shrink-0" />
                   <span>Download Photo Layout (PNG)</span>
                 </div>
-                <Download className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                <Download className="w-4 h-4 text-slate-400 group-hover:text-inherit" />
               </button>
 
               {/* 4. DOWNLOAD PDF */}
               <button
                 type="button"
                 onClick={downloadAssemblyPdf}
-                className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer transition-all ${
+                className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer ${
                   theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-850'
                 }`}
               >
@@ -2893,7 +2893,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <FileDown className="w-4 h-4 text-red-500 shrink-0" />
                   <span>Download Ready-to-Print PDF</span>
                 </div>
-                <Download className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                <Download className="w-4 h-4 text-slate-400 group-hover:text-inherit" />
               </button>
 
             </div>
@@ -2940,7 +2940,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               <button
                 type="button"
                 onClick={() => setCropModalOpen(false)}
-                className="p-1.5 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all cursor-pointer border border-slate-700"
+                className="p-1.5 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white cursor-pointer border border-slate-700"
               >
                 ✕ Close
               </button>
@@ -3256,7 +3256,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={applyManualCrop}
-                    className="px-4 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/40"
+                    className="px-4 py-1.5 rounded-lg text-xs font-extrabold bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer flex items-center gap-1.5 shadow-md shadow-emerald-950/40"
                   >
                     <Check className="w-4 h-4 text-slate-950 stroke-[3]" />
                     <span>{language === 'hi' ? 'क्रॉप लागू करें (Apply Crop)' : 'Apply Crop & Save'}</span>

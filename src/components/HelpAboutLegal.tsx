@@ -306,14 +306,14 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
   // 1. HELP & FAQ RENDERING
   if (tab === 'help') {
     return (
-      <div className="space-y-6 max-w-4xl animate-fade-in">
+      <div className="space-y-6 max-w-4xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black font-display tracking-tight text-inherit flex items-center gap-2">
               <HelpCircle className="w-6 h-6 text-blue-500" />
               <span>{t.helpTitle}</span>
             </h1>
-            <p className="text-xs text-slate-400 mt-1">{t.helpTagline}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.helpTagline}</p>
           </div>
           {/* FAQ Search Bar */}
           <div className="relative w-full sm:w-72 shrink-0">
@@ -323,7 +323,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               placeholder={language === 'hi' ? 'अक्सर पूछे जाने वाले प्रश्न खोजें...' : 'Search answers, standard specs...'}
               value={faqSearch}
               onChange={(e) => setFaqSearch(e.target.value)}
-              className={`w-full text-xs py-2.5 pl-9 pr-4 rounded-xl border outline-none transition-all ${
+              className={`w-full text-xs py-2.5 pl-9 pr-4 rounded-xl border outline-none ${
                 theme === 'dark' 
                   ? 'bg-slate-900 border-slate-800 focus:border-blue-500 text-white' 
                   : 'bg-white border-slate-200 focus:border-blue-500 text-slate-800'
@@ -558,7 +558,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               return (
                 <div 
                   key={item.id} 
-                  className={`rounded-2xl border transition-all ${
+                  className={`rounded-2xl border ${
                     theme === 'dark' 
                       ? 'bg-slate-950/70 border-slate-900 hover:border-slate-800' 
                       : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
@@ -566,7 +566,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 >
                   <button
                     onClick={() => setExpandedFaqId(isExpanded ? null : item.id)}
-                    className="w-full flex items-center justify-between p-5 text-left font-bold text-xs md:text-sm text-slate-800 dark:text-slate-100 gap-4"
+                    className="w-full flex items-center justify-between p-5 text-left font-bold text-xs md:text-sm text-slate-800 dark:text-slate-100 gap-4 cursor-pointer"
                   >
                     <span className="flex items-start gap-2.5">
                       <span className="text-blue-500 font-mono text-[11px] uppercase tracking-wider font-extrabold">Q.</span>
@@ -580,7 +580,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                   </button>
                   
                   {isExpanded && (
-                    <div className="px-5 pb-5 pt-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed border-t border-slate-150 dark:border-slate-900 animate-fade-in space-y-2 font-medium">
+                    <div className="px-5 pb-5 pt-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed border-t border-slate-150 dark:border-slate-900 space-y-2 font-medium">
                       <p className="whitespace-pre-wrap">{answer}</p>
                     </div>
                   )}
@@ -636,13 +636,13 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
   // 2. ABOUT US RENDERING (Corporate Grade)
   if (tab === 'about') {
     return (
-      <div className="space-y-6 max-w-4xl animate-fade-in">
+      <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="text-2xl font-black font-display tracking-tight text-inherit flex items-center gap-2">
             <Info className="w-6 h-6 text-blue-500" />
             <span>{language === 'hi' ? 'हमारे बारे में' : 'About SnapID Studio'}</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">{t.aboutTagline}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.aboutTagline}</p>
         </div>
 
         {/* Core Profile Card */}
@@ -657,14 +657,14 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <h3 className="font-extrabold text-base text-inherit leading-tight">
                 SnapID Core Setup
               </h3>
-              <p className="text-[11px] text-slate-400">Professional Identity Layout Studio • Est. 2026</p>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">Professional Identity Layout Studio • Est. 2026</p>
             </div>
           </div>
 
-          <div className="space-y-4 text-xs md:text-sm text-slate-400 leading-relaxed">
+          <div className="space-y-4 text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
             <p>{t.aboutP1}</p>
             
-            <p className="font-semibold text-blue-500 dark:text-blue-400">
+            <p className="font-semibold text-blue-600 dark:text-blue-400">
               {t.aboutP2}
             </p>
 
@@ -685,7 +685,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <Building className="w-4 h-4 text-blue-500" />
               <span>{language === 'hi' ? 'हमारा दृष्टिकोण और कॉर्पोरेट मिशन' : 'Our Vision & Corporate Mission'}</span>
             </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
               {language === 'hi' 
                 ? 'SnapID स्टूडियो में, हमारा मिशन आम नागरिकों, फोटो ऑपरेटरों और डिजिटल सेवा केंद्रों को पूर्ण दस्तावेज़ संप्रभुता प्रदान करना है। हमारा मानना ​​है कि बायोमेट्रिक-सम्मत फॉर्मेटिंग उपकरण सार्वभौमिक रूप से सभी के लिए पूरी तरह से मुफ्त और सुरक्षित रूप से उपलब्ध होने चाहिए।'
                 : 'At SnapID Studio, our mission is to deliver complete document sovereignty to citizens, photo operators, and digital service bureaus. We believe that professional, biometric-compliant formatting utilities should be universally accessible, free from commercial walls, and built with absolute, non-compromising technical safety.'}
@@ -699,7 +699,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <UserCheck className="w-4 h-4 text-cyan-500" />
               <span>{language === 'hi' ? 'मूल सिद्धांत और नैतिकता' : 'Core Principles & Ethics'}</span>
             </h3>
-            <ul className="text-xs text-slate-400 space-y-1.5">
+            <ul className="text-xs text-slate-600 dark:text-slate-300 space-y-1.5">
               <li className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                 <span>
@@ -734,43 +734,43 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
   // 3. LEGAL PORTAL RENDERING (Compliance & AdSense)
   if (tab === 'legal') {
     return (
-      <div className="space-y-6 max-w-4xl animate-fade-in">
+      <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="text-2xl font-black font-display tracking-tight text-inherit flex items-center gap-2">
             <Shield className="w-6 h-6 text-blue-500" />
             <span>{language === 'hi' ? 'कानूनी और गोपनीयता' : 'Compliance & Legal Center'}</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">{t.legalTagline}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{t.legalTagline}</p>
         </div>
 
         {/* Legal Sub Tabs */}
         <div className="flex border-b border-slate-200 dark:border-slate-900">
           <button
             onClick={() => setLegalSubTab('privacy')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 cursor-pointer ${
               legalSubTab === 'privacy'
                 ? 'border-blue-500 text-blue-500'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {language === 'hi' ? 'गोपनीयता नीति' : 'Privacy Policy'}
           </button>
           <button
             onClick={() => setLegalSubTab('terms')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 cursor-pointer ${
               legalSubTab === 'terms'
                 ? 'border-blue-500 text-blue-500'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {language === 'hi' ? 'सेवा की शर्तें' : 'Terms of Service'}
           </button>
           <button
             onClick={() => setLegalSubTab('disclaimer')}
-            className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            className={`px-4 py-2.5 text-xs font-bold border-b-2 cursor-pointer ${
               legalSubTab === 'disclaimer'
                 ? 'border-blue-500 text-blue-500'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
             }`}
           >
             {language === 'hi' ? 'अस्वीकरण' : 'General Disclaimer'}
@@ -782,7 +782,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
         }`}>
           {legalSubTab === 'privacy' && (
-            <div className="space-y-4 text-xs md:text-sm text-slate-400 leading-relaxed">
+            <div className="space-y-4 text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
               {language === 'hi' ? (
                 <>
                   <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -839,7 +839,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           )}
 
           {legalSubTab === 'terms' && (
-            <div className="space-y-4 text-xs md:text-sm text-slate-400 leading-relaxed">
+            <div className="space-y-4 text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
               {language === 'hi' ? (
                 <>
                   <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -895,7 +895,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           )}
 
           {legalSubTab === 'disclaimer' && (
-            <div className="space-y-4 text-xs md:text-sm text-slate-400 leading-relaxed">
+            <div className="space-y-4 text-xs md:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
               {language === 'hi' ? (
                 <>
                   <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -957,11 +957,11 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
       if (!article) return null;
 
       return (
-        <div className="space-y-6 max-w-3xl mx-auto animate-fade-in pb-12">
+        <div className="space-y-6 max-w-3xl mx-auto pb-12">
           {/* Back Button */}
           <button
             onClick={() => setSelectedArticleId(null)}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
               theme === 'dark' 
                 ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-300 hover:text-white' 
                 : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-slate-950'
@@ -1031,14 +1031,14 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
 
     // Render Article List
     return (
-      <div className="space-y-6 max-w-6xl animate-fade-in text-slate-900 dark:text-slate-100">
+      <div className="space-y-6 max-w-6xl text-slate-900 dark:text-slate-100">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-black font-display tracking-tight text-inherit flex items-center gap-2">
               <BookOpen className="w-6 h-6 text-blue-500" />
               <span>{language === 'hi' ? 'ब्लॉग और मार्गदर्शिका' : 'Official Photo Sizing & Travel Guides'}</span>
             </h1>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
               {language === 'hi' 
                 ? 'दस्तावेज़ दिशानिर्देशों, मुद्रण युक्तियों और पासपोर्ट फोटो आयामों पर पेशेवर लेख पढ़ें।' 
                 : 'Read professional articles on document guidelines, printing tips, and passport photo dimensions.'}
@@ -1053,7 +1053,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               placeholder={language === 'hi' ? 'लेख, कीवर्ड खोजें...' : 'Search articles, keywords...'}
               value={blogSearch}
               onChange={(e) => setBlogSearch(e.target.value)}
-              className={`w-full text-xs py-2.5 pl-9 pr-4 rounded-xl border outline-none transition-all ${
+              className={`w-full text-xs py-2.5 pl-9 pr-4 rounded-xl border outline-none ${
                 theme === 'dark' 
                   ? 'bg-slate-900 border-slate-800 focus:border-blue-500 text-white' 
                   : 'bg-white border-slate-200 focus:border-blue-500 text-slate-850'
@@ -1068,7 +1068,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
                 selectedCategory === cat
                   ? 'bg-blue-600 text-white border-blue-600'
                   : theme === 'dark'
@@ -1086,7 +1086,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           {filteredArticles.map((art) => (
             <div
               key={art.id}
-              className={`rounded-2xl border p-5 flex flex-col justify-between transition-all group ${
+              className={`rounded-2xl border p-5 flex flex-col justify-between group ${
                 theme === 'dark'
                   ? 'bg-slate-950/70 border-slate-900 hover:border-slate-800'
                   : 'bg-white border-slate-200 hover:border-slate-300 shadow-xs'
@@ -1103,11 +1103,11 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                   </span>
                 </div>
                 
-                <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-550 transition-colors leading-snug line-clamp-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-550 leading-snug line-clamp-2">
                   {art.title}
                 </h3>
                 
-                <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-3">
                   {art.summary}
                 </p>
               </div>
@@ -1141,13 +1141,13 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
   // 5. INTERACTIVE COMPREHENSIVE SITEMAP
   if (tab === 'sitemap') {
     return (
-      <div className="space-y-6 max-w-5xl animate-fade-in">
+      <div className="space-y-6 max-w-5xl">
         <div>
           <h1 className="text-2xl font-black font-display tracking-tight text-inherit flex items-center gap-2">
             <Map className="w-6 h-6 text-blue-500" />
             <span>Interactive Application Sitemap</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
             Navigate instantly to any section of the SnapID Studio suite. Fully crawlable hierarchical index tree.
           </p>
         </div>
@@ -1162,17 +1162,17 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <span>1. AI Layout Tools & Workspaces</span>
             </h3>
             
-            <div className="space-y-3 text-xs text-slate-400">
+            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400">
               <div className="flex items-start gap-3">
                 <CornerDownRight className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('passport')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     Passport Size Photo Maker
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Crop 35x45mm, 2x2\" and 3.5x4.5cm photos. Remove backgrounds using on-device machine learning.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">Crop 35x45mm, 2x2\" and 3.5x4.5cm photos. Remove backgrounds using on-device machine learning.</p>
                 </div>
               </div>
 
@@ -1181,11 +1181,11 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('documents')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     Document Print Preparator
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Prepare standard Indian identity cards (Aadhaar, PAN Card, Voter ID, Driving Licence) in exact wallet proportions.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">Prepare standard Indian identity cards (Aadhaar, PAN Card, Voter ID, Driving Licence) in exact wallet proportions.</p>
                 </div>
               </div>
 
@@ -1194,11 +1194,11 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('resizer')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     Photo Resizer
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Resize dimensions (px/%), compress to target KB (10–200 KB), adjust quality, and export crisp photos & signatures.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">Resize dimensions (px/%), compress to target KB (10–200 KB), adjust quality, and export crisp photos & signatures.</p>
                 </div>
               </div>
             </div>
@@ -1213,17 +1213,17 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <span>2. Knowledge Center & Support</span>
             </h3>
 
-            <div className="space-y-3 text-xs text-slate-400">
+            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400">
               <div className="flex items-start gap-3">
                 <CornerDownRight className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('help')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     Help Desk & FAQ Center
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Find 12 extensive answers to passport regulations, browser privacy, thermal printing scales, and formatting issues.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">Find 12 extensive answers to passport regulations, browser privacy, thermal printing scales, and formatting issues.</p>
                 </div>
               </div>
 
@@ -1232,11 +1232,11 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('contact')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     Contact Support & Email Desk
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Submit feedback, report ticket issues, and connect with our team. Response times are guaranteed under 24-48 business hours.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">Submit feedback, report ticket issues, and connect with our team. Response times are guaranteed under 24-48 business hours.</p>
                 </div>
               </div>
             </div>
@@ -1251,17 +1251,17 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <span>3. Company & Legal Declarations</span>
             </h3>
 
-            <div className="space-y-3 text-xs text-slate-400">
+            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400">
               <div className="flex items-start gap-3">
                 <CornerDownRight className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('about')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     About Us & Corporate Mission
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Discover SnapID Studio's story, history, development values, and our commitment to absolute citizen privacy.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">Discover SnapID Studio's story, history, development values, and our commitment to absolute citizen privacy.</p>
                 </div>
               </div>
 
@@ -1270,11 +1270,11 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 <div>
                   <button 
                     onClick={() => onChangeTab && onChangeTab('legal')}
-                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block"
+                    className="font-bold text-slate-900 dark:text-slate-100 hover:underline text-left block cursor-pointer"
                   >
                     Privacy Policy & Cookie Policy
                   </button>
-                  <p className="text-[11px] text-slate-400 mt-0.5">GDPR & DPDP Act (2023) disclosure detailing local RAM calculations, zero database caches, and Google AdSense cookie guidelines.</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">GDPR & DPDP Act (2023) disclosure detailing local RAM calculations, zero database caches, and Google AdSense cookie guidelines.</p>
                 </div>
               </div>
             </div>
@@ -1289,7 +1289,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <span>4. Blog & Travel Sizing Articles Directory</span>
             </h3>
 
-            <div className="space-y-3 text-xs text-slate-400 max-h-72 overflow-y-auto pr-2">
+            <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400 max-h-72 overflow-y-auto pr-2">
               {localizedArticles.map((art, idx) => (
                 <div key={art.id} className="flex items-start gap-2.5">
                   <span className="text-[10px] text-slate-500 font-mono mt-0.5">[{idx + 1}]</span>

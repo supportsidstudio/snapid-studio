@@ -55,7 +55,7 @@ export default function SnapIdLogo({
     <div className={`flex items-center ${gapSizes[size]} select-none ${className}`}>
       
       {/* BRAND CAMERA ICON WITH SQUIRCLE BEZEL AND GLOW (Identical design in both light & dark modes) */}
-      <div className={`relative ${iconSizes[size]} shrink-0 flex items-center justify-center p-[1.5px] rounded-[24%] transition-all duration-300 bg-gradient-to-br from-[#38bdf8] via-[#4f46e5] to-[#c084fc] ${
+      <div className={`relative ${iconSizes[size]} shrink-0 flex items-center justify-center p-[1.5px] rounded-[24%] bg-gradient-to-br from-[#38bdf8] via-[#4f46e5] to-[#c084fc] ${
         isDarkMode 
           ? 'shadow-[0_12px_40px_rgba(37,99,235,0.4),_0_0_20px_rgba(139,92,246,0.3)]' 
           : 'shadow-[0_10px_25px_rgba(37,99,235,0.25),_0_4px_12px_rgba(139,92,246,0.18)]'
