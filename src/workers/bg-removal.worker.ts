@@ -57,6 +57,7 @@ function getModelSources(): string[] {
 const CACHE_NAME = 'snapid-u2netp-model-v1';
 
 try {
+  ort.env.logLevel = 'error';
   ort.env.wasm.wasmPaths = getWasmBasePath();
   const threads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
     ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
@@ -155,6 +156,8 @@ async function getSession(): Promise<ort.InferenceSession> {
         const sessionOptions: ort.InferenceSession.SessionOptions = {
           executionProviders: ['wasm'],
           graphOptimizationLevel: 'all',
+          logSeverityLevel: 3,
+          logVerbosityLevel: 0,
         };
 
         // U²-NetP uses MaxPool with ceil_mode=1, which is not supported by WebGPU kernels in ONNX Runtime Web.

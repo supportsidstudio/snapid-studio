@@ -71,6 +71,7 @@ let sessionInitPromise: Promise<ort.InferenceSession> | null = null;
  */
 function configureOrtEnvironment() {
   try {
+    ort.env.logLevel = 'error';
     ort.env.wasm.wasmPaths = getWasmBasePath();
     const threads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
       ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
@@ -178,6 +179,8 @@ async function getOrInitEnhancerSession(onProgress?: EnhancementProgressCallback
         session = await ort.InferenceSession.create(modelBuffer, {
           executionProviders: ['webgpu', 'wasm'],
           graphOptimizationLevel: 'all',
+          logSeverityLevel: 3,
+          logVerbosityLevel: 0,
         });
         console.log('[AI Enhancer] WebGPU session initialized successfully!');
       } catch (gpuErr) {
@@ -190,6 +193,8 @@ async function getOrInitEnhancerSession(onProgress?: EnhancementProgressCallback
       session = await ort.InferenceSession.create(modelBuffer, {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
+        logSeverityLevel: 3,
+        logVerbosityLevel: 0,
       });
       console.log('[AI Enhancer] WASM session initialized successfully!');
     }
