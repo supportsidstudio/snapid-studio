@@ -2387,12 +2387,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                   <span>
                     {useEnhancedPhoto && enhancedBgImg
-                      ? (language === 'hi' ? 'Swin2SR 2× AI एन्हांसमेंट सक्रिय' : 'Swin2SR 2× AI Enhanced')
+                      ? (language === 'hi' ? 'AI HD एन्हांसमेंट सक्रिय' : 'AI HD Enhanced')
                       : (language === 'hi' ? 'ओरिजिनल कटआउट (Ready to Enhance)' : 'Original Cutout (Ready)')}
                   </span>
                 </span>
                 <span className="text-[9px] sm:text-[10px] font-mono text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                  Swin2SR ONNX
+                  Real-ESRGAN HD
                 </span>
               </div>
             </div>

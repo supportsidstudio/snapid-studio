@@ -58,11 +58,15 @@ const CACHE_NAME = 'snapid-u2netp-model-v1';
 
 try {
   ort.env.logLevel = 'error';
-  ort.env.wasm.wasmPaths = getWasmBasePath();
-  const threads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-    ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
-    : 2;
-  ort.env.wasm.numThreads = threads;
+  const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+  const safeThreads = isIsolated
+    ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+        ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+        : 2)
+    : 1;
+  const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
+  ort.env.wasm.wasmPaths = isGitHub ? CDN_WASM_PATH : getWasmBasePath();
+  ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.proxy = false;
 } catch (e) {
   console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
@@ -144,9 +148,12 @@ async function getSession(): Promise<ort.InferenceSession> {
     let lastError: any = null;
     const modelSources = getModelSources();
 
-    const threads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-      ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
-      : 2;
+    const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+    const threads = isIsolated
+      ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+          ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+          : 2)
+      : 1;
 
     // Try creating session with each verified model source until one succeeds
     for (const source of modelSources) {
