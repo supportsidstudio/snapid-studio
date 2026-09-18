@@ -71,11 +71,13 @@ function getModelSources(): string[] {
   return [
     localModel,
     '/models/realesr-general-x4v3/model.onnx',
-    'https://huggingface.co/CoderViking/realesr-general-x4v3-onnx/resolve/main/realesr-general-x4v3.onnx'
+    'https://huggingface.co/CoderViking/realesr-general-x4v3-onnx/resolve/main/realesr-general-x4v3.onnx',
+    'https://raw.githubusercontent.com/CoderViking/realesr-general-x4v3-onnx/main/realesr-general-x4v3.onnx'
   ];
 }
 
 const CACHE_NAME = 'snapid-realesrgan-model-v1';
+const EXPECTED_LOCAL_MODEL_SIZE = 4866417; // Exact byte length of realesr-general-x4v3.onnx
 
 try {
   ort.env.logLevel = 'error';
@@ -85,8 +87,9 @@ try {
         ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
         : 2)
     : 1;
-  const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
-  ort.env.wasm.wasmPaths = isGitHub ? CDN_WASM_PATH : getWasmBasePath();
+
+  // Always point to local WASM binaries first (shipped in /onnxruntime/)
+  ort.env.wasm.wasmPaths = getWasmBasePath();
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
@@ -96,6 +99,7 @@ try {
     allocatedThreads: safeThreads,
     hardwareConcurrency: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 'unknown',
     isSharedArrayBufferAvailable: typeof SharedArrayBuffer !== 'undefined',
+    wasmPath: getWasmBasePath(),
     environmentNotice: isIsolated
       ? 'Cross-Origin Isolation ACTIVE (Multi-threaded WASM SIMD enabled)'
       : 'Embedded/Iframe Context: crossOriginIsolated is FALSE. Multi-threading is locked by browser security. In standalone/production tab, COOP/COEP enables multi-threading.'
@@ -121,10 +125,10 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
         const cached = await cache.match(resolved);
         if (cached) {
           const buffer = await cached.arrayBuffer();
-          if (buffer.byteLength >= 4000000) {
+          if (buffer.byteLength >= 4800000 && buffer.byteLength <= 5000000) {
             const header = new Uint8Array(buffer, 0, 4);
             if (header[0] === 0x08) {
-              console.log(`[AI Enhancer Worker] Model verified from Cache API (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+              console.log(`[AI Enhancer Worker] Model verified from Cache API (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB, ${buffer.byteLength} bytes)`);
               return buffer;
             }
           }
@@ -135,33 +139,46 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
     }
   }
 
-  // 2. Fetch from local/CDN endpoints
+  // 2. Fetch from local/CDN endpoints with robust verification
   let lastError: any = null;
   for (let i = 0; i < sources.length; i++) {
     const rawUrl = sources[i];
     const url = rawUrl.startsWith('/') ? `${base.replace(/\/+$/, '')}${rawUrl}` : rawUrl;
     try {
-      postProgress(i === 0 ? 'Loading Real-ESRGAN AI model (~4.7MB)...' : 'Retrying AI model load...', 12);
+      postProgress(i === 0 ? 'Loading Real-ESRGAN AI model (~4.86MB)...' : 'Retrying AI model load from mirror...', 12);
       console.log(`[AI Enhancer Worker] Fetching Real-ESRGAN model binary from: ${url}`);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status} (${res.statusText})`);
 
       const cType = res.headers.get('content-type') || '';
       if (cType.includes('text/html')) {
-        throw new Error(`Invalid response content-type: ${cType} (expected binary stream, got HTML)`);
+        throw new Error(`Invalid response content-type: ${cType} (expected binary stream, got HTML 404 page)`);
       }
 
+      const cEncoding = res.headers.get('content-encoding');
       const cLength = res.headers.get('content-length');
       const buffer = await res.arrayBuffer();
-      console.log(`[AI Enhancer Worker] Model fetch completed. Content-Length header: ${cLength}, Received: ${buffer.byteLength} bytes`);
 
-      if (buffer.byteLength < 4000000) {
-        throw new Error(`Model binary size invalid: expected ~4.86MB, got ${buffer.byteLength} bytes`);
+      console.log(`[AI Enhancer Worker] Model fetch completed from ${url}. Headers: [Content-Length: ${cLength}, Content-Encoding: ${cEncoding || 'none'}], Decompressed Payload: ${buffer.byteLength} bytes`);
+
+      // Integrity checks:
+      // A: Size validation (Real-ESRGAN general x4v3 compact ONNX is ~4.86MB)
+      if (buffer.byteLength < 4800000 || buffer.byteLength > 5000000) {
+        throw new Error(`Model binary size mismatch: expected ~${EXPECTED_LOCAL_MODEL_SIZE} bytes (4.86MB), received ${buffer.byteLength} bytes. File is likely corrupted or truncated.`);
       }
 
+      // B: Protobuf ONNX Magic Byte check (All valid ONNX models begin with 0x08 tag 1)
       const header = new Uint8Array(buffer, 0, 4);
       if (header[0] !== 0x08) {
-        throw new Error(`Invalid ONNX binary protobuf header: [${Array.from(header).join(', ')}]`);
+        throw new Error(`Invalid ONNX binary protobuf header: [${Array.from(header).join(', ')}] (expected first byte 0x08)`);
+      }
+
+      // If Content-Length header is present and no compression was applied, verify byte count
+      if (cLength && (!cEncoding || cEncoding === 'identity')) {
+        const declaredLen = parseInt(cLength, 10);
+        if (!isNaN(declaredLen) && declaredLen !== buffer.byteLength) {
+          console.warn(`[AI Enhancer Worker] Warning: Content-Length header (${declaredLen}) != received bytes (${buffer.byteLength})`);
+        }
       }
 
       if (typeof caches !== 'undefined') {
@@ -176,7 +193,7 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
       }
       return buffer;
     } catch (e: any) {
-      console.warn(`[AI Enhancer Worker] Failed to load from ${url}:`, e);
+      console.warn(`[AI Enhancer Worker] Failed to load/verify from ${url}:`, e?.message || e);
       lastError = e;
     }
   }
@@ -288,20 +305,18 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
       }
     }
 
-    // 2. WASM execution configurations in priority order
-    const wasmConfigs: Array<{ path: string; threads: number; label: string }> = isGitHub
-      ? [
-          { path: CDN_WASM_PATH, threads: threads, label: 'CDN WASM (SIMD)' },
-          { path: getWasmBasePath(), threads: threads, label: 'Local WASM (SIMD)' },
-        ]
-      : [
-          { path: getWasmBasePath(), threads: threads, label: 'Local WASM (SIMD)' },
-          { path: CDN_WASM_PATH, threads: threads, label: 'CDN WASM (SIMD)' },
-        ];
+    // 2. WASM execution configurations in priority order: Local bundled files FIRST on all platforms
+    const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
+      { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+      { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
+      { path: CDN_WASM_PATH, threads: threads, label: 'jsDelivr CDN WASM' },
+      { path: 'https://unpkg.com/onnxruntime-web@1.29.0/dist/', threads: 1, label: 'Unpkg CDN WASM (Single-thread)' }
+    ];
 
     let lastWasmErr: any = null;
     for (const cfg of wasmConfigs) {
       try {
+        console.log(`[AI Enhancer Worker] Attempting session creation with: ${cfg.label} (path: ${cfg.path}, threads: ${cfg.threads})`);
         ort.env.wasm.wasmPaths = cfg.path;
         ort.env.wasm.numThreads = cfg.threads;
         ort.env.wasm.simd = true;
@@ -312,11 +327,9 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
         console.log(`[AI Enhancer Worker] Real-ESRGAN session ACTIVE via ${cfg.label} (Engine: ${activeBackend}, Threads: ${cfg.threads}, Isolated: ${isIsolated}) in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${wasmSession.inputNames.join(', ')}] Outputs: [${wasmSession.outputNames.join(', ')}]`);
         session = wasmSession;
         return wasmSession;
-      } catch (cfgErr) {
-        console.warn(`[AI Enhancer Worker] ${cfg.label} configuration failed:`, cfgErr);
+      } catch (cfgErr: any) {
+        console.warn(`[AI Enhancer Worker] ${cfg.label} initialization failed:`, cfgErr?.message || cfgErr);
         lastWasmErr = cfgErr;
-        // If initWasm() failed in this worker context, subsequent create() calls in the same context will fail.
-        break;
       }
     }
 

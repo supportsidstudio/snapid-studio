@@ -31,7 +31,13 @@ let currentRequestId = 0;
 
 function getClientBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
-    return window.location.origin + (window.location.pathname.startsWith('/snapid-studio') ? '/snapid-studio/' : '/');
+    const origin = window.location.origin;
+    const pathname = window.location.pathname;
+    const segments = pathname.split('/').filter(Boolean);
+    if (window.location.hostname.includes('github.io') && segments.length > 0) {
+      return `${origin}/${segments[0]}/`;
+    }
+    return `${origin}/`;
   }
   return '/';
 }
@@ -68,13 +74,13 @@ export function preloadAiEnhancerModel(): void {
 }
 
 /**
- * Fast CPU-based fallback enhancement if Web Worker is unavailable
+ * Explicit Fast Clarity pass (Only executed when explicitly requested by user in fastMode)
  */
-async function fallbackStudioEnhance(
+export async function applyFastClarityPass(
   inputBlob: Blob,
   onProgress?: EnhancementProgressCallback
 ): Promise<Blob> {
-  onProgress?.('Applying studio clarity fallback...', 50);
+  onProgress?.('Applying fast clarity pass...', 50);
   const bitmap = await createImageBitmap(inputBlob);
   const targetW = Math.round(bitmap.width * 2);
   const targetH = Math.round(bitmap.height * 2);
@@ -85,12 +91,13 @@ async function fallbackStudioEnhance(
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bitmap, 0, 0, targetW, targetH);
 
-  onProgress?.('Finalizing HD portrait...', 95);
+  onProgress?.('Fast clarity pass complete', 100);
   return await canvas.convertToBlob({ type: 'image/png' });
 }
 
 /**
  * 🚀 AI HD Photo Enhancement Pipeline (Web Worker Offloaded)
+ * NEVER silently falls back to classical processing. Returns actual AI neural result or throws error.
  */
 export async function enhancePhotoWithRealEsrgan(
   inputBlob: Blob,
@@ -126,58 +133,54 @@ export async function enhancePhotoWithRealEsrgan(
   const worker = getEnhancerWorker();
   const baseUrl = getClientBaseUrl();
 
-  try {
-    return await new Promise<Blob>((resolve, reject) => {
-      const handleMessage = (e: MessageEvent) => {
-        const data = e.data;
-        if (!data || data.id !== reqId) return;
+  return await new Promise<Blob>((resolve, reject) => {
+    const handleMessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (!data || data.id !== reqId) return;
 
-        if (data.type === 'progress') {
-          onProgress?.(data.step, data.percent);
-        } else if (data.type === 'complete') {
-          worker.removeEventListener('message', handleMessage);
-          onProgress?.('AI HD Enhance ✓', 100);
-          console.log(`[AI Enhancer Client: COMPLETE] ID: ${reqId} in ${data.elapsedMs}ms | Mode: ${data.mode || 'neural_hd'} | Output Blob: ${data.resultBlob?.size} bytes`, data.diagnostics || {});
-          resolve(data.resultBlob);
-        } else if (data.type === 'error') {
-          worker.removeEventListener('message', handleMessage);
-          console.error(`[AI Enhancer Client: ERROR] ID: ${reqId} failed in worker:`, data.message);
-          // Terminate and reset worker reference so next invocation starts with clean worker state
-          if (enhancerWorker === worker) {
-            try {
-              enhancerWorker.terminate();
-            } catch {
-              // ignore
-            }
-            enhancerWorker = null;
+      if (data.type === 'progress') {
+        onProgress?.(data.step, data.percent);
+      } else if (data.type === 'complete') {
+        worker.removeEventListener('message', handleMessage);
+        onProgress?.('AI HD Enhance ✓', 100);
+        console.log(`[AI Enhancer Client: COMPLETE] ID: ${reqId} in ${data.elapsedMs}ms | Mode: ${data.mode || 'neural_hd'} | Output Blob: ${data.resultBlob?.size} bytes`, data.diagnostics || {});
+        resolve(data.resultBlob);
+      } else if (data.type === 'error') {
+        worker.removeEventListener('message', handleMessage);
+        console.error(`[AI Enhancer Client: ERROR] ID: ${reqId} failed in worker:`, data.message);
+        // Terminate and reset worker reference so next invocation starts with clean worker state
+        if (enhancerWorker === worker) {
+          try {
+            enhancerWorker.terminate();
+          } catch {
+            // ignore
           }
-          reject(new Error(data.message || 'Worker enhancement failed'));
+          enhancerWorker = null;
         }
-      };
+        // Reject with clear, honest error (NO SILENT FALLBACK)
+        reject(new Error(data.message || 'AI HD Neural Super-Resolution model failed to run'));
+      }
+    };
 
-      worker.addEventListener('message', handleMessage);
+    worker.addEventListener('message', handleMessage);
 
-      // Send to worker with transferable imageBitmap
-      worker.postMessage(
-        {
-          id: reqId,
-          type: 'enhance',
-          baseUrl,
-          imageBitmap,
-          options: {
-            fastMode: options.fastMode || false,
-            isMobile,
-            isLowEnd,
-            maxDimension: options.maxDimension
-          }
-        },
-        [imageBitmap]
-      );
-    });
-  } catch (workerErr: any) {
-    console.warn('[AI Enhancer Client] Worker neural enhancement failed, falling back to studio clarity pass:', workerErr?.message || workerErr);
-    return await fallbackStudioEnhance(inputBlob, onProgress);
-  }
+    // Send to worker with transferable imageBitmap
+    worker.postMessage(
+      {
+        id: reqId,
+        type: 'enhance',
+        baseUrl,
+        imageBitmap,
+        options: {
+          fastMode: options.fastMode || false,
+          isMobile,
+          isLowEnd,
+          maxDimension: options.maxDimension
+        }
+      },
+      [imageBitmap]
+    );
+  });
 }
 
 // Clean aliases

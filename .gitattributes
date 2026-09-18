@@ -1,0 +1,11 @@
+# Declare files that must always be treated as binary by Git
+# Prevents line-ending conversion (CRLF/LF) corruption and ensures raw byte fidelity
+*.onnx binary
+*.wasm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.bin binary

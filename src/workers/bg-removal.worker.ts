@@ -64,8 +64,8 @@ try {
         ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
         : 2)
     : 1;
-  const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
-  ort.env.wasm.wasmPaths = isGitHub ? CDN_WASM_PATH : getWasmBasePath();
+
+  ort.env.wasm.wasmPaths = getWasmBasePath();
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
@@ -172,19 +172,13 @@ async function getSession(): Promise<ort.InferenceSession> {
           logVerbosityLevel: 0,
         };
 
-        // Try candidate configurations in order of performance and compatibility
-        const wasmConfigs: Array<{ path: string; threads: number; label: string }> = isGitHub
-          ? [
-              { path: CDN_WASM_PATH, threads: threads, label: 'CDN WASM (Multi-thread)' },
-              { path: CDN_WASM_PATH, threads: 1, label: 'CDN WASM (Single-thread fallback)' },
-              { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
-            ]
-          : [
-              { path: getWasmBasePath(), threads: threads, label: 'Local WASM (Multi-thread)' },
-              { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
-              { path: CDN_WASM_PATH, threads: threads, label: 'CDN WASM (Multi-thread fallback)' },
-              { path: CDN_WASM_PATH, threads: 1, label: 'CDN WASM (Single-thread fallback)' },
-            ];
+        // Try candidate configurations in order of performance and compatibility (Local first)
+        const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
+          { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+          { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
+          { path: CDN_WASM_PATH, threads: threads, label: 'jsDelivr CDN WASM' },
+          { path: 'https://unpkg.com/onnxruntime-web@1.29.0/dist/', threads: 1, label: 'Unpkg CDN WASM (Single-thread)' }
+        ];
 
         let createdSession: ort.InferenceSession | null = null;
         let lastInitError: any = null;
