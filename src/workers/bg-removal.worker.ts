@@ -50,7 +50,7 @@ function getModelSources(): string[] {
   return [
     localModel,
     'https://huggingface.co/edgetools/u2netp/resolve/main/u2netp.onnx',
-    'https://cdn.jsdelivr.net/gh/danielgatis/rembg@v0.0.0/models/u2netp.onnx'
+    'https://huggingface.co/Heliosoph/u2net-onnx/resolve/main/u2netp.onnx'
   ];
 }
 
@@ -67,6 +67,7 @@ try {
   const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
   ort.env.wasm.wasmPaths = isGitHub ? CDN_WASM_PATH : getWasmBasePath();
   ort.env.wasm.numThreads = safeThreads;
+  ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
 } catch (e) {
   console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
@@ -104,7 +105,8 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
   }
 
   console.log(`[U2NetP Worker] Fetching U²-NetP model binary from: ${resolvedUrl}`);
-  const response = await fetch(resolvedUrl, { cache: 'force-cache' });
+  // Use default cache strategy so that stale 404 or corrupted responses are never served
+  const response = await fetch(resolvedUrl);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} (${response.statusText})`);
   }
@@ -155,6 +157,9 @@ async function getSession(): Promise<ort.InferenceSession> {
           : 2)
       : 1;
 
+    // Determine if deployment is GitHub Pages or file protocol
+    const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
+
     // Try creating session with each verified model source until one succeeds
     for (const source of modelSources) {
       try {
@@ -167,28 +172,44 @@ async function getSession(): Promise<ort.InferenceSession> {
           logVerbosityLevel: 0,
         };
 
-        // U²-NetP uses MaxPool with ceil_mode=1, which is not supported by WebGPU kernels in ONNX Runtime Web.
-        // Multi-threaded WASM with SIMD provides complete operator support and high performance.
-        try {
-          ort.env.wasm.wasmPaths = getWasmBasePath();
-          ort.env.wasm.numThreads = threads;
-          ort.env.wasm.simd = true;
-          ort.env.wasm.proxy = false;
-          const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-          console.log(`[U2NetP Worker] U²-NetP session active via local WASM (${threads} threads, SIMD)! Inputs: [${newSession.inputNames.join(', ')}]`);
-          session = newSession;
-          return newSession;
-        } catch (localWasmErr) {
-          console.warn('[U2NetP Worker] Local WASM init failed, switching to CDN wasmPaths fallback...', localWasmErr);
-          ort.env.wasm.wasmPaths = CDN_WASM_PATH;
-          ort.env.wasm.numThreads = threads;
-          ort.env.wasm.simd = true;
-          ort.env.wasm.proxy = false;
-          const newSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-          console.log(`[U2NetP Worker] U²-NetP session active via CDN WASM (${threads} threads, SIMD)! Inputs: [${newSession.inputNames.join(', ')}]`);
-          session = newSession;
-          return newSession;
+        // Try candidate configurations in order of performance and compatibility
+        const wasmConfigs: Array<{ path: string; threads: number; label: string }> = isGitHub
+          ? [
+              { path: CDN_WASM_PATH, threads: threads, label: 'CDN WASM (Multi-thread)' },
+              { path: CDN_WASM_PATH, threads: 1, label: 'CDN WASM (Single-thread fallback)' },
+              { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
+            ]
+          : [
+              { path: getWasmBasePath(), threads: threads, label: 'Local WASM (Multi-thread)' },
+              { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
+              { path: CDN_WASM_PATH, threads: threads, label: 'CDN WASM (Multi-thread fallback)' },
+              { path: CDN_WASM_PATH, threads: 1, label: 'CDN WASM (Single-thread fallback)' },
+            ];
+
+        let createdSession: ort.InferenceSession | null = null;
+        let lastInitError: any = null;
+
+        for (const cfg of wasmConfigs) {
+          try {
+            ort.env.wasm.wasmPaths = cfg.path;
+            ort.env.wasm.numThreads = cfg.threads;
+            ort.env.wasm.simd = true;
+            ort.env.wasm.proxy = false;
+            createdSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
+            console.log(`[U2NetP Worker] U²-NetP session active via ${cfg.label}! Inputs: [${createdSession.inputNames.join(', ')}]`);
+            break;
+          } catch (cfgErr) {
+            console.warn(`[U2NetP Worker] ${cfg.label} initialization failed, trying next configuration...`, cfgErr);
+            lastInitError = cfgErr;
+          }
         }
+
+        if (createdSession) {
+          session = createdSession;
+          return createdSession;
+        }
+
+        throw lastInitError || new Error('All WASM initialization attempts failed for this model buffer.');
       } catch (srcErr: any) {
         console.warn(`[U2NetP Worker] Failed loading model from source ${source}:`, srcErr.message || srcErr);
         lastError = srcErr;

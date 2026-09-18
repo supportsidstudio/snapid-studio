@@ -15,6 +15,13 @@ const PORT = 3000;
 async function startServer() {
   const app = express();
 
+  // Cross-Origin Isolation headers for multi-threaded WASM SIMD support
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+    next();
+  });
+
   // Middleware to parse JSON bodies
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -119,21 +126,29 @@ async function startServer() {
     });
   });
 
-  // Serve static files from public directory with proper MIME types and caching
-  app.use(express.static(path.join(process.cwd(), "public"), {
+  const staticFileOptions = {
     maxAge: "30d",
-    setHeaders: (res, filePath) => {
+    setHeaders: (res: express.Response, filePath: string) => {
       if (filePath.endsWith('.wasm')) {
         res.setHeader('Content-Type', 'application/wasm');
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       } else if (filePath.endsWith('.onnx') || filePath.endsWith('.onnx.gz')) {
         res.setHeader('Content-Type', filePath.endsWith('.gz') ? 'application/gzip' : 'application/octet-stream');
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (filePath.endsWith('.mjs') || filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
       }
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
-  }));
+  };
+
+  // Explicitly mount /models and /onnxruntime (including /src prefixes for Vite dev mode)
+  app.use(['/models', '/src/models'], express.static(path.join(process.cwd(), "public/models"), staticFileOptions));
+  app.use(['/onnxruntime', '/src/onnxruntime'], express.static(path.join(process.cwd(), "public/onnxruntime"), staticFileOptions));
+
+  // Serve static files from public directory with proper MIME types and caching
+  app.use(express.static(path.join(process.cwd(), "public"), staticFileOptions));
 
   // Vite integration as middleware in development, or static serving in production
   if (process.env.NODE_ENV !== "production") {

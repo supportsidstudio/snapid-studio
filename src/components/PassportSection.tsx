@@ -56,7 +56,7 @@ import {
   cleanupPrintMemory,
   DPI_300_DPM
 } from '../utils/passport-print-engine';
-import { enhancePhotoWithFsrcnn } from '../utils/ai-enhancer';
+import { enhancePhotoWithFsrcnn, preloadAiEnhancerModel } from '../utils/ai-enhancer';
 import BgRemovalWorker from '../workers/bg-removal.worker?worker';
 
 let bgWorker: Worker | null = null;
@@ -179,6 +179,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [customBgColor, setCustomBgColor] = useState('#ffffff');
   const [sheetPageIndex, setSheetPageIndex] = useState<number>(0);
   
+  // AI Enhance Mode (Real-ESRGAN Neural HD vs Fast Classical Mode)
+  const [enhanceFastMode, setEnhanceFastMode] = useState<boolean>(false);
+
   // AI Progress
   const [isRemovingBg, setIsRemovingBg] = useState(false);
   const [aiStep, setAiStep] = useState<string>('');
@@ -922,27 +925,34 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       });
   };
 
-  // AI Photo Enhancement runner (Lightweight Real-ESRGAN general-x4v3 pipeline)
+  // AI Photo Enhancement runner (Real-ESRGAN general-x4v3 Web Worker pipeline)
   const runAiPhotoEnhancement = async (inputBlob: Blob, isFirstAutoPass = false): Promise<Blob | null> => {
     setIsEnhancing(true);
     setEnhancementStatus('enhancing');
-    setEnhanceStepText(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
+    setEnhanceStepText(language === 'hi' ? 'अनुमानित समय तैयार हो रहा है...' : 'Estimating time & preparing tiles...');
     setEnhancementErrorMsg(null);
 
+    const tEnhanceClientStart = performance.now();
+    console.log(`[PassportSection: ENHANCE START] Invoking Real-ESRGAN | FastMode: ${enhanceFastMode} | Input Blob Size: ${inputBlob.size} bytes`);
+
     try {
-      const enhancedBlob = await enhancePhotoWithFsrcnn(inputBlob, (step, percent) => {
-        setEnhanceStepText(step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'));
-        setAiStep(step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'));
-      });
+      const enhancedBlob = await enhancePhotoWithFsrcnn(
+        inputBlob,
+        (step, percent) => {
+          setEnhanceStepText(step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'));
+          setAiStep(step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'));
+        },
+        { fastMode: enhanceFastMode }
+      );
 
       if (enhancedBlob && enhancedBlob.size > 1000) {
         // Verification: image exists, loads successfully, width > 0, height > 0
         const newUrl = URL.createObjectURL(enhancedBlob);
-        await new Promise<void>((resolve, reject) => {
+        const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
           const testImg = new Image();
           testImg.onload = () => {
             if (testImg.naturalWidth > 0 && testImg.naturalHeight > 0) {
-              resolve();
+              resolve({ width: testImg.naturalWidth, height: testImg.naturalHeight });
             } else {
               reject(new Error('Enhanced image has zero dimensions'));
             }
@@ -951,6 +961,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           testImg.src = newUrl;
         });
 
+        const clientDuration = (performance.now() - tEnhanceClientStart).toFixed(1);
+        console.log(`[PassportSection: ENHANCE SUCCESS] Received Real-ESRGAN enhanced master | Resolution: ${width}x${height}px | Payload: ${enhancedBlob.size} bytes | Total Round-Trip Time: ${clientDuration}ms`);
+
         setEnhancedBgImg(newUrl);
         setRemovedBgImg(newUrl);
         setUseEnhancedPhoto(true);
@@ -958,15 +971,15 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         setEnhancementStatus('enhanced');
         return enhancedBlob;
       } else {
-        throw new Error('Enhanced image payload is invalid');
+        throw new Error('Enhanced image payload is invalid or empty');
       }
     } catch (err: any) {
-      console.warn('AI photo enhancement fallback to original cutout:', err);
+      console.error('[PassportSection: ENHANCE ERROR] Real-ESRGAN failed:', err);
       setEnhancementStatus('ready');
       setEnhancementErrorMsg(
         language === 'hi'
-          ? 'AI एन्हांसमेंट पूरा नहीं हो सका। मूल फोटो तैयार है।'
-          : "AI enhancement couldn't be completed. Original photo is ready."
+          ? 'AI एन्हांसमेंट पूरा नहीं हो सका: ' + (err?.message || 'Error')
+          : "AI enhancement couldn't be completed: " + (err?.message || 'Error')
       );
       return inputBlob;
     } finally {
@@ -2264,33 +2277,72 @@ export default function PassportSection({ language, theme }: PassportSectionProp
               )}
 
               {/* Primary Enhance Photo Action Button */}
-              <button
-                type="button"
-                id="passport-enhance-action-btn"
-                disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
-                onClick={handleManualEnhanceClick}
-                className={`w-full py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer ${
-                  isEnhancing
-                    ? 'bg-blue-650 text-white cursor-wait opacity-80'
-                    : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-550 hover:to-indigo-550 text-white shadow-md shadow-blue-500/20 active:scale-[0.99] border border-blue-400/30'
-                } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
-              >
-                {isEnhancing ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                    <span>{enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>
-                      {enhanceCount > 0
-                        ? '🚀 AI HD Enhance ✓'
-                        : '🚀 AI HD Enhance'}
-                    </span>
-                  </>
-                )}
-              </button>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-[10px] text-slate-400">
+                  <span className="font-semibold uppercase tracking-wider">Enhance Engine:</span>
+                  <div className="flex items-center bg-slate-900/60 dark:bg-slate-950/80 p-0.5 rounded-lg border border-slate-700/50">
+                    <button
+                      type="button"
+                      onClick={() => setEnhanceFastMode(false)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                        !enhanceFastMode
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Real-ESRGAN Deep Learning Super-Resolution (Runs off main thread in Web Worker with adaptive tiles)"
+                    >
+                      ✨ Neural HD
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEnhanceFastMode(true)}
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                        enhanceFastMode
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                      title="Fast Mode: Instant studio clarity pass (0s wait, perfect for low-power mobile)"
+                    >
+                      ⚡ Fast Mode
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  id="passport-enhance-action-btn"
+                  disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
+                  onClick={handleManualEnhanceClick}
+                  className={`w-full py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer ${
+                    isEnhancing
+                      ? 'bg-blue-650 text-white cursor-wait opacity-80'
+                      : enhanceFastMode
+                        ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-550 hover:to-orange-550 text-white shadow-md shadow-amber-500/20 active:scale-[0.99] border border-amber-400/30'
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-550 hover:to-indigo-550 text-white shadow-md shadow-blue-500/20 active:scale-[0.99] border border-blue-400/30'
+                  } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
+                >
+                  {isEnhancing ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      <span>{enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className={`w-4 h-4 ${enhanceFastMode ? 'text-yellow-200' : 'text-amber-300'}`} />
+                      <span>
+                        {enhanceCount > 0
+                          ? (enhanceFastMode ? '⚡ Fast Enhance ✓' : '🚀 AI HD Enhance ✓')
+                          : (enhanceFastMode ? '⚡ Fast Studio Enhance' : '🚀 AI HD Enhance')}
+                      </span>
+                    </>
+                  )}
+                </button>
+                <p className="text-[11px] text-slate-400 text-center font-medium">
+                  {enhanceFastMode
+                    ? (language === 'hi' ? '⚡ तुरंत 0.1s में स्टूडियो क्लैरिटी पास' : '⚡ Instant studio clarity enhancement (~0.1s)')
+                    : (language === 'hi' ? '🧠 Real-ESRGAN न्यूरल HD: ~20-40s (डिवाइस अनुसार)' : '🧠 Real-ESRGAN Neural HD: ~20–40s (device adaptive)')}
+                </p>
+              </div>
 
               {/* Manual Selector: Use Enhanced / Use Original & Level Badge */}
               <div className="space-y-2">
