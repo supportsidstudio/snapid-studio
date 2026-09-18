@@ -121,7 +121,7 @@ try {
 
 let session: ort.InferenceSession | null = null;
 let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
-let activeBackend: 'webgpu' | 'wasm-threaded' | 'wasm-single' = 'wasm-single';
+let activeBackend: 'wasm-threaded' | 'wasm-single' = 'wasm-single';
 
 async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number) => void): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
@@ -238,87 +238,9 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
       logSeverityLevel: 3,
     };
 
-    // 1. Try Hardware WebGPU first if supported
-    if (typeof navigator !== 'undefined' && (navigator as any).gpu) {
-      try {
-        console.log('[AI Enhancer Worker] Inspecting WebGPU adapter capability...');
-        const adapter = await (navigator as any).gpu.requestAdapter();
-        let adapterInfo: any = null;
-        if (adapter) {
-          if (typeof adapter.requestAdapterInfo === 'function') {
-            try {
-              adapterInfo = await adapter.requestAdapterInfo();
-            } catch {
-              // ignore
-            }
-          }
-          if (!adapterInfo && (adapter as any).info) {
-            adapterInfo = (adapter as any).info;
-          }
-        }
-
-        const isFallback = adapter?.isFallbackAdapter === true;
-        const vendor = String(adapterInfo?.vendor || '').toLowerCase();
-        const architecture = String(adapterInfo?.architecture || '').toLowerCase();
-        const device = String(adapterInfo?.device || '').toLowerCase();
-        const description = String(adapterInfo?.description || '').toLowerCase();
-
-        console.log('[AI Enhancer Worker: GPU ADAPTER INFO]', {
-          vendor: adapterInfo?.vendor || 'unknown',
-          architecture: adapterInfo?.architecture || 'unknown',
-          device: adapterInfo?.device || 'unknown',
-          description: adapterInfo?.description || 'unknown',
-          isFallbackAdapter: isFallback
-        });
-
-        const isSoftwareGpu = isFallback ||
-          vendor.includes('google') || // Google SwiftShader
-          vendor.includes('swiftshader') ||
-          architecture.includes('swiftshader') ||
-          device.includes('swiftshader') ||
-          description.includes('swiftshader') ||
-          vendor.includes('llvmpipe') ||
-          description.includes('llvmpipe') ||
-          description.includes('microsoft basic render') ||
-          description.includes('software');
-
-        if (isSoftwareGpu) {
-          console.warn(`[AI Enhancer Worker: WEBGPU REJECTED] Software-emulated WebGPU detected (${description || device || vendor || 'SwiftShader/CPU'}). Emulated WebGPU is 5-10x slower than native WASM. Forcing fallback to optimized WASM SIMD!`);
-          throw new Error('Software-emulated WebGPU (SwiftShader) rejected in favor of WASM');
-        }
-
-        console.log('[AI Enhancer Worker] Hardware WebGPU detected. Initializing session and running benchmark probe...');
-        const gpuSession = await ort.InferenceSession.create(modelBuffer.slice(0), {
-          executionProviders: ['webgpu', 'wasm'],
-          graphOptimizationLevel: 'all',
-        });
-
-        // Run 128x128 real speed probe to verify genuine GPU acceleration
-        const tProbeStart = performance.now();
-        const testTensor = new ort.Tensor('float32', new Float32Array(1 * 3 * 128 * 128), [1, 3, 128, 128]);
-        const testFeeds: Record<string, ort.Tensor> = { [gpuSession.inputNames[0] || 'input']: testTensor };
-        await gpuSession.run(testFeeds);
-        const probeMs = performance.now() - tProbeStart;
-
-        console.log(`[AI Enhancer Worker: WEBGPU PROBE BENCHMARK] 128x128 test tile executed in ${probeMs.toFixed(1)}ms`);
-
-        if (probeMs > 1800) {
-          console.warn(`[AI Enhancer Worker: WEBGPU SLOW] WebGPU 128x128 probe took ${probeMs.toFixed(1)}ms (>1800ms threshold). Genuine hardware GPU acceleration is unavailable or throttled. Falling back to optimized WASM SIMD!`);
-          throw new Error(`WebGPU probe too slow: ${probeMs.toFixed(1)}ms`);
-        }
-
-        activeBackend = 'webgpu';
-        console.log(`[AI Enhancer Worker] Real-ESRGAN session ACTIVE & VERIFIED via Hardware WebGPU in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${gpuSession.inputNames.join(', ')}] Outputs: [${gpuSession.outputNames.join(', ')}]`);
-        session = gpuSession;
-        return gpuSession;
-      } catch (gpuErr: any) {
-        console.warn('[AI Enhancer Worker] WebGPU initialization / probe rejected, falling back to WASM:', gpuErr?.message || gpuErr);
-      }
-    }
-
-    // 2. WASM execution configurations in priority order: Local bundled files FIRST on all platforms
+    // WASM execution configurations in priority order: Local bundled files FIRST
     const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
-      { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+      { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread SIMD' : 'Single-thread SIMD'})` },
       { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
       { path: CDN_WASM_PATH, threads: threads, label: 'jsDelivr CDN WASM' },
       { path: 'https://unpkg.com/onnxruntime-web@1.29.0/dist/', threads: 1, label: 'Unpkg CDN WASM (Single-thread)' }
@@ -654,10 +576,9 @@ async function runRealEsrganInferenceWorker(
   }
 
   // Adaptive Tile & Overlap Sizing:
-  // - Hardware WebGPU (high-spec only): 224px tiles
-  // - ALL CPU/WASM runs and low-spec devices: 160px tiles (cuts per-tile pixel workload by 50% vs 224px!)
-  const tileSize = (activeBackend === 'webgpu' && !isLowEnd) ? 224 : 160;
-  const tilePad = tileSize <= 160 ? 10 : 12;
+  // - Pure CPU/WASM SIMD: 160px tiles (cuts per-tile pixel workload by 50% vs 224px!)
+  const tileSize = 160;
+  const tilePad = 10;
   const step = tileSize - 2 * tilePad;
 
   console.log(`[AI Enhancer Worker: TILE CONFIG] Active Engine: ${activeBackend} | isLowEnd: ${isLowEnd} => Chosen Tile Size: ${tileSize}x${tileSize}px (step: ${step}px, overlap: ${tilePad}px)`);
@@ -1018,16 +939,9 @@ async function handleEnhancementRequest(
     const tModelInitMs = performance.now() - tModelStart;
 
     // 2. Adaptive Resolution Caps (calibrated for high fidelity without unnecessary tiling overhead):
-    // - WebGPU: up to 1024px (Generates up to 4096px 4x master)
-    // - Multi-threaded WASM: up to 720px (Generates up to 2880px 4x master)
+    // - Multi-threaded WASM SIMD: up to 720px (Generates up to 2880px 4x master)
     // - Single-threaded WASM / Low-End: up to 540px (Generates up to 2160px 4x master, 1080px final output - over 500 DPI for passport photos!)
-    let defaultMaxDim = 720;
-    if (activeBackend === 'webgpu' && !isLowEnd) {
-      defaultMaxDim = 1024;
-    } else if (isLowEnd || activeBackend === 'wasm-single') {
-      defaultMaxDim = 540;
-    }
-
+    const defaultMaxDim = (isLowEnd || activeBackend === 'wasm-single') ? 540 : 720;
     const effectiveMaxDim = maxDimension ? Math.min(maxDimension, defaultMaxDim) : defaultMaxDim;
 
     let inWidth = imageBitmap.width;
