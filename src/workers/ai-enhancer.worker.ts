@@ -76,7 +76,7 @@ function getModelSources(): string[] {
   ];
 }
 
-const CACHE_NAME = 'snapid-realesrgan-model-v1';
+const CACHE_NAME = 'snapid-realesrgan-model-v3';
 const EXPECTED_LOCAL_MODEL_SIZE = 4866417; // Exact byte length of realesr-general-x4v3.onnx
 
 try {
@@ -93,6 +93,17 @@ try {
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
+
+  // Purge legacy caches asynchronously
+  if (typeof caches !== 'undefined') {
+    caches.keys().then((keys) => {
+      keys.forEach((key) => {
+        if (key.startsWith('snapid-realesrgan-model-') && key !== CACHE_NAME) {
+          caches.delete(key).catch(() => {});
+        }
+      });
+    }).catch(() => {});
+  }
 
   console.log('[AI Enhancer Worker: ENVIRONMENT DIAGNOSTICS]', {
     crossOriginIsolated: isIsolated,

@@ -54,7 +54,7 @@ function getModelSources(): string[] {
   ];
 }
 
-const CACHE_NAME = 'snapid-u2netp-model-v1';
+const CACHE_NAME = 'snapid-u2netp-model-v3';
 
 try {
   ort.env.logLevel = 'error';
@@ -69,6 +69,17 @@ try {
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
+
+  // Purge legacy caches asynchronously
+  if (typeof caches !== 'undefined') {
+    caches.keys().then((keys) => {
+      keys.forEach((key) => {
+        if (key.startsWith('snapid-u2netp-model-') && key !== CACHE_NAME) {
+          caches.delete(key).catch(() => {});
+        }
+      });
+    }).catch(() => {});
+  }
 } catch (e) {
   console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
 }
