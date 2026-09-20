@@ -77,7 +77,14 @@ let bgWorker: Worker | null = null;
 
 const getWorker = () => {
   if (!bgWorker && typeof window !== 'undefined') {
-    bgWorker = new BgRemovalWorker();
+    try {
+      bgWorker = new Worker(
+        new URL('../workers/bg-removal.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      bgWorker = new BgRemovalWorker();
+    }
   }
   return bgWorker;
 };

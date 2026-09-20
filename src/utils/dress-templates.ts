@@ -1,3 +1,19 @@
+export function getAssetUrl(path: string): string {
+  if (!path) return '';
+  if (path.startsWith('data:') || path.startsWith('blob:') || path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  const cleanPath = path.replace(/^\/+/, '');
+  
+  if (typeof window !== 'undefined' && window.location) {
+    const origin = window.location.origin;
+    const pathname = window.location.pathname.replace(/\/[^/]*$/, '/');
+    return `${origin}${pathname}${cleanPath}`;
+  }
+  
+  return cleanPath;
+}
+
 export type DressCategory = 'men' | 'women' | 'kids';
 
 export interface DressTemplate {
@@ -705,7 +721,7 @@ export async function loadDressImage(template: DressTemplate | { customImageSrc:
           resolve(fallbackImg);
         };
         fallbackImg.onerror = tryVectorFallback;
-        fallbackImg.src = template.fallbackImageSrc;
+        fallbackImg.src = getAssetUrl(template.fallbackImageSrc);
       } else {
         tryVectorFallback();
       }
@@ -721,7 +737,7 @@ export async function loadDressImage(template: DressTemplate | { customImageSrc:
     if ('customImageSrc' in template && template.customImageSrc) {
       img.src = template.customImageSrc;
     } else if ('imageSrc' in template && template.imageSrc) {
-      img.src = template.imageSrc;
+      img.src = getAssetUrl(template.imageSrc);
     } else {
       tryVectorFallback();
     }

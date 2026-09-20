@@ -23,7 +23,8 @@ import {
   DressTransformState, 
   DRESS_TEMPLATES, 
   INITIAL_DRESS_STATE, 
-  generateDressVectorDataUrl 
+  generateDressVectorDataUrl,
+  getAssetUrl
 } from '../utils/dress-templates';
 import { AppLanguage, AppTheme } from '../types';
 import { translations } from '../translations';
@@ -276,7 +277,7 @@ export default function PassportDressPanel({
                 {/* Template Visual Thumbnail */}
                 <div className="w-14 h-16 rounded-lg bg-slate-950/40 border border-slate-700/50 flex items-center justify-center overflow-hidden p-0.5">
                   <img
-                    src={template.imageSrc || previewSvg}
+                    src={getAssetUrl(template.imageSrc) || previewSvg}
                     alt={template.name}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                     loading="lazy"

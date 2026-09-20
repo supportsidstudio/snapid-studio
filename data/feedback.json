@@ -1,0 +1,34 @@
+[
+  {
+    "id": "fb_seed_1",
+    "rating": 5,
+    "category": "Excellent",
+    "feedback": "Very easy to use and really helpful for official passport and visa photo prints!",
+    "name": "Rahul",
+    "createdAt": "2026-09-19T08:37:58.192Z"
+  },
+  {
+    "id": "fb_seed_2",
+    "rating": 5,
+    "category": "Excellent",
+    "feedback": "AI background removal and automatic Aadhaar card cropping worked seamlessly. Saved my trip to the cyber cafe.",
+    "name": "Priya Sharma",
+    "createdAt": "2026-09-18T08:37:58.192Z"
+  },
+  {
+    "id": "fb_seed_3",
+    "rating": 5,
+    "category": "Good",
+    "feedback": "Resized my signature and photo to exactly 20 KB for government exam form in seconds.",
+    "name": "Amit Kumar",
+    "createdAt": "2026-09-16T02:37:58.192Z"
+  },
+  {
+    "id": "fb_seed_4",
+    "rating": 5,
+    "category": "Excellent",
+    "feedback": "100% on-device processing and no biometric data leaves the browser. Amazing privacy protection!",
+    "name": "Vikram Rathore",
+    "createdAt": "2026-09-14T06:37:58.192Z"
+  }
+]

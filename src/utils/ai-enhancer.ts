@@ -32,19 +32,22 @@ let currentRequestId = 0;
 function getClientBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
     const origin = window.location.origin;
-    const pathname = window.location.pathname;
-    const segments = pathname.split('/').filter(Boolean);
-    if (window.location.hostname.includes('github.io') && segments.length > 0) {
-      return `${origin}/${segments[0]}/`;
-    }
-    return `${origin}/`;
+    const pathname = window.location.pathname.replace(/\/[^/]*$/, '/');
+    return `${origin}${pathname}`;
   }
   return '/';
 }
 
 function getEnhancerWorker(): Worker {
   if (!enhancerWorker && typeof window !== 'undefined') {
-    enhancerWorker = new AiEnhancerWorker();
+    try {
+      enhancerWorker = new Worker(
+        new URL('../workers/ai-enhancer.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      enhancerWorker = new AiEnhancerWorker();
+    }
     enhancerWorker.onerror = (err) => {
       console.warn('[AI Enhancer Client] Worker error:', err);
       if (enhancerWorker) {
