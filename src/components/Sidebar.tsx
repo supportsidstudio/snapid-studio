@@ -87,7 +87,7 @@ function Sidebar({
             onClick={onToggleLanguage}
             className={`flex items-center justify-center p-1.5 rounded-lg cursor-pointer ${
               isDark
-                ? 'bg-slate-800/80 hover:bg-slate-750 text-slate-200'
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200'
                 : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
             }`}
             title={language === 'en' ? 'हिन्दी में बदलें' : 'Switch to English'}
@@ -100,7 +100,7 @@ function Sidebar({
             onClick={onToggleTheme}
             className={`flex items-center justify-center p-1.5 rounded-lg cursor-pointer ${
               isDark
-                ? 'bg-slate-800/80 hover:bg-slate-750 text-slate-200'
+                ? 'bg-slate-800/80 hover:bg-slate-700 text-slate-200'
                 : 'bg-slate-100 hover:bg-slate-200/80 text-slate-700'
             }`}
             title={isDark ? 'Switch to White Mode' : 'Switch to Dark Mode'}
@@ -117,7 +117,7 @@ function Sidebar({
             onClick={() => setIsOpen(!isOpen)}
             className={`p-1.5 rounded-lg border ${
               isDark 
-                ? 'border-slate-800 hover:bg-slate-850 text-slate-200' 
+                ? 'border-slate-800 hover:bg-slate-800 text-slate-200' 
                 : 'border-slate-200 hover:bg-slate-100 text-slate-700'
             }`}
             aria-label="Toggle Menu"
@@ -142,8 +142,8 @@ function Sidebar({
         isCollapsed ? 'lg:w-[76px]' : 'lg:w-[270px]'
       } ${
         isDark 
-          ? 'bg-slate-950 border-slate-900 text-slate-350' 
-          : 'bg-white border-slate-250 text-slate-600'
+          ? 'bg-slate-950 border-slate-900 text-slate-300' 
+          : 'bg-white border-slate-200 text-slate-600'
       } flex flex-col h-full lg:sticky pb-4 select-none shrink-0 transition-transform duration-200 ease-out will-change-transform lg:transition-none`}>
         
         {/* Header containing single SnapID Studio logo and Collapse/Close Button */}
@@ -247,7 +247,7 @@ function Sidebar({
                     isActive
                       ? 'bg-blue-600 text-white font-semibold shadow-[0_0_20px_rgba(37,99,235,0.45)]'
                       : isDark
-                        ? 'hover:bg-slate-900/80 text-slate-350 hover:text-white'
+                        ? 'hover:bg-slate-900/80 text-slate-300 hover:text-white'
                         : 'hover:bg-slate-100/80 text-slate-700 hover:text-slate-900'
                   }`}
                 >

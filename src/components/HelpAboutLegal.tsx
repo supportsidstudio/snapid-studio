@@ -269,8 +269,8 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
         return (
           <div key={idx} className={`grid grid-cols-${cols.length} gap-2 p-3 border-b text-[11px] leading-relaxed ${
             isHeader 
-              ? 'bg-slate-100 dark:bg-slate-900 font-bold text-slate-900 dark:text-white border-slate-300 dark:border-slate-750' 
-              : 'border-slate-150 dark:border-slate-850 text-slate-600 dark:text-slate-300'
+              ? 'bg-slate-100 dark:bg-slate-900 font-bold text-slate-900 dark:text-white border-slate-300 dark:border-slate-800' 
+              : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'
           }`}>
             {cols.map((col, cIdx) => (
               <div key={cIdx} className="break-words">{col.replace(/\\"/g, '"')}</div>
@@ -355,7 +355,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
             : 'bg-white border-slate-200 shadow-sm'
         } space-y-6`}>
           
-          <div className="flex items-center gap-3 border-b pb-4 border-slate-150 dark:border-slate-800">
+          <div className="flex items-center gap-3 border-b pb-4 border-slate-200 dark:border-slate-800">
             <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
               <Crop className="w-5 h-5 animate-pulse" />
             </div>
@@ -363,7 +363,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               <h2 className="text-base font-black font-display tracking-tight text-slate-800 dark:text-slate-100">
                 {(t as any).autoCropGuidanceTitle}
               </h2>
-              <p className="text-[11px] text-slate-650 dark:text-slate-400 font-medium">
+              <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                 {language === 'hi' ? 'दस्तावेजों को स्वचालित रूप से क्रॉप करने के लिए सर्वोत्तम अभ्यास' : 'Best practices for automatic document cropping & framing'}
               </p>
             </div>
@@ -373,7 +373,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
             {/* Guidance Tips & Supported Docs */}
             <div className="space-y-6">
               <div>
-                <h3 className="font-bold text-xs text-slate-750 dark:text-slate-350 uppercase tracking-wider mb-3">
+                <h3 className="font-bold text-xs text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
                   {language === 'hi' ? 'महत्वपूर्ण दिशानिर्देश' : 'Core Instructions'}
                 </h3>
                 <ul className="space-y-2">
@@ -400,7 +400,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
 
               {/* Supported Documents */}
               <div className={`p-4 rounded-xl ${
-                theme === 'dark' ? 'bg-slate-950/40 border border-slate-850' : 'bg-slate-50 border border-slate-150'
+                theme === 'dark' ? 'bg-slate-950/40 border border-slate-800' : 'bg-slate-50 border border-slate-200'
               } space-y-2.5`}>
                 <h4 className="font-extrabold text-xs text-slate-800 dark:text-slate-200">
                   {(t as any).supportedDocsTitle}
@@ -419,7 +419,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
                         theme === 'dark' 
                           ? 'bg-slate-900 border border-slate-800 text-slate-300' 
-                          : 'bg-white border border-slate-250 text-slate-750 shadow-xs'
+                          : 'bg-white border border-slate-200 text-slate-700 shadow-xs'
                       }`}
                     >
                       {doc}
@@ -432,7 +432,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
             {/* Visual Sample Images */}
             <div className="flex flex-col justify-between">
               <div>
-                <h3 className="font-bold text-xs text-slate-750 dark:text-slate-350 uppercase tracking-wider mb-3">
+                <h3 className="font-bold text-xs text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-3">
                   {language === 'hi' ? 'उदाहरण (सही बनाम गलत)' : 'Visual Examples (Correct vs Incorrect)'}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3 gap-4">
@@ -520,13 +520,119 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               </div>
 
               {/* Note tip at bottom */}
-              <div className="mt-4 p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-500/5 border border-blue-150 dark:border-blue-500/10 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+              <div className="mt-4 p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/10 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
                 {(t as any).autoCropGuidanceTip10}
               </div>
             </div>
 
           </div>
 
+        </div>
+
+        {/* ⌨️ Keyboard Controls / कैसे इस्तेमाल करें (Help & Shortcuts Card) */}
+        <div className={`p-6 rounded-2xl border space-y-4 subtle-element-glow ${
+          theme === 'dark'
+            ? 'bg-slate-900/70 border-slate-800 text-slate-200 shadow-md'
+            : 'bg-white border-slate-200 text-slate-800 shadow-sm'
+        }`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4 border-slate-200/60 dark:border-slate-800/80">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20">
+                <span className="text-base">⌨️</span>
+              </div>
+              <div>
+                <h3 className="text-base font-black font-display tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <span>⌨️ {t.dressGuideHelpTitle}</span>
+                  <span className="text-xs text-slate-400 font-normal">/ {t.dressGuideHelpSubtitle}</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+                  {t.dressGuideLiveDirect}
+                </p>
+              </div>
+            </div>
+            <span className="self-start sm:self-auto text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+              {language === 'hi' ? 'तुरंत अलाइनमेंट' : 'Instant Adjustment'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 1. Suit Position */}
+            <div className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+              theme === 'dark' ? 'bg-slate-950/60 border-slate-800/70' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  ←
+                </kbd>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  →
+                </kbd>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  ↑
+                </kbd>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  ↓
+                </kbd>
+              </div>
+              <div>
+                <div className="font-extrabold text-xs text-slate-800 dark:text-slate-100">{t.dressGuideSuitPosTitle}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t.dressGuideSuitPosDesc}</div>
+              </div>
+            </div>
+
+            {/* 2. Shoulder Width */}
+            <div className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+              theme === 'dark' ? 'bg-slate-950/60 border-slate-800/70' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <kbd className="h-7 px-2.5 inline-flex items-center justify-center font-mono font-bold text-xs text-indigo-100 bg-gradient-to-b from-indigo-600 to-indigo-800 rounded-md border border-indigo-400/80 shadow-xs">
+                  Shift
+                </kbd>
+                <span className="text-slate-400 font-bold text-xs">+</span>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  ←
+                </kbd>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  →
+                </kbd>
+              </div>
+              <div>
+                <div className="font-extrabold text-xs text-slate-800 dark:text-slate-100">{t.dressGuideShoulderWidthTitle}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t.dressGuideShoulderWidthDesc}</div>
+              </div>
+            </div>
+
+            {/* 3. Suit Scale */}
+            <div className={`p-4 rounded-xl border flex flex-col justify-between gap-3 ${
+              theme === 'dark' ? 'bg-slate-950/60 border-slate-800/70' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <kbd className="h-7 px-2.5 inline-flex items-center justify-center font-mono font-bold text-xs text-indigo-100 bg-gradient-to-b from-indigo-600 to-indigo-800 rounded-md border border-indigo-400/80 shadow-xs">
+                  Shift
+                </kbd>
+                <span className="text-slate-400 font-bold text-xs">+</span>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  ↑
+                </kbd>
+                <kbd className="min-w-[28px] h-7 px-2 inline-flex items-center justify-center font-mono font-bold text-xs text-slate-100 bg-gradient-to-b from-slate-700 to-slate-800 rounded-md border border-slate-600 shadow-xs">
+                  ↓
+                </kbd>
+              </div>
+              <div>
+                <div className="font-extrabold text-xs text-slate-800 dark:text-slate-100">{t.dressGuideSuitScaleTitle}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{t.dressGuideSuitScaleDesc}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Friendly Instruction Line */}
+          <div className={`p-3 rounded-xl text-center border ${
+            theme === 'dark' ? 'bg-blue-950/30 border-blue-500/25' : 'bg-blue-50 border-blue-200'
+          }`}>
+            <p className="text-xs font-semibold text-blue-500 dark:text-blue-400">
+              {t.dressGuideFooterLine}
+            </p>
+          </div>
         </div>
 
         {/* Category Pills */}
@@ -573,14 +679,14 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                       <span>{question}</span>
                     </span>
                     <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold shrink-0 ${
-                      theme === 'dark' ? 'bg-slate-900 text-slate-450' : 'bg-slate-100 text-slate-500'
+                      theme === 'dark' ? 'bg-slate-900 text-slate-400' : 'bg-slate-100 text-slate-500'
                     }`}>
                       {item.category}
                     </span>
                   </button>
                   
                   {isExpanded && (
-                    <div className="px-5 pb-5 pt-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed border-t border-slate-150 dark:border-slate-900 space-y-2 font-medium">
+                    <div className="px-5 pb-5 pt-1 text-xs text-slate-700 dark:text-slate-300 leading-relaxed border-t border-slate-200 dark:border-slate-900 space-y-2 font-medium">
                       <p className="whitespace-pre-wrap">{answer}</p>
                     </div>
                   )}
@@ -595,7 +701,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
 
           {/* Quick-Print Guidelines card */}
           <div className={`p-5 rounded-2xl border ${
-            theme === 'dark' ? 'bg-blue-900/5 border-blue-500/15' : 'bg-blue-50/30 border-blue-150 shadow-xs'
+            theme === 'dark' ? 'bg-blue-900/5 border-blue-500/15' : 'bg-blue-50/30 border-blue-200 shadow-xs'
           } space-y-3`}>
             <h4 className="font-bold text-xs text-blue-600 dark:text-blue-400 uppercase tracking-wider flex items-center gap-2">
               <Printer className="w-4 h-4" />
@@ -649,7 +755,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
         <div className={`p-6 md:p-8 rounded-3xl border space-y-6 ${
           theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
         }`}>
-          <div className="flex items-center gap-4 border-b pb-5 border-slate-150 dark:border-slate-900">
+          <div className="flex items-center gap-4 border-b pb-5 border-slate-200 dark:border-slate-900">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white font-extrabold text-xl shadow-md">
               S
             </div>
@@ -940,7 +1046,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
             </div>
           )}
 
-          <div className="border-t border-slate-150 dark:border-slate-900 pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-slate-500 gap-2">
+          <div className="border-t border-slate-200 dark:border-slate-900 pt-4 flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-slate-500 gap-2">
             <span>License: MIT Freeware Tool</span>
             <span>© 2026 SnapID Studio • AdSense & GDPR Verification Ready</span>
           </div>
@@ -963,7 +1069,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
             onClick={() => setSelectedArticleId(null)}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
               theme === 'dark' 
-                ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-300 hover:text-white' 
+                ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white' 
                 : 'bg-white border-slate-200 hover:bg-slate-100 text-slate-700 hover:text-slate-950'
             }`}
           >
@@ -993,7 +1099,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 <span>{language === 'hi' ? 'एसईओ सत्यापित' : 'SEO Verified'}</span>
               </span>
             </div>
-            <div className="h-[1px] bg-slate-200 dark:bg-slate-850 my-2" />
+            <div className="h-[1px] bg-slate-200 dark:bg-slate-800 my-2" />
           </div>
 
           {/* Render Article Content with beautiful typography */}
@@ -1002,7 +1108,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           </article>
 
           {/* Back Button Footer */}
-          <div className="h-[1px] bg-slate-200 dark:bg-slate-850 my-6" />
+          <div className="h-[1px] bg-slate-200 dark:bg-slate-800 my-6" />
           <div className="flex justify-between items-center">
             <button
               onClick={() => setSelectedArticleId(null)}
@@ -1019,7 +1125,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                   if (onChangeTab) onChangeTab('documents');
                 }
               }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-550 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-colors flex items-center gap-2 cursor-pointer"
             >
               <span>{language === 'hi' ? 'लेआउट जनरेटर शुरू करें' : 'Launch Layout Generator'}</span>
               <ChevronRight className="w-3.5 h-3.5" />
@@ -1056,7 +1162,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
               className={`w-full text-xs py-2.5 pl-9 pr-4 rounded-xl border outline-none ${
                 theme === 'dark' 
                   ? 'bg-slate-900 border-slate-800 focus:border-blue-500 text-white' 
-                  : 'bg-white border-slate-200 focus:border-blue-500 text-slate-850'
+                  : 'bg-white border-slate-200 focus:border-blue-500 text-slate-800'
               }`}
             />
           </div>
@@ -1103,7 +1209,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                   </span>
                 </div>
                 
-                <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-550 leading-snug line-clamp-2">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 leading-snug line-clamp-2">
                   {art.title}
                 </h3>
                 
@@ -1112,7 +1218,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
                 </p>
               </div>
 
-              <div className="flex items-center justify-between border-t border-slate-150 dark:border-slate-900 pt-4 mt-5">
+              <div className="flex items-center justify-between border-t border-slate-200 dark:border-slate-900 pt-4 mt-5">
                 <span className="text-[10px] text-slate-500 font-medium">{art.date}</span>
                 <button
                   onClick={() => {
@@ -1157,7 +1263,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           <div className={`p-5 rounded-2xl border space-y-4 ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200'
           }`}>
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-150 dark:border-slate-900">
+            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-200 dark:border-slate-900">
               <Laptop className="w-4 h-4 text-blue-500" />
               <span>1. AI Layout Tools & Workspaces</span>
             </h3>
@@ -1208,7 +1314,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           <div className={`p-5 rounded-2xl border space-y-4 ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200'
           }`}>
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-150 dark:border-slate-900">
+            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-200 dark:border-slate-900">
               <HelpCircle className="w-4 h-4 text-emerald-500" />
               <span>2. Knowledge Center & Support</span>
             </h3>
@@ -1246,7 +1352,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           <div className={`p-5 rounded-2xl border space-y-4 ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200'
           }`}>
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-150 dark:border-slate-900">
+            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-200 dark:border-slate-900">
               <Shield className="w-4 h-4 text-purple-500" />
               <span>3. Company & Legal Declarations</span>
             </h3>
@@ -1284,7 +1390,7 @@ export default function HelpAboutLegal({ tab, language, theme, onChangeTab }: He
           <div className={`p-5 rounded-2xl border space-y-4 ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200'
           }`}>
-            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-150 dark:border-slate-900">
+            <h3 className="font-extrabold text-sm text-slate-900 dark:text-white flex items-center gap-2.5 border-b pb-2.5 border-slate-200 dark:border-slate-900">
               <BookOpen className="w-4 h-4 text-amber-500" />
               <span>4. Blog & Travel Sizing Articles Directory</span>
             </h3>

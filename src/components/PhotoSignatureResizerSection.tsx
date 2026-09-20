@@ -21,6 +21,7 @@ import {
   Eye
 } from 'lucide-react';
 import { AppLanguage, AppTheme } from '../types';
+import { getSamplePassportPhotoDataUrl, generateSampleSignatureDataUrl, dataUrlToFile } from '../utils/sampleAssets';
 
 interface PhotoSignatureResizerSectionProps {
   language: AppLanguage;
@@ -81,6 +82,32 @@ export default function PhotoSignatureResizerSection({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const sourceImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Sample Demo Loader State
+  const [isLoadingSample, setIsLoadingSample] = useState<boolean>(false);
+
+  const handleLoadSample = async (modeToLoad: ToolMode) => {
+    try {
+      setIsLoadingSample(true);
+      setErrorMessage(null);
+      if (modeToLoad === 'photo') {
+        const dataUrl = await getSamplePassportPhotoDataUrl();
+        const sampleFile = dataUrlToFile(dataUrl, 'sample-passport-photo.jpg');
+        setToolMode('photo');
+        processUploadedFile(sampleFile);
+      } else {
+        const dataUrl = generateSampleSignatureDataUrl();
+        const sampleFile = dataUrlToFile(dataUrl, 'sample-signature.png');
+        setToolMode('signature');
+        processUploadedFile(sampleFile);
+      }
+    } catch (err) {
+      console.error('Error loading sample in resizer:', err);
+      setErrorMessage(language === 'hi' ? 'नमूना लोड करने में त्रुटि हुई।' : 'Error loading sample file.');
+    } finally {
+      setIsLoadingSample(false);
+    }
+  };
 
   // Format bytes to KB or MB
   const formatFileSize = (bytes: number): string => {
@@ -855,6 +882,72 @@ export default function PhotoSignatureResizerSection({
                 JPG, JPEG, PNG, WEBP
               </span>
             </div>
+
+            {/* Instant Try with Sample Demo Buttons */}
+            <div 
+              className="mt-6 pt-5 border-t border-slate-200/80 dark:border-slate-800/80 w-full flex flex-col sm:flex-row items-center justify-center gap-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {toolMode === 'photo' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSample('photo')}
+                    disabled={isLoadingSample}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 cursor-pointer transform active:scale-95 transition-all disabled:opacity-75"
+                  >
+                    {isLoadingSample ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>{language === 'hi' ? 'फोटो लोड हो रही है...' : 'Loading Sample Photo...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-cyan-300" />
+                        <span>{language === 'hi' ? '⚡ नमूना फोटो से तुरंत आज़माएं' : '⚡ Try with Sample Photo'}</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSample('signature')}
+                    disabled={isLoadingSample}
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline px-2 py-1 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{language === 'hi' ? 'या नमूना हस्ताक्षर आज़माएं →' : 'Or try with Sample Signature →'}</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSample('signature')}
+                    disabled={isLoadingSample}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 cursor-pointer transform active:scale-95 transition-all disabled:opacity-75"
+                  >
+                    {isLoadingSample ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>{language === 'hi' ? 'हस्ताक्षर लोड हो रहा है...' : 'Loading Sample Signature...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-cyan-300" />
+                        <span>{language === 'hi' ? '⚡ नमूना हस्ताक्षर से तुरंत आज़माएं' : '⚡ Try with Sample Signature'}</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSample('photo')}
+                    disabled={isLoadingSample}
+                    className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline px-2 py-1 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>{language === 'hi' ? 'या नमूना फोटो आज़माएं →' : 'Or try with Sample Photo →'}</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       ) : (
@@ -908,6 +1001,25 @@ export default function PhotoSignatureResizerSection({
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>{language === 'hi' ? 'फोटो बदलें' : 'Change Image'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleLoadSample(toolMode === 'signature' ? 'signature' : 'photo')}
+                disabled={isLoadingSample}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer subtle-glow-button ${
+                  theme === 'dark'
+                    ? 'bg-blue-950/40 hover:bg-blue-900/50 text-cyan-300 border-blue-500/30'
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200'
+                }`}
+                title={toolMode === 'signature' ? 'Try Sample Signature' : 'Try Sample Photo'}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>
+                  {toolMode === 'signature'
+                    ? (language === 'hi' ? 'नमूना हस्ताक्षर' : 'Sample Signature')
+                    : (language === 'hi' ? 'नमूना फोटो' : 'Sample Photo')}
+                </span>
               </button>
 
               <button

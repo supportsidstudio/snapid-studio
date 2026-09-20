@@ -1,8 +1,61 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" style="background-color: #020617; color-scheme: dark;">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- Instant zero-flash theme and background initializer (runs synchronously before CSS/JS) -->
+    <script>
+      (function() {
+        try {
+          var saved = localStorage.getItem('snapid_theme');
+          if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+            document.documentElement.style.backgroundColor = '#f8fafc';
+            document.documentElement.style.colorScheme = 'light';
+          } else {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+            document.documentElement.style.backgroundColor = '#020617';
+            document.documentElement.style.colorScheme = 'dark';
+          }
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- Critical instant styling: Prevents white flash & blank page freeze -->
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #020617;
+        color: #f8fafc;
+        min-height: 100%;
+        -webkit-font-smoothing: antialiased;
+      }
+      html.light, html.light body {
+        background-color: #f8fafc;
+        color: #0f172a;
+        color-scheme: light;
+      }
+      #root {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background-color: inherit;
+      }
+      #root:empty {
+        background-color: #020617;
+      }
+    </style>
+
+    <!-- Preconnect Google Fonts for faster non-blocking font resolution -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     
     <!-- Professional SEO Metadata -->
     <title>SnapID Studio - AI Passport Photo Maker & Document Print Suite</title>

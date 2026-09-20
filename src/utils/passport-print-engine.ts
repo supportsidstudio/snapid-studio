@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { printPdfBlobDirectly } from './pdf-print-helper';
 
 export interface PrintEngineConfig {
   pageWidthMm: number;
@@ -9,6 +10,8 @@ export interface PrintEngineConfig {
   borderWidthMm?: number;
   borderColor?: string;
   isSingle?: boolean;
+  marginMm?: number;
+  gapMm?: number;
 }
 
 export interface SheetLayoutInfo {
@@ -33,7 +36,9 @@ export interface SheetLayoutInfo {
 export const DPI_300_DPM = 300 / 25.4;
 
 /**
- * Calculate physical sheet layout, columns, rows, margins and multi-sheet pagination
+ * Calculate physical sheet layout, columns, rows, margins and multi-sheet pagination.
+ * Photos ALWAYS fill sequentially starting from top-left (row-by-row, left-to-right, top-to-bottom),
+ * leaving any remaining empty slots at the bottom/end of the sheet.
  */
 export function calculateSheetLayout(config: PrintEngineConfig, pageIndex = 0): SheetLayoutInfo {
   const { pageWidthMm, pageHeightMm, photoWidthMm, photoHeightMm, copiesCount, isSingle } = config;
@@ -57,8 +62,8 @@ export function calculateSheetLayout(config: PrintEngineConfig, pageIndex = 0): 
 
   // Determine physical margins & spacing
   const isSmallPhotoPaper = pageWidthMm <= 160 && pageHeightMm <= 210;
-  const gapMm = isSmallPhotoPaper ? 2.0 : 3.0;
-  const edgeMarginMm = isSmallPhotoPaper ? 2.5 : 6.0;
+  const gapMm = config.gapMm !== undefined ? config.gapMm : (isSmallPhotoPaper ? 2.0 : 3.0);
+  const edgeMarginMm = config.marginMm !== undefined ? config.marginMm : (isSmallPhotoPaper ? 2.5 : 6.0);
 
   // Maximum grid columns & rows that fit without overflowing printable bounds
   const maxCols = Math.max(1, Math.floor((pageWidthMm - (2 * edgeMarginMm) + gapMm) / (photoWidthMm + gapMm)));
@@ -72,49 +77,14 @@ export function calculateSheetLayout(config: PrintEngineConfig, pageIndex = 0): 
   const remainingPhotos = copiesCount - (safePageIndex * perSheetCapacity);
   const photosOnPage = Math.max(1, Math.min(perSheetCapacity, remainingPhotos));
 
-  // Determine optimal column arrangement
-  let cols = maxCols;
-  let rows = Math.ceil(photosOnPage / maxCols);
-  let startXMm = 0;
-  let startYMm = 0;
+  // Sequential standard grid layout: always use standard full columns across the page
+  const cols = maxCols;
+  const rows = Math.ceil(photosOnPage / maxCols);
 
-  if (totalPages === 1) {
-    // For single-page prints, adjust column layout for aesthetic centered grouping
-    if (photosOnPage <= 2) {
-      cols = Math.min(maxCols, 2);
-    } else if (photosOnPage <= 4) {
-      cols = Math.min(maxCols, 2);
-    } else if (photosOnPage <= 6) {
-      cols = maxCols >= 4 && photosOnPage > 4 ? 4 : Math.min(maxCols, 3);
-    } else if (photosOnPage <= 8) {
-      cols = Math.min(maxCols, 4);
-    } else {
-      cols = maxCols;
-    }
-
-    if (Math.ceil(photosOnPage / cols) > maxRows) {
-      cols = Math.min(maxCols, Math.ceil(photosOnPage / maxRows));
-    }
-
-    rows = Math.ceil(photosOnPage / cols);
-
-    const gridWidthMm = (cols * photoWidthMm) + ((cols - 1) * gapMm);
-    const gridHeightMm = (rows * photoHeightMm) + ((rows - 1) * gapMm);
-
-    startXMm = Math.max(0, (pageWidthMm - gridWidthMm) / 2);
-    startYMm = Math.max(0, (pageHeightMm - gridHeightMm) / 2);
-  } else {
-    // Multi-page batch: keep exact consistent grid columns and sheet origin across all pages
-    // This guarantees identical trimming & cutting lines across the entire batch
-    cols = maxCols;
-    rows = Math.ceil(photosOnPage / maxCols);
-
-    const fullGridWidthMm = (maxCols * photoWidthMm) + ((maxCols - 1) * gapMm);
-    const fullGridHeightMm = (maxRows * photoHeightMm) + ((maxRows - 1) * gapMm);
-
-    startXMm = Math.max(0, (pageWidthMm - fullGridWidthMm) / 2);
-    startYMm = Math.max(0, (pageHeightMm - fullGridHeightMm) / 2);
-  }
+  // Full grid horizontal centering with predictable top-left origin
+  const fullGridWidthMm = (maxCols * photoWidthMm) + ((maxCols - 1) * gapMm);
+  const startXMm = Math.max(edgeMarginMm, (pageWidthMm - fullGridWidthMm) / 2);
+  const startYMm = edgeMarginMm; // Top-to-bottom: starts directly from top margin
 
   return {
     totalPages,
@@ -447,18 +417,11 @@ export async function syncDirectPrintDOM(
 }
 
 /**
- * Executes a robust dedicated print layout flow satisfying all strict print requirements:
- * 
- * Flow:
- * User clicks "Final Print"
- * → create dedicated print layout
- * → insert actual processed image sources
- * → wait until print document loads
- * → wait until ALL images finish loading
- * → verify images have non-zero dimensions
- * → apply print CSS
- * → call print()
- * → close print window only after printing lifecycle is complete.
+ * Executes a robust dedicated print layout flow:
+ * Generates an in-memory studio 300 DPI PDF document (using jsPDF)
+ * with exact millimetric dimensions and lossless PNG images,
+ * embeds the auto-print directive, and silently triggers the browser print dialog
+ * via an isolated hidden iframe without downloading the PDF.
  */
 export async function executeDedicatedFinalPrint(
   singleCardCanvas: HTMLCanvasElement,
@@ -477,208 +440,50 @@ export async function executeDedicatedFinalPrint(
     const totalPages = verification.totalPages;
 
     console.info(
-      `[Print Engine Verified] Rendering ${totalPages} page(s) with ${verification.totalPrintable} total photos...`
+      `[Print Engine Verified] Rendering ${totalPages} page(s) with ${verification.totalPrintable} total photos into PDF print stream...`
     );
 
-    // 2. Render each print sheet page at 300 DPI into lossless Base64 PNG data URLs
-    // Base64 PNG URLs are completely self-contained, offline, synchronous to load,
-    // and have zero object-url revocation bugs.
-    const pageDataUrls: string[] = [];
+    // 2. Generate studio-quality 300 DPI PDF directly
+    const isLandscape = pageWidthMm >= pageHeightMm;
+    const orientation = isLandscape ? 'landscape' : 'portrait';
+
+    const doc = new jsPDF({
+      orientation,
+      unit: 'mm',
+      format: [pageWidthMm, pageHeightMm],
+      compress: true
+    });
+
     for (let p = 0; p < totalPages; p++) {
       if (onProgress) {
         onProgress(p + 1, totalPages);
       }
+      if (p > 0) {
+        doc.addPage([pageWidthMm, pageHeightMm], orientation);
+      }
 
       const sheetCanvas = renderHighResSheetCanvas(singleCardCanvas, config, p, DPI_300_DPM);
-      const dataUrl = sheetCanvas.toDataURL('image/png', 1.0);
-      pageDataUrls.push(dataUrl);
+      const dataUrl = sheetCanvas.toDataURL('image/png', 1.0); // 100% lossless 300 DPI PNG
 
       // Immediately free the canvas buffer to keep RAM usage minimal
       sheetCanvas.width = 0;
       sheetCanvas.height = 0;
+
+      doc.addImage(dataUrl, 'PNG', 0, 0, pageWidthMm, pageHeightMm, undefined, 'FAST');
 
       if (totalPages > 2) {
         await new Promise((r) => setTimeout(r, 4));
       }
     }
 
-    // 3. Build dedicated print HTML document with absolute exact page dimensions and print media styling
-    const pagesHtml = pageDataUrls.map((dataUrl, idx) => `
-      <div class="snapid-dedicated-print-page" id="print-sheet-page-${idx + 1}" data-page="${idx + 1}">
-        <img src="${dataUrl}" alt="Passport Photo Sheet Page ${idx + 1} of ${totalPages}" />
-      </div>
-    `).join('\n');
+    // Embed auto-print command in the PDF catalog
+    doc.autoPrint({ variant: 'non-conform' });
 
-    const printDocumentHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>SnapID Studio - Passport Photo Print</title>
-  <style>
-    @page {
-      size: ${pageWidthMm}mm ${pageHeightMm}mm !important;
-      margin: 0mm !important;
-    }
-    *, *::before, *::after {
-      box-sizing: border-box !important;
-    }
-    html, body {
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #ffffff !important;
-      width: ${pageWidthMm}mm !important;
-      height: auto !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-      color-adjust: exact !important;
-    }
-    .snapid-dedicated-print-page {
-      width: ${pageWidthMm}mm !important;
-      height: ${pageHeightMm}mm !important;
-      page-break-after: always !important;
-      break-after: page !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      position: relative !important;
-      overflow: hidden !important;
-      background: #ffffff !important;
-      display: block !important;
-    }
-    .snapid-dedicated-print-page:last-child {
-      page-break-after: auto !important;
-      break-after: auto !important;
-    }
-    .snapid-dedicated-print-page img {
-      width: 100% !important;
-      height: 100% !important;
-      display: block !important;
-      object-fit: fill !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    @media screen {
-      body {
-        background: #f1f5f9 !important;
-        padding: 24px !important;
-        display: flex !important;
-        flex-direction: column !important;
-        align-items: center !important;
-        gap: 24px !important;
-      }
-      .snapid-dedicated-print-page {
-        box-shadow: 0 10px 30px rgba(0,0,0,0.12) !important;
-      }
-    }
-  </style>
-</head>
-<body>
-  ${pagesHtml}
-</body>
-</html>`;
+    // Output pure in-memory Blob (no download to disk)
+    const pdfBlob = doc.output('blob');
 
-    // 4. Create an isolated hidden iframe for printing
-    // This isolates print styles 100% from website UI, prevents premature DOM teardown,
-    // and works reliably in Chrome and Edge without popup-blocker restrictions.
-    return new Promise<boolean>((resolve, reject) => {
-      try {
-        const existingFrame = document.getElementById('snapid-dedicated-print-iframe');
-        if (existingFrame) {
-          try { existingFrame.remove(); } catch {}
-        }
-
-        const iframe = document.createElement('iframe');
-        iframe.id = 'snapid-dedicated-print-iframe';
-        iframe.style.position = 'fixed';
-        iframe.style.right = '0';
-        iframe.style.bottom = '0';
-        iframe.style.width = '0';
-        iframe.style.height = '0';
-        iframe.style.border = '0';
-        iframe.style.opacity = '0';
-        iframe.style.pointerEvents = 'none';
-
-        document.body.appendChild(iframe);
-
-        const targetWindow = iframe.contentWindow;
-        const targetDoc = targetWindow?.document || iframe.contentDocument;
-
-        if (!targetWindow || !targetDoc) {
-          throw new Error('Print iframe context unavailable');
-        }
-
-        targetDoc.open();
-        targetDoc.write(printDocumentHtml);
-        targetDoc.close();
-
-        const proceedWithPrint = async () => {
-          try {
-            // 5. Wait until ALL images in the print layout finish loading
-            const images = Array.from(targetDoc.querySelectorAll('img'));
-            await Promise.all(images.map((img) => {
-              return new Promise<void>((imgResolve, imgReject) => {
-                if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-                  imgResolve();
-                  return;
-                }
-                img.onload = () => imgResolve();
-                img.onerror = () => imgReject(new Error('Print photo failed to load in dedicated layout'));
-                if (img.decode) {
-                  img.decode().then(imgResolve).catch(imgResolve);
-                }
-              });
-            }));
-
-            // 6. Verify ALL images have non-zero dimensions
-            for (const img of images) {
-              if (!img.naturalWidth || !img.naturalHeight) {
-                throw new Error('Image dimensions not available in print layout');
-              }
-            }
-
-            // 7. Wait for fonts & layout readiness
-            if (targetDoc.fonts && targetDoc.fonts.ready) {
-              await targetDoc.fonts.ready;
-            }
-
-            // 8. Small safety delay so the browser compositor finishes rasterization
-            await new Promise((r) => setTimeout(r, 180));
-
-            // 9. Lifecycle cleanup: remove iframe only after printing is done
-            let cleanedUp = false;
-            const cleanup = () => {
-              if (cleanedUp) return;
-              cleanedUp = true;
-              setTimeout(() => {
-                try { iframe.remove(); } catch {}
-              }, 1000);
-              resolve(true);
-            };
-
-            targetWindow.addEventListener('afterprint', cleanup);
-
-            // 10. Trigger print dialog
-            targetWindow.focus();
-            targetWindow.print();
-
-            // Safety fallback if afterprint does not fire in edge cases (e.g. dialog cancelled)
-            setTimeout(cleanup, 60000);
-          } catch (err: any) {
-            console.error('[Print Engine] Print execution error:', err);
-            try { iframe.remove(); } catch {}
-            reject(err);
-          }
-        };
-
-        if (targetDoc.readyState === 'complete') {
-          proceedWithPrint();
-        } else {
-          targetWindow.addEventListener('load', proceedWithPrint);
-        }
-      } catch (outerErr: any) {
-        console.error('[Print Engine] Error setting up print iframe:', outerErr);
-        reject(outerErr);
-      }
-    });
+    // 3. Silently trigger print dialog via isolated hidden iframe
+    return await printPdfBlobDirectly(pdfBlob);
   } catch (err) {
     console.error('[Print Engine] executeDedicatedFinalPrint error:', err);
     return false;

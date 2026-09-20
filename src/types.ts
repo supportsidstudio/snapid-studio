@@ -2,7 +2,10 @@ export type AppTab = 'home' | 'passport' | 'documents' | 'resizer' | 'help' | 'a
 export type AppTheme = 'dark' | 'light';
 export type AppLanguage = 'en' | 'hi';
 
-export type PassportPresetId = 'india_us' | 'eu_uk' | 'oci_visa' | 'stamp';
+export type PassportPresetId = 'india_us' | 'eu_uk' | 'oci_visa' | 'stamp' | 'custom';
+
+export type { DressTransformState } from './utils/dress-templates';
+export type { DressTransformState as DressState } from './utils/dress-templates';
 
 export interface PassportSizePreset {
   id: PassportPresetId;

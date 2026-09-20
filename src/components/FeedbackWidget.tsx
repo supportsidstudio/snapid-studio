@@ -347,7 +347,7 @@ export default function FeedbackWidget({ theme, language = 'en' }: FeedbackWidge
                             isCatSelected
                               ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-400/40 shadow-[0_0_10px_rgba(59,130,246,0.35)] scale-102'
                               : theme === 'dark'
-                              ? 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-750 hover:text-white hover:border-slate-600'
+                              ? 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white hover:border-slate-600'
                               : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-300'
                           }`}
                           title={`${cat.defaultStar} Star - ${isHindi ? cat.labelHi : cat.labelEn}`}

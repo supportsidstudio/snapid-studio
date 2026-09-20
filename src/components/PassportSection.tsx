@@ -32,7 +32,8 @@ import {
   Grid3X3,
   Square,
   Move,
-  Pipette
+  Pipette,
+  Shirt
 } from 'lucide-react';
 import { 
   AppLanguage, 
@@ -57,6 +58,19 @@ import {
   DPI_300_DPM
 } from '../utils/passport-print-engine';
 import { enhancePhotoWithFsrcnn, preloadAiEnhancerModel } from '../utils/ai-enhancer';
+import { getSamplePassportPhotoDataUrl, SAMPLE_FEMALE_PASSPORT_DATA_URL } from '../utils/sampleAssets';
+import {
+  DressTransformState,
+  INITIAL_DRESS_STATE,
+  DRESS_TEMPLATES,
+  loadDressImage,
+  drawDressLayerOnCanvas
+} from '../utils/dress-templates';
+import PassportDressPanel from './PassportDressPanel';
+import { PassportLayoutTab } from './passport/PassportLayoutTab';
+import { PassportCropTab } from './passport/PassportCropTab';
+import { PassportEnhanceTab } from './passport/PassportEnhanceTab';
+import { PassportDressStudioTab } from './passport/PassportDressStudioTab';
 import BgRemovalWorker from '../workers/bg-removal.worker?worker';
 
 let bgWorker: Worker | null = null;
@@ -114,16 +128,16 @@ interface PassportSectionProps {
   theme: AppTheme;
 }
 
-const PASSPORT_PRESETS: PassportSizePreset[] = [
+export const PASSPORT_PRESETS: PassportSizePreset[] = [
   { id: 'eu_uk', nameEn: 'Passport (35 x 45 mm)', nameHi: 'पासपोर्ट (35 x 45 mm)', widthMm: 35, heightMm: 45, aspectRatio: 35 / 45 },
   { id: 'india_us', nameEn: 'US/Visa (51 x 51 mm / 2"x2")', nameHi: 'यूएस/वीजा (51 x 51 mm)', widthMm: 51, heightMm: 51, aspectRatio: 1 },
   { id: 'oci_visa', nameEn: 'OCI/Visa (35 x 35 mm)', nameHi: 'OCI/वीजा (35 x 35 mm)', widthMm: 35, heightMm: 35, aspectRatio: 1 },
   { id: 'stamp', nameEn: 'Stamp (20 x 25 mm)', nameHi: 'स्टाम्प (20 x 25 mm)', widthMm: 20, heightMm: 25, aspectRatio: 20 / 25 },
 ];
 
-const SHEET_SIZE_PRESETS: SheetSizePreset[] = [
-  { id: 'size_4x6', nameEn: '4 x 6" (10x15 cm)', nameHi: '4x6" (10x15 cm)', widthMm: 101.6, heightMm: 152.4, category: 'Photo Paper' },
+export const SHEET_SIZE_PRESETS: SheetSizePreset[] = [
   { id: 'size_a4', nameEn: 'A4 (210 x 297 mm)', nameHi: 'A4 (210x297 mm)', widthMm: 210, heightMm: 297, category: 'Standard Paper' },
+  { id: 'size_4x6', nameEn: '4 x 6" (10x15 cm)', nameHi: '4x6" (10x15 cm)', widthMm: 101.6, heightMm: 152.4, category: 'Photo Paper' },
   { id: 'size_5x7', nameEn: '5 x 7" (13x18 cm)', nameHi: '5x7" (13x18 cm)', widthMm: 127, heightMm: 178, category: 'Photo Paper' },
   { id: 'size_a6', nameEn: 'A6 (105 x 148 mm)', nameHi: 'A6 (105x148 mm)', widthMm: 105, heightMm: 148, category: 'Standard Paper' },
   { id: 'size_a5', nameEn: 'A5 (148 x 210 mm)', nameHi: 'A5 (148x210 mm)', widthMm: 148, heightMm: 210, category: 'Standard Paper' },
@@ -152,6 +166,10 @@ const SHEET_SIZE_PRESETS: SheetSizePreset[] = [
   { id: 'single', nameEn: 'Single Photo', nameHi: 'सिंगल फोटो', widthMm: 0, heightMm: 0, category: 'Single' },
 ];
 
+// Fixed optimal margins and photo spacing (A4 standard: 2mm gap, 5mm margin)
+const FIXED_PRINT_SPACING_MM = 2.0;
+const FIXED_PRINT_MARGIN_MM = 5.0;
+
 export default function PassportSection({ language, theme }: PassportSectionProps) {
   const t = translations[language];
 
@@ -168,9 +186,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
   const [enhanceStepText, setEnhanceStepText] = useState<string>('');
   
-  // Settings & Toggles
+  // Settings & Toggles (Default Paper is A4 - standard for Cyber Cafe & eMitra)
   const [sizePreset, setSizePreset] = useState<PassportPresetId>('eu_uk');
-  const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_4x6');
+  const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_a4');
+  const [customWidthMm, setCustomWidthMm] = useState<number>(35);
+  const [customHeightMm, setCustomHeightMm] = useState<number>(45);
   const [customPaperWidthMm, setCustomPaperWidthMm] = useState<number>(100);
   const [customPaperHeightMm, setCustomPaperHeightMm] = useState<number>(150);
 
@@ -204,8 +224,64 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [borderWidth, setBorderWidth] = useState(0.25); // mm border thickness (0.25mm matches standard 1px crisp border)
   const [borderColor, setBorderColor] = useState('#000000'); // simple black border by default
   
+  // Dress & Suit Overlay
+  const [dressState, setDressState] = useState<DressTransformState>(INITIAL_DRESS_STATE);
+  const committedDressStateRef = useRef<DressTransformState>(INITIAL_DRESS_STATE);
+
+  // Sample Real Human Passport Photo (Female, ICAO compliant natural headshot, local & embedded)
+  const [samplePhotoPreviewSrc, setSamplePhotoPreviewSrc] = useState<string>('/sample-female-passport.jpg');
+  const [isLoadingSample, setIsLoadingSample] = useState(false);
+
+  const handleLoadSamplePhoto = async () => {
+    try {
+      setIsLoadingSample(true);
+      const dataUrl = await getSamplePassportPhotoDataUrl();
+      if (dataUrl) {
+        setRawSourceImage(dataUrl);
+        setOriginalImage(dataUrl);
+        setRemovedBgImg(null);
+        setRawRemovedBgImg(null);
+        setEnhancedBgImg(null);
+        setEnhanceCount(0);
+        setEnhancementStatus('ready');
+        setEnhancementErrorMsg(null);
+        setUseEnhancedPhoto(true);
+        setZoom(1.0);
+        setPanX(0);
+        setPanY(0);
+        setRotation(0);
+        setBrightness(100);
+        setContrast(100);
+        setDressState(INITIAL_DRESS_STATE);
+        setActiveTab('adjust');
+        setShowBeforePreview(false);
+
+        // Run automatic U²-NetP background removal
+        await runBackgroundRemoval(dataUrl);
+      }
+    } catch (err) {
+      console.warn('Sample photo load error:', err);
+      // Absolute fallback to embedded data URL
+      setRawSourceImage(SAMPLE_FEMALE_PASSPORT_DATA_URL);
+      setOriginalImage(SAMPLE_FEMALE_PASSPORT_DATA_URL);
+    } finally {
+      setIsLoadingSample(false);
+    }
+  };
+
+  const handleDressStateChangeFromPanel = (newState: DressTransformState) => {
+    setDressState(newState);
+    setSingleCanvasUpdated(prev => prev + 1);
+  };
+
+  const handleQuickSuitApply = () => {
+    committedDressStateRef.current = { ...dressState };
+    setSingleCanvasUpdated(prev => prev + 1);
+  };
+  
   // UI Panels
   const [activeTab, setActiveTab] = useState<'adjust' | 'sheet'>('adjust');
+  const [rightPanelTab, setRightPanelTab] = useState<'layout' | 'crop' | 'enhance' | 'dress'>('layout');
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Refs
@@ -245,6 +321,96 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       document.body.classList.remove('snapid-modal-open');
     };
   }, [cropModalOpen]);
+
+  // Keyboard Arrow controls for fine-tuning selected dress / suit position & adjustments directly on the photo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Only active when an attire / dress is selected
+      if (!dressState.templateId && !dressState.customImageSrc) return;
+
+      // 2. Only active on the adjustment view and not in the crop modal
+      if (activeTab !== 'adjust' || cropModalOpen) return;
+
+      // 3. Do not hijack if user is typing in an input, textarea, select, or editable element
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName ? target.tagName.toUpperCase() : '';
+        if (
+          tagName === 'INPUT' ||
+          tagName === 'TEXTAREA' ||
+          tagName === 'SELECT' ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+
+      // 4. Check for arrow keys
+      if (
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight' ||
+        e.key === 'ArrowUp' ||
+        e.key === 'ArrowDown'
+      ) {
+        e.preventDefault(); // Prevent page scrolling
+
+        if (e.shiftKey) {
+          // SHIFT + ARROWS: Adjust Shoulder Width (Left/Right) or Suit Scale (Up/Down)
+          // MUST NOT move suit position
+          setDressState(prev => {
+            if (!prev.templateId && !prev.customImageSrc) return prev;
+            let newScaleX = prev.scaleX;
+            let newScale = prev.scale;
+
+            if (e.key === 'ArrowLeft') {
+              // Shift + Left: Decrease Shoulder Width slightly
+              newScaleX = Math.max(0.8, Math.min(1.3, Math.round((newScaleX - 0.02) * 100) / 100));
+            } else if (e.key === 'ArrowRight') {
+              // Shift + Right: Increase Shoulder Width slightly
+              newScaleX = Math.max(0.8, Math.min(1.3, Math.round((newScaleX + 0.02) * 100) / 100));
+            } else if (e.key === 'ArrowUp') {
+              // Shift + Up: Decrease Suit Scale slightly
+              newScale = Math.max(0.7, Math.min(1.8, Math.round((newScale - 0.02) * 100) / 100));
+            } else if (e.key === 'ArrowDown') {
+              // Shift + Down: Increase Suit Scale slightly
+              newScale = Math.max(0.7, Math.min(1.8, Math.round((newScale + 0.02) * 100) / 100));
+            }
+
+            return {
+              ...prev,
+              scaleX: newScaleX,
+              scale: newScale
+            };
+          });
+        } else {
+          // NORMAL ARROWS: Move Suit Position 1px
+          // MUST NOT change scale or shoulder width
+          setDressState(prev => {
+            if (!prev.templateId && !prev.customImageSrc) return prev;
+            let newX = prev.offsetX;
+            let newY = prev.offsetY;
+            if (e.key === 'ArrowLeft') newX -= 1;
+            if (e.key === 'ArrowRight') newX += 1;
+            if (e.key === 'ArrowUp') newY -= 1;
+            if (e.key === 'ArrowDown') newY += 1;
+            // Clamp to safe boundaries (-40% to +40%)
+            newX = Math.max(-40, Math.min(40, Math.round(newX * 10) / 10));
+            newY = Math.max(-40, Math.min(40, Math.round(newY * 10) / 10));
+            return {
+              ...prev,
+              offsetX: newX,
+              offsetY: newY
+            };
+          });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { passive: false });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [dressState.templateId, dressState.customImageSrc, activeTab, cropModalOpen]);
 
   // Serial queue for local AI background removal (prevents concurrent execution of ONNX sessions)
   const bgRemovalChainRef = useRef<Promise<any>>(Promise.resolve());
@@ -646,8 +812,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   // Dynamically calculate maximum photos that fit on the selected paper without overflowing margins (Landscape studio standard)
   const maxCopiesOnPaper = React.useMemo(() => {
     if (sheetSize === 'single') return 1;
-    let wBase = selectedSheetPreset.widthMm || 101.6;
-    let hBase = selectedSheetPreset.heightMm || 152.4;
+    let wBase = selectedSheetPreset.widthMm || 210;
+    let hBase = selectedSheetPreset.heightMm || 297;
     if (sheetSize === 'size_user_defined') {
       wBase = customPaperWidthMm || 100;
       hBase = customPaperHeightMm || 150;
@@ -656,8 +822,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const pageH = Math.min(wBase, hBase);
 
     const isSmallPhotoPaper = pageW <= 160 && pageH <= 210;
-    const gapMm = isSmallPhotoPaper ? 2 : 3.5;
-    const edgeMargin = isSmallPhotoPaper ? 2 : 8;
+    const gapMm = FIXED_PRINT_SPACING_MM;
+    const edgeMargin = isSmallPhotoPaper ? 2.5 : FIXED_PRINT_MARGIN_MM;
 
     const maxCols = Math.max(1, Math.floor((pageW - (2 * edgeMargin) + gapMm) / (selectedSizePreset.widthMm + gapMm)));
     const maxRows = Math.max(1, Math.floor((pageH - (2 * edgeMargin) + gapMm) / (selectedSizePreset.heightMm + gapMm)));
@@ -793,6 +959,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       setRotation(0);
       setBrightness(100);
       setContrast(100);
+      setDressState(INITIAL_DRESS_STATE);
       setActiveTab('adjust');
       setShowBeforePreview(false); // Render the AI background removed by default
 
@@ -929,7 +1096,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const runAiPhotoEnhancement = async (inputBlob: Blob, isFirstAutoPass = false): Promise<Blob | null> => {
     setIsEnhancing(true);
     setEnhancementStatus('enhancing');
-    setEnhanceStepText(language === 'hi' ? 'अनुमानित समय तैयार हो रहा है...' : 'Estimating time & preparing tiles...');
+    setEnhanceStepText(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
     setEnhancementErrorMsg(null);
 
     const tEnhanceClientStart = performance.now();
@@ -938,9 +1105,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     try {
       const enhancedBlob = await enhancePhotoWithFsrcnn(
         inputBlob,
-        (step, percent) => {
-          setEnhanceStepText(step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'));
-          setAiStep(step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'));
+        (_step, _percent) => {
+          setEnhanceStepText(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
+          setAiStep(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...');
         },
         { fastMode: enhanceFastMode }
       );
@@ -1061,14 +1228,26 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
   // Live Canvas Sync representing single Passport Photo cropped
   useEffect(() => {
-    const canvas = previewCanvasRef.current;
-    if (!canvas || !originalImage) return;
+    let isCancelled = false;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const renderCard = async () => {
+      const canvas = previewCanvasRef.current;
+      if (!canvas || !originalImage) return;
 
-    const img = new Image();
-    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      const activeSrc = (removedBgImg && !showBeforePreview) ? removedBgImg : originalImage;
+      const img = new Image();
+
+      await new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+        img.src = activeSrc;
+      });
+
+      if (isCancelled) return;
+
       // Set canvas to a clean high-resolution (600x600 px range depending on standard aspect ratio)
       const baseWidth = 600;
       const baseHeight = baseWidth / selectedSizePreset.aspectRatio;
@@ -1108,8 +1287,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       ctx.rotate((rotation * Math.PI) / 180);
       
       // Calculate scaled image sizing to cover the canvas area (preventing empty borders showing at the sides of the passport photo)
-      const scaleImgWidth = img.width;
-      const scaleImgHeight = img.height;
+      const scaleImgWidth = img.naturalWidth || img.width || 600;
+      const scaleImgHeight = img.naturalHeight || img.height || 600;
       // Use Math.max to fully cover the target viewport aspect ratio
       const fitScale = Math.max(baseWidth / scaleImgWidth, baseHeight / scaleImgHeight);
       
@@ -1129,6 +1308,29 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
       ctx.restore();
 
+      // If user selected a dress template, draw suit overlay with feathered neck blend
+      if ((dressState.templateId || dressState.customImageSrc) && !showBeforePreview) {
+        const template = DRESS_TEMPLATES.find(t => t.id === dressState.templateId) || {
+          customImageSrc: dressState.customImageSrc || ''
+        };
+        const dressImg = await loadDressImage(template);
+        if (!isCancelled && dressImg) {
+          drawDressLayerOnCanvas(
+            ctx,
+            dressImg,
+            baseWidth,
+            baseHeight,
+            dressState,
+            panX,
+            panY,
+            zoom,
+            rotation
+          );
+        }
+      }
+
+      if (isCancelled) return;
+
       // If user selected borders, draw inside frame
       if (borderWidth > 0) {
         ctx.strokeStyle = borderColor;
@@ -1141,7 +1343,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
       setSingleCanvasUpdated(prev => prev + 1);
     };
-    img.src = (removedBgImg && !showBeforePreview) ? removedBgImg : originalImage;
+
+    renderCard();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
     originalImage, 
     removedBgImg, 
@@ -1156,13 +1363,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     brightness, 
     contrast,
     borderWidth,
-    borderColor
+    borderColor,
+    dressState
   ]);
 
   // Physical print engine config helper
   const getPrintEngineConfig = () => {
-    let baseWidthMm = selectedSheetPreset.widthMm || 101.6;
-    let baseHeightMm = selectedSheetPreset.heightMm || 152.4;
+    let baseWidthMm = selectedSheetPreset.widthMm || 210;
+    let baseHeightMm = selectedSheetPreset.heightMm || 297;
     if (sheetSize === 'size_user_defined') {
       baseWidthMm = customPaperWidthMm || 100;
       baseHeightMm = customPaperHeightMm || 150;
@@ -1181,6 +1389,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       pageHeightMm = minDim;
     }
 
+    const isSmallPhotoPaper = pageWidthMm <= 160 && pageHeightMm <= 210;
+    const gapMm = FIXED_PRINT_SPACING_MM;
+    const marginMm = isSmallPhotoPaper ? 2.5 : FIXED_PRINT_MARGIN_MM;
+
     return {
       pageWidthMm,
       pageHeightMm,
@@ -1189,7 +1401,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       copiesCount: sheetSize === 'single' ? 1 : photosCopiesCount,
       borderWidthMm: borderWidth,
       borderColor: borderColor,
-      isSingle: sheetSize === 'single'
+      isSingle: sheetSize === 'single',
+      marginMm,
+      gapMm
     };
   };
 
@@ -1259,6 +1473,28 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const link = document.createElement('a');
     link.download = `SnapID_Passport_${selectedSizePreset.id}_sheet_${selectedSheetPreset.id}_page${sheetPageIndex + 1}.png`;
     link.href = sheetCanvas.toDataURL('image/png', 1.0);
+    link.click();
+  };
+
+  // Download High-Quality JPG image
+  const downloadSheetJpg = () => {
+    if (!previewCanvasRef.current) return;
+    const config = getPrintEngineConfig();
+    const srcCanvas = sheetSize === 'single'
+      ? previewCanvasRef.current
+      : renderHighResSheetCanvas(previewCanvasRef.current, config, sheetPageIndex);
+    const jpgCanvas = document.createElement('canvas');
+    jpgCanvas.width = srcCanvas.width;
+    jpgCanvas.height = srcCanvas.height;
+    const ctx = jpgCanvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, jpgCanvas.width, jpgCanvas.height);
+      ctx.drawImage(srcCanvas, 0, 0);
+    }
+    const link = document.createElement('a');
+    link.download = `SnapID_Passport_${selectedSizePreset.id}_${sheetSize === 'single' ? 'single' : 'sheet'}.jpg`;
+    link.href = jpgCanvas.toDataURL('image/jpeg', 0.95);
     link.click();
   };
 
@@ -1407,1558 +1643,689 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             AI Powered
           </span>
         </h1>
-        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-550' : 'text-slate-500'}`}>
+        <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
           {t.passportSubtitle}
         </p>
       </div>
 
       {!originalImage ? (
-        /* Empty upload area with subtle premium glowing style */
-        <div 
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          className={`relative overflow-hidden group border-2 rounded-3xl p-8 sm:p-14 text-center ${
-            isDragOver 
-              ? 'border-blue-500 bg-blue-500/10 scale-[1.01] shadow-[0_0_30px_rgba(59,130,246,0.3)]' 
-              : theme === 'dark'
-                ? 'border-blue-500/50 bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 shadow-[0_0_24px_rgba(59,130,246,0.18)] hover:border-blue-400 hover:shadow-[0_0_32px_rgba(59,130,246,0.32)]'
-                : 'border-blue-300/80 bg-gradient-to-br from-blue-50/80 via-sky-50/40 to-indigo-50/30 shadow-[0_4px_22px_rgba(37,99,235,0.12)] hover:border-blue-500 hover:shadow-[0_6px_28px_rgba(37,99,235,0.22)]'
-          }`}
-        >
-          <div className="relative z-10 max-w-md mx-auto flex flex-col items-center">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 mb-4 group-hover:scale-110">
-              <Upload className="w-6 h-6 sm:w-7 sm:h-7 animate-bounce" />
-            </div>
-            <h3 className="font-extrabold text-base sm:text-xl text-slate-900 dark:text-white tracking-tight">
-              {t.photoUploadLabel}
-            </h3>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-2 mb-6">
-              {t.photoUploadSubText}
-            </p>
+        /* Authentic Studio Showcase & Upload Section (Replaces empty curtain/placeholder) */
+        <div className="w-full max-w-5xl mx-auto space-y-6">
+          <div className={`relative overflow-hidden rounded-3xl border p-6 sm:p-10 ${
+            theme === 'dark'
+              ? 'bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 border-blue-500/30 shadow-[0_0_30px_rgba(37,99,235,0.15)]'
+              : 'bg-gradient-to-br from-white via-blue-50/50 to-indigo-50/30 border-blue-200/80 shadow-[0_8px_30px_rgba(37,99,235,0.08)]'
+          }`}>
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+              
+              {/* Left Column: Authentic Real Human Passport Photo Studio Mockup */}
+              <div className="md:col-span-5 flex flex-col items-center text-center">
+                <div className="relative group">
+                  {/* Subtle Studio Glow Behind Headshot */}
+                  <div className="absolute -inset-2 bg-gradient-to-tr from-blue-600/30 via-cyan-500/20 to-indigo-600/30 rounded-2xl blur-lg pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity" />
+                  
+                  {/* Framed Real Human Passport Photo */}
+                  <div className="relative w-44 sm:w-52 aspect-[35/45] rounded-xl bg-white p-1.5 shadow-2xl border-2 border-white/80 dark:border-slate-700 overflow-hidden">
+                    <img 
+                      src={samplePhotoPreviewSrc}
+                      onError={() => setSamplePhotoPreviewSrc(SAMPLE_FEMALE_PASSPORT_DATA_URL)}
+                      alt="Professional Real Human Passport Headshot"
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                    
+                    {/* Corner Registration Crop Guides */}
+                    <div className="absolute top-3 left-3 w-3 h-3 border-t-2 border-l-2 border-cyan-400" />
+                    <div className="absolute top-3 right-3 w-3 h-3 border-t-2 border-r-2 border-cyan-400" />
+                    <div className="absolute bottom-3 left-3 w-3 h-3 border-b-2 border-l-2 border-cyan-400" />
+                    <div className="absolute bottom-3 right-3 w-3 h-3 border-b-2 border-r-2 border-cyan-400" />
 
-            {isMobile ? (
-              <div className="flex flex-col gap-3.5 w-full max-w-[280px] mx-auto">
-                <button
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 bg-blue-600 hover:bg-blue-550 text-white rounded-xl font-bold text-sm shadow-md cursor-pointer"
-                >
-                  <Camera className="w-4 h-4 shrink-0" />
-                  <span>Open Camera</span>
-                </button>
-                
-                <button
-                  onClick={() => galleryInputRef.current?.click()}
-                  className={`w-full inline-flex items-center justify-center gap-2.5 px-5 py-3 rounded-xl font-bold text-sm border shadow-xs cursor-pointer ${
-                    theme === 'dark' 
-                      ? 'bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-200' 
-                      : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                    {/* Quality Stamp Badge */}
+                    <div className="absolute bottom-3 inset-x-3 bg-slate-950/85 backdrop-blur-xs text-white rounded-md py-1 px-2 flex items-center justify-between text-[9px] font-mono border border-cyan-400/40">
+                      <span className="font-bold text-cyan-300">300 DPI</span>
+                      <span className="text-emerald-400 font-bold">ICAO 9303</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instant Try with Sample Photo Button */}
+                <div className="mt-4 w-full max-w-xs">
+                  <button
+                    type="button"
+                    onClick={handleLoadSamplePhoto}
+                    disabled={isLoadingSample}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 cursor-pointer transform active:scale-95 transition-all disabled:opacity-75"
+                  >
+                    {isLoadingSample ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>{language === 'hi' ? 'लोड हो रहा है...' : 'Loading Sample...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-cyan-300" />
+                        <span>{language === 'hi' ? '⚡ नमूना फोटो से तुरंत आज़माएं' : '⚡ Try with Sample Photo'}</span>
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[10.5px] text-slate-400 mt-1.5">
+                    {language === 'hi' ? 'बिना अपलोड किए सभी टूल्स का तुरंत परीक्षण करें' : 'Instantly test all features without uploading your own file'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Column: Upload Area (Drag-and-Drop + Select File) */}
+              <div className="md:col-span-7 flex flex-col justify-center">
+                <div 
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all ${
+                    isDragOver 
+                      ? 'border-blue-500 bg-blue-500/10 scale-[1.01]' 
+                      : theme === 'dark'
+                        ? 'border-slate-700 hover:border-blue-400 bg-slate-900/50'
+                        : 'border-slate-300 hover:border-blue-500 bg-white/70'
                   }`}
                 >
-                  <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
-                  <span>Choose from Gallery</span>
-                </button>
+                  <div className="w-12 h-12 rounded-xl bg-blue-600/20 text-blue-500 flex items-center justify-center mx-auto mb-3">
+                    <Upload className="w-6 h-6 animate-bounce" />
+                  </div>
+                  
+                  <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
+                    {t.photoUploadLabel}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 mb-5">
+                    {t.photoUploadSubText}
+                  </p>
 
-                <input 
-                  ref={cameraInputRef}
-                  type="file" 
-                  accept="image/*" 
-                  capture="environment"
-                  onChange={handlePhotoUpload} 
-                  className="hidden" 
-                />
-                <input 
-                  ref={galleryInputRef}
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handlePhotoUpload} 
-                  className="hidden" 
-                />
+                  {isMobile ? (
+                    <div className="flex flex-col gap-2.5 w-full max-w-[260px] mx-auto">
+                      <button
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer"
+                      >
+                        <Camera className="w-4 h-4 shrink-0" />
+                        <span>Open Camera</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => galleryInputRef.current?.click()}
+                        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs border shadow-xs cursor-pointer ${
+                          theme === 'dark' 
+                            ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' 
+                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                        <span>Choose from Gallery</span>
+                      </button>
+
+                      <input 
+                        ref={cameraInputRef}
+                        type="file" 
+                        accept="image/*" 
+                        capture="environment"
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
+                      <input 
+                        ref={galleryInputRef}
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
+                    </div>
+                  ) : (
+                    <label className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-blue-500/25 hover:shadow-blue-500/40 cursor-pointer active:scale-95 transition-all">
+                      <Maximize2 className="w-4 h-4" />
+                      <span>Select Local Photo</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                      />
+                    </label>
+                  )}
+
+                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[10.5px] font-mono">
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                      ⚡ 300 DPI Output
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
+                      AI Background Removal
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
+                      Suits & Formal Attire
+                    </span>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <label className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-550 text-white rounded-xl font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 cursor-pointer active:scale-95">
-                <Maximize2 className="w-4 h-4" />
-                <span>Select Local Photo</span>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handlePhotoUpload} 
-                  className="hidden" 
-                />
-              </label>
-            )}
 
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono text-slate-400 dark:text-slate-400">
-              <span className="px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
-                ⚡ 300 DPI Studio Quality
-              </span>
-              <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-medium">
-                AI Auto Background Removal
-              </span>
             </div>
           </div>
         </div>
       ) : (
         /* Portrait loaded, show modular workspace */
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-          
-          {/* Left panel / Center Preview Area (8-cols on desktop for bigger viewports) */}
-          <div className="xl:col-span-8 flex flex-col gap-4">
+        <div className="w-full max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 xl:gap-6 items-start">
             
-            {/* Tab header buttons */}
-            <div className={`flex p-1 sm:p-1.5 rounded-xl border shrink-0 subtle-element-glow ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-slate-100 border-slate-200'
-            }`}>
-              <button
-                onClick={() => setActiveTab('adjust')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold ${
-                  activeTab === 'adjust'
-                    ? theme === 'dark'
-                      ? 'bg-slate-900 text-white shadow-md subtle-glow-active'
-                      : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
-                    : 'text-slate-400 hover:text-inherit'
-                }`}
-              >
-                <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>{t.cropAndAlign}</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('sheet')}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold ${
-                  activeTab === 'sheet'
-                    ? theme === 'dark'
-                      ? 'bg-slate-900 text-white shadow-md subtle-glow-active'
-                      : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
-                    : 'text-slate-400 hover:text-inherit'
-                }`}
-              >
-                <Layout className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>
-                  <span className="hidden sm:inline">Print Layup Grid ({selectedSheetPreset.nameEn.split('(')[0].trim()})</span>
-                  <span className="sm:hidden">Print Grid</span>
-                </span>
-              </button>
-            </div>
-
-            {/* Render selected canvas stage */}
-            <div className={`relative border rounded-2xl overflow-hidden min-h-[300px] sm:aspect-[4/3] w-full flex items-center justify-center p-3 sm:p-6 subtle-glow-card ${
-              theme === 'dark' 
-                ? 'bg-slate-950 border-slate-900 shadow-2xl shadow-blue-550/5' 
-                : 'bg-stone-50 border-slate-200 shadow-md'
-            }`}>
+            {/* LEFT COLUMN: Photo Preview Canvas, Status, & Direct Print/PDF/JPG/PNG Action Row */}
+            <div 
+              id="passport-left-preview-panel"
+              className="lg:col-span-7 xl:col-span-7 2xl:col-span-7 order-1 w-full pr-0 sm:pr-1 flex flex-col gap-3 pb-8"
+            >
               
-              {/* Cropper View */}
-              <div 
-                className={`w-full h-full flex flex-col items-center justify-center ${activeTab === 'adjust' ? 'block' : 'hidden'}`}
-              >
-                {/* Before/After Segmented Selector */}
-                {removedBgImg && (
-                  <div className={`flex p-1 rounded-xl gap-1 mb-3 shrink-0 subtle-element-glow ${
-                    theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-slate-150 border border-slate-200'
-                  }`}>
-                    <button
-                      type="button"
-                      onClick={() => setShowBeforePreview(false)}
-                      className={`px-2.5 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer ${
-                        !showBeforePreview
-                          ? theme === 'dark' ? 'bg-blue-600 text-white shadow-md subtle-glow-active' : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
-                          : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
-                      }`}
-                    >
-                      <span className="hidden sm:inline">AI Bg Removed (After)</span>
-                      <span className="sm:hidden">AI Removed</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowBeforePreview(true)}
-                      className={`px-2.5 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer ${
-                        showBeforePreview
-                          ? theme === 'dark' ? 'bg-slate-800 text-white shadow-md subtle-glow-active' : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
-                          : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
-                      }`}
-                    >
-                      <span className="hidden sm:inline">Original Upload (Before)</span>
-                      <span className="sm:hidden">Original</span>
-                    </button>
-                  </div>
-                )}
-
-                <p className="text-[11px] font-medium text-slate-400 mb-2 font-mono flex items-center gap-1.5 uppercase tracking-wide">
-                  <Eye className="w-3.5 h-3.5 text-blue-500" />
-                  Drag inside the card area to align, zoom with slider below
-                </p>
-
-                {/* Cropping box viewport reflecting actual aspect-ratio */}
-                <div 
-                  ref={containerRef}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUpOrLeave}
-                  onMouseLeave={handleMouseUpOrLeave}
-                  style={{ aspectRatio: selectedSizePreset.aspectRatio }}
-                  className={`relative w-auto h-full max-h-[350px] shadow-xl overflow-hidden border border-dashed cursor-move select-none rounded-[1px] subtle-element-glow ${
-                    theme === 'dark' ? 'border-slate-700 bg-slate-90/80 shadow-black' : 'border-slate-300 bg-white shadow-slate-200'
-                  }`}
-                >
-                  <canvas 
-                    ref={previewCanvasRef} 
-                    className="w-full h-full block object-contain pointer-events-none"
-                  />
-                  
-                  {/* Guideline Overlays representing camera framing aid */}
-                  <div className="absolute inset-0 border border-blue-500/20 pointer-events-none">
-                    <div className="absolute top-1/4 bottom-1/4 left-0 right-0 border-y border-dashed border-blue-500/15" />
-                    <div className="absolute left-1/3 right-1/3 top-0 bottom-0 border-x border-dashed border-blue-500/15" />
-                    {/* Head contour circle guide for alignment */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-2/5 h-2/5 rounded-full border border-dashed border-blue-500/25 flex items-center justify-center">
-                      <div className="w-[8px] h-[8px] rounded-full bg-blue-500/30" />
-                    </div>
-                  </div>
-
-                  {/* Unified Automatic Processing Overlay */}
-                  {(isRemovingBg || isEnhancing) && (
-                    <div className="absolute inset-0 z-20 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center select-none animate-fadeIn">
-                      <div className="p-3 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/30 mb-2.5 shadow-lg">
-                        <Sparkles className="w-5 h-5 text-blue-400 animate-spin" />
-                      </div>
-                      <span className="text-xs sm:text-sm font-bold text-white mb-2 drop-shadow">
-                        {aiStep || (language === 'hi' ? 'फोटो प्रोसेस की जा रही है...' : 'Processing photo...')}
-                      </span>
-                      <div className="w-36 bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700/50">
-                        <div
-                          className="bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-300"
-                          style={{
-                            width: aiStep.includes('Preparing') || aiStep.includes('अंतिम')
-                              ? '95%'
-                              : aiStep.includes('Enhancing') || aiStep.includes('क्वालिटी')
-                              ? '70%'
-                              : '35%'
-                          }}
-                        />
-                      </div>
-                      <span className="text-[9px] font-mono text-slate-400 mt-2">
-                        {language === 'hi' ? '100% सुरक्षित • इन-ब्राउज़र AI' : '100% Private • In-Browser AI'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-2.5 flex items-center gap-4 text-xs font-mono text-slate-500 bg-slate-500/5 px-3 py-1 rounded">
-                  <span>Aspect: {selectedSizePreset.widthMm} x {selectedSizePreset.heightMm} mm</span>
-                  <span>Zoom: {zoom.toFixed(1)}x</span>
-                </div>
-              </div>
-
-              {/* Sheet Layup Grid Preview */}
-              <div 
-                className={`w-full h-full flex flex-col items-center justify-center ${activeTab === 'sheet' ? 'block' : 'hidden'}`}
-              >
-                <div className={`shadow-2xl overflow-y-auto max-h-[360px] p-2 border rounded-md max-w-full ${
-                  theme === 'dark' ? 'border-slate-800 bg-slate-900 shadow-black' : 'border-slate-200 bg-white text-slate-900'
-                }`}>
-                  <canvas 
-                    ref={sheetCanvasRef} 
-                    className="w-auto h-auto max-h-[340px] max-w-full block mx-auto object-contain bg-white shrink-0"
-                  />
-                </div>
-
-                {/* Multi-Page Sheet Navigation Controls */}
-                {(() => {
-                  const config = getPrintEngineConfig();
-                  const layout = calculateSheetLayout(config, sheetPageIndex);
-                  if (layout.totalPages > 1) {
-                    return (
-                      <div className="mt-2.5 flex items-center justify-center gap-3">
-                        <button
-                          type="button"
-                          disabled={sheetPageIndex <= 0}
-                          onClick={() => setSheetPageIndex(p => Math.max(0, p - 1))}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
-                            sheetPageIndex <= 0
-                              ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900'
-                              : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-                          }`}
-                        >
-                          ← Prev Page
-                        </button>
-                        <span className="text-xs font-mono font-bold text-slate-200 bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700">
-                          Sheet {sheetPageIndex + 1} of {layout.totalPages} ({layout.photosOnPage} photos)
-                        </span>
-                        <button
-                          type="button"
-                          disabled={sheetPageIndex >= layout.totalPages - 1}
-                          onClick={() => setSheetPageIndex(p => Math.min(layout.totalPages - 1, p + 1))}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
-                            sheetPageIndex >= layout.totalPages - 1
-                              ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900'
-                              : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-                          }`}
-                        >
-                          Next Page →
-                        </button>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3.5 text-xs text-slate-400 font-medium text-center">
-                  <span className="truncate max-w-[260px] sm:max-w-none">Layout Sheet: {selectedSheetPreset.nameEn} ({photosCopiesCount} Photos Total)</span>
-                  <span className="hidden sm:inline">•</span>
-                  <span>300 DPI Studio Grade Output</span>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Quick action buttons row inside panel */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <button
-                onClick={() => {
-                  setOriginalImage(null);
-                  setRemovedBgImg(null);
-                  setRawRemovedBgImg(null);
-                  setEnhancedBgImg(null);
-                  setEnhanceCount(0);
-                  setEnhancementStatus('ready');
-                  setEnhancementErrorMsg(null);
-                }}
-                className={`w-full sm:w-auto px-3.5 py-2.5 rounded-xl text-xs font-semibold border flex items-center justify-center gap-2 transition-colors cursor-pointer subtle-glow-button ${
-                  theme === 'dark'
-                    ? 'border-slate-800 hover:bg-slate-900 text-slate-300'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-650'
-                }`}
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>{t.reUploadPhoto}</span>
-              </button>
-
-              <div className="w-full sm:w-auto flex items-center justify-center gap-2">
-                {/* AI removal process initiator */}
-                {!removedBgImg ? (
-                  <button
-                    onClick={() => runBackgroundRemoval()}
-                    disabled={isRemovingBg}
-                    className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer subtle-glow-button ${
-                      isRemovingBg
-                        ? 'bg-blue-600/20 text-blue-400 cursor-not-allowed'
-                        : theme === 'dark'
-                          ? 'bg-blue-600/15 border border-blue-500/30 hover:bg-blue-600 text-blue-400 hover:text-white'
-                          : 'bg-blue-600 hover:bg-blue-550 text-white shadow-xs'
-                    }`}
-                  >
-                    <Sparkles className={`w-3.5 h-3.5 ${isRemovingBg ? 'animate-spin' : ''}`} />
-                    <span>{isRemovingBg ? 'Extracting...' : t.bgRemovalLabel}</span>
-                  </button>
-                ) : (
-                  <div className="w-full sm:w-auto flex items-center justify-center gap-2 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 font-bold px-3 py-2.5 rounded-xl subtle-element-glow">
-                    <Check className="w-3.5 h-3.5" />
-                    <span>AI Background Extracted</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Side-by-Side: Print & Print Layout / Back to Edit (Always Visible) */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 w-full">
-              {/* 1. PRINT BUTTON */}
-              <button
-                type="button"
-                id="snapid-passport-print-btn"
-                onClick={handleDirectPrint}
-                className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer border border-blue-500/20 subtle-glow-button active:scale-[0.98]"
-              >
-                <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
-                <span>{language === 'hi' ? 'फाइनल प्रिंट' : 'Final Print'}</span>
-              </button>
-              
-              {/* 2. PRINT LAYOUT / BACK TO EDIT BUTTON */}
-              <button
-                type="button"
-                id="snapid-passport-tab-toggle-btn"
-                onClick={() => {
-                  if (activeTab === 'sheet') {
-                    setActiveTab('adjust');
-                  } else {
-                    setActiveTab('sheet');
-                  }
-                }}
-                className={`w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base border flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer subtle-glow-button active:scale-[0.98] ${
-                  activeTab === 'sheet'
-                    ? 'bg-blue-600/15 border-blue-500/30 text-blue-400 hover:bg-blue-600/25'
-                    : theme === 'dark' 
-                      ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' 
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                }`}
-              >
-                {activeTab === 'sheet' ? (
-                  <>
-                    <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-400 shrink-0" />
-                    <span>{language === 'hi' ? 'वापस जाएं (Back)' : 'Back to Edit'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Layout className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 text-blue-400 shrink-0" />
-                    <span>Print Layout</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Mobile / Tablet detailed loading state */}
-            {isRemovingBg && (
-              <div className={`p-4 rounded-xl border text-center space-y-2 animate-pulse subtle-glow-card ${
-                theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-blue-50/50 border-blue-100'
+              {/* Tab header buttons for Canvas Mode */}
+              <div className={`flex p-1 sm:p-1.5 rounded-xl border shrink-0 subtle-element-glow ${
+                theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-slate-100 border-slate-200'
               }`}>
-                <div className="flex items-center justify-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
-                  <span className="text-sm font-bold text-blue-500">{aiStep || (language === 'hi' ? 'लोड हो रहा है...' : 'Loading...')}</span>
-                </div>
-                <p className="text-[10px] text-slate-400 max-w-sm mx-auto">
-                  {language === 'hi'
-                    ? 'कृपया प्रतीक्षा करें, फोटो प्रोसेस की जा रही है (100% सुरक्षित एवं निजी)...'
-                    : 'Please wait, processing image securely in your browser...'}
-                </p>
-              </div>
-            )}
-
-          </div>
-
-          {/* Right Panel: Settings panels, sliders, borders, choices (4-cols on desktop) */}
-          <div className="xl:col-span-4 space-y-6">
-            
-            {/* Panel Card: Target Spec & Document Sizes */}
-            <div className={`p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-            } space-y-4`}>
-              <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-xs tracking-tight flex items-center gap-1.5">
-                  <Layout className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Layout Specifications</span>
-                </h3>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 max-w-[120px] truncate subtle-element-glow" title={selectedSheetPreset.nameEn}>
-                  {selectedSheetPreset.id === 'single' ? 'Single' : selectedSheetPreset.nameEn.split('(')[0].trim()}
-                </span>
-              </div>
-
-              {/* 1. Passport Photo Size Selection */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-400 mb-1 uppercase tracking-wider">
-                  {language === 'hi' ? 'फोटो आकार (Photo Size)' : 'Passport Size'}
-                </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {PASSPORT_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      type="button"
-                      onClick={() => setSizePreset(preset.id)}
-                      className={`px-2 py-1.5 rounded-lg text-left border cursor-pointer min-w-0 subtle-glow-button ${
-                        sizePreset === preset.id
-                          ? 'border-blue-500 bg-blue-500/10 font-bold text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
-                          : theme === 'dark'
-                            ? 'border-slate-800 hover:border-slate-750 text-slate-300 bg-slate-900/40'
-                            : 'border-slate-200 hover:border-slate-300 text-slate-700 bg-slate-50'
-                      }`}
-                      title={language === 'hi' ? preset.nameHi : preset.nameEn}
-                    >
-                      <div className="font-bold truncate text-[11px] leading-tight">
-                        {language === 'hi' ? preset.nameHi.split('(')[0] : preset.nameEn.split('(')[0]}
-                      </div>
-                      <div className="text-[10px] font-mono text-slate-400 truncate">
-                        {preset.widthMm} x {preset.heightMm} mm
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 2. Document / Paper Size with Down-Arrow Dropdown */}
-              <div className="space-y-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800/60">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    {language === 'hi' ? 'शीट साइज (Sheet Size)' : 'Document / Paper Size'}
-                  </label>
-                  <span className="text-[10px] font-mono text-blue-500 font-bold">
-                    {sheetSize === 'size_user_defined'
-                      ? `${customPaperWidthMm} x ${customPaperHeightMm} mm`
-                      : sheetSize === 'single'
-                        ? 'Individual'
-                        : `${selectedSheetPreset.widthMm} x ${selectedSheetPreset.heightMm} mm`}
-                  </span>
-                </div>
-
-                {/* Dropdown with custom styling & down arrow */}
-                <div className="relative">
-                  <select
-                    id="passport-document-size-dropdown"
-                    value={sheetSize}
-                    onChange={(e) => {
-                      const newSize = e.target.value as SheetSizeId;
-                      setSheetSize(newSize);
-                      if (newSize === 'single') {
-                        setPhotosCopiesCount(1);
-                      } else if (newSize === 'size_4x6') {
-                        setPhotosCopiesCount(8);
-                      } else if (newSize === 'size_a4') {
-                        setPhotosCopiesCount(30);
-                      }
-                    }}
-                    className={`w-full appearance-none px-3 py-2 pr-8 rounded-lg text-xs font-bold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 subtle-element-glow ${
-                      theme === 'dark'
-                        ? 'bg-slate-900 border-slate-700 text-slate-100 hover:border-slate-600'
-                        : 'bg-white border-slate-300 text-slate-800 hover:border-slate-400 shadow-sm'
-                    }`}
-                  >
-                    <optgroup label="⭐ Most Popular for Photo Printing">
-                      {SHEET_SIZE_PRESETS.slice(0, 3).map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.nameEn} {preset.category ? `(${preset.category})` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="📄 Standard Paper Sizes">
-                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Standard Paper').map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.nameEn}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="🖼️ Photo & Card Papers">
-                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Photo Paper' && p.id !== 'size_4x6' && p.id !== 'size_5x7').map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.nameEn}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="⚖️ Legal / Official Formats">
-                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Legal / Official').map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.nameEn}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="✉️ Envelope Formats">
-                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Envelope').map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.nameEn}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="📐 Large Formats & Special">
-                      {SHEET_SIZE_PRESETS.filter(p => p.category === 'Large Format' || p.category === 'Special').map((preset) => (
-                        <option key={preset.id} value={preset.id}>
-                          {preset.nameEn}
-                        </option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="⚙️ Custom & Single">
-                      <option value="size_user_defined">User-Defined (Custom mm)</option>
-                      <option value="single">Single Photo (Individual)</option>
-                    </optgroup>
-                  </select>
-
-                  {/* Down Arrow Indicator */}
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
-                    <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
-                  </div>
-                </div>
-
-                {/* Quick Selection Chips */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSheetSize('size_4x6');
-                      setPhotosCopiesCount(8);
-                    }}
-                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center cursor-pointer truncate subtle-glow-button ${
-                      sheetSize === 'size_4x6'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                    title="10 x 15 cm (4 x 6 in) - 8 Photos Studio Standard"
-                  >
-                    10x15 (4x6")
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSheetSize('size_a4');
-                      setPhotosCopiesCount(30);
-                    }}
-                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center cursor-pointer truncate subtle-glow-button ${
-                      sheetSize === 'size_a4'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                    title="A4 Standard Sheet"
-                  >
-                    A4 Sheet
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSheetSize('size_5x7');
-                      setPhotosCopiesCount(10);
-                    }}
-                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center cursor-pointer truncate subtle-glow-button ${
-                      sheetSize === 'size_5x7'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                    title="13 x 18 cm (5 x 7 in)"
-                  >
-                    13x18 (5x7")
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSheetSize('single');
-                      setPhotosCopiesCount(1);
-                    }}
-                    className={`px-1.5 py-1.5 rounded text-[10px] font-bold border text-center cursor-pointer truncate subtle-glow-button ${
-                      sheetSize === 'single'
-                        ? 'border-blue-500 bg-blue-500/15 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                    title="Single Photo"
-                  >
-                    Single
-                  </button>
-                </div>
-
-                {/* User-Defined Custom Millimeter inputs */}
-                {sheetSize === 'size_user_defined' && (
-                  <div className={`p-2 rounded-lg border space-y-1.5 subtle-element-glow ${
-                    theme === 'dark' ? 'bg-slate-900/70 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="text-[10px] font-bold text-blue-500 flex items-center justify-between">
-                      <span>Custom Size</span>
-                      <span className="font-mono text-[10px]">Max: {maxCopiesOnPaper}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <div>
-                        <span className="text-[9px] text-slate-400 font-semibold block mb-0.5">Width (mm)</span>
-                        <input
-                          type="number"
-                          min={50}
-                          max={600}
-                          value={customPaperWidthMm}
-                          onChange={(e) => setCustomPaperWidthMm(Math.max(30, Number(e.target.value) || 100))}
-                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border subtle-element-glow ${
-                            theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                          }`}
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[9px] text-slate-400 font-semibold block mb-0.5">Height (mm)</span>
-                        <input
-                          type="number"
-                          min={50}
-                          max={900}
-                          value={customPaperHeightMm}
-                          onChange={(e) => setCustomPaperHeightMm(Math.max(30, Number(e.target.value) || 150))}
-                          className={`w-full px-2 py-1 rounded text-xs font-mono font-bold border subtle-element-glow ${
-                            theme === 'dark' ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
-                          }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 3. Copies Selection Panel - Dynamic Count with No Artificial Limit */}
-              {sheetSize !== 'single' && (
-                <div className="pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 space-y-2.5">
-                  <div className={`flex items-center justify-between px-2.5 py-2 rounded-xl border subtle-element-glow ${
-                    theme === 'dark' ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                        {language === 'hi' ? 'फोटो संख्या (Photo Quantity)' : 'Photo Quantity'}
-                      </span>
-                      <span className="text-[9px] text-blue-500 font-medium font-mono">
-                        {photosCopiesCount > maxCopiesOnPaper 
-                          ? `${Math.ceil(photosCopiesCount / maxCopiesOnPaper)} Sheets (${maxCopiesOnPaper}/sheet)`
-                          : `1 Sheet (${photosCopiesCount}/${maxCopiesOnPaper} slots)`}
-                      </span>
-                    </div>
-
-                    {/* Stepper with direct editable number input (- [input] +) */}
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        id="passport-copies-decrease-btn"
-                        disabled={photosCopiesCount <= 1}
-                        onClick={() => setPhotosCopiesCount(prev => Math.max(1, prev - 1))}
-                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border cursor-pointer select-none subtle-glow-button ${
-                          photosCopiesCount <= 1
-                            ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
-                            : theme === 'dark'
-                              ? 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white active:scale-95'
-                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 active:scale-95'
-                        }`}
-                        title={language === 'hi' ? 'कम करें (-1)' : 'Decrease (-1)'}
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-
-                      <div className="relative">
-                        <input
-                          type="number"
-                          id="passport-copies-custom-input"
-                          min={1}
-                          max={64}
-                          step={1}
-                          value={photosCopiesCount}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            if (!isNaN(val)) {
-                              setPhotosCopiesCount(Math.max(1, Math.min(64, val)));
-                            } else if (e.target.value === '') {
-                              setPhotosCopiesCount(1);
-                            }
-                          }}
-                          className={`w-14 sm:w-16 px-1.5 py-1 text-center text-xs sm:text-sm font-black font-mono rounded border focus:outline-none focus:ring-1 focus:ring-blue-500 subtle-element-glow ${
-                            theme === 'dark'
-                              ? 'bg-slate-950 border-slate-700 text-blue-400'
-                              : 'bg-white border-slate-300 text-blue-600 shadow-xs'
-                          }`}
-                          title={language === 'hi' ? 'फोटो संख्या दर्ज करें (1 से 64)' : 'Enter photo count (1 to 64)'}
-                        />
-                      </div>
-
-                      <button
-                        type="button"
-                        id="passport-copies-increase-btn"
-                        disabled={photosCopiesCount >= 64}
-                        onClick={() => setPhotosCopiesCount(prev => Math.min(64, prev + 1))}
-                        className={`w-7 h-7 rounded-md flex items-center justify-center font-bold border cursor-pointer select-none subtle-glow-button ${
-                          photosCopiesCount >= 64
-                            ? 'opacity-30 cursor-not-allowed border-slate-800 bg-slate-950 text-slate-600'
-                            : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500 active:scale-95 shadow-sm shadow-blue-500/20'
-                        }`}
-                        title={language === 'hi' ? 'बढ़ाएं (+1)' : 'Increase (+1)'}
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Preset quick studio counts (4, 8, 16, 32, 64) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">Quick Quantity:</span>
-                      <span className="text-[8px] font-mono text-slate-500">Max 64 Photos</span>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {[4, 8, 16, 32, 64].map(count => (
-                        <button
-                          key={count}
-                          type="button"
-                          onClick={() => setPhotosCopiesCount(count)}
-                          className={`py-1.5 rounded-lg text-[11px] font-mono font-bold border text-center cursor-pointer subtle-glow-button ${
-                            photosCopiesCount === count
-                              ? 'border-blue-500 bg-blue-500 text-white subtle-glow-active'
-                              : theme === 'dark' 
-                                ? 'border-slate-800 bg-slate-900 text-slate-300 hover:text-white hover:border-slate-700' 
-                                : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                          title={`${count} Photos`}
-                        >
-                          {count}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Mathematical Parity & Verification Banner */}
-                  <div className={`p-2 rounded-xl border flex items-center justify-between text-[10px] font-mono ${
-                    theme === 'dark' 
-                      ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-400' 
-                      : 'bg-emerald-50/80 border-emerald-200 text-emerald-700'
-                  }`}>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span className="font-bold">Verified:</span>
-                    </div>
-                    <span className="font-semibold text-right">
-                      {photosCopiesCount} Selected = {photosCopiesCount} Printable ({Math.ceil(photosCopiesCount / maxCopiesOnPaper)} {Math.ceil(photosCopiesCount / maxCopiesOnPaper) > 1 ? 'Sheets' : 'Sheet'})
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Panel Card: Professional Crop & Align Studio Tool (Single Primary Location) */}
-            <div className={`p-4 sm:p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' 
-                ? 'bg-gradient-to-b from-blue-950/20 via-slate-950 to-slate-950 border-blue-500/30 shadow-lg shadow-blue-500/5' 
-                : 'bg-gradient-to-b from-blue-50/50 via-white to-white border-blue-200 shadow-sm'
-            } space-y-3`}>
-              <div className="flex items-center justify-between border-b pb-2 border-slate-200/60 dark:border-slate-800/60">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
-                    <Crop className="w-4 h-4 text-blue-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-xs sm:text-sm tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                      <span>{language === 'hi' ? 'फोटो क्रॉप एवं अलाइन (Crop Tool)' : 'Crop & Align Tool'}</span>
-                      <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30">
-                        {selectedSizePreset.widthMm}x{selectedSizePreset.heightMm}mm
-                      </span>
-                    </h3>
-                    <p className="text-[10px] text-slate-400 font-medium">
-                      {language === 'hi' ? 'पासपोर्ट फेस रेश्यो के अनुसार परफेक्ट फ्रेमिंग' : 'Precision crop box & instant alignment'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                id="passport-top-crop-action-btn"
-                onClick={openPhotoshopCropModal}
-                className="w-full py-2.5 sm:py-3 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2.5 cursor-pointer bg-blue-600 hover:bg-blue-550 text-white shadow-md shadow-blue-600/25 active:scale-[0.99] border border-blue-400/30"
-              >
-                <Crop className="w-4 h-4 text-white" />
-                <span>{language === 'hi' ? '✂️ फोटो क्रॉप करें (Open Crop Box)' : '✂️ Crop Photo (Studio Box)'}</span>
-              </button>
-            </div>
-
-            {/* Panel Card: AI Photo Enhance */}
-            <div className={`p-4 sm:p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-            } space-y-3.5`}>
-              <div className="flex items-center justify-between border-b pb-2 border-slate-200/60 dark:border-slate-800/60">
-                <div>
-                  <h3 className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
-                    <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 shrink-0" />
-                    <span>✨ AI Photo Enhance</span>
-                  </h3>
-                  <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
-                    Improve clarity & print quality
-                  </p>
-                </div>
-
-                {/* Status Badge */}
-                <div>
-                  {enhancementStatus === 'enhancing' ? (
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1 animate-pulse">
-                      <RefreshCw className="w-2.5 h-2.5 animate-spin" />
-                      <span>{enhanceStepText || 'Enhancing...'}</span>
-                    </span>
-                  ) : enhancementStatus === 'enhanced' ? (
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                      <Check className="w-2.5 h-2.5" />
-                      <span>Enhanced{enhanceCount > 1 ? ` (${enhanceCount}x)` : ''}</span>
-                    </span>
-                  ) : enhancementStatus === 'unavailable' ? (
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
-                      Enhancement unavailable
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-700/40">
-                      Ready
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Error / Fallback Notification */}
-              {enhancementErrorMsg && (
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400 flex items-start gap-2">
-                  <span className="text-xs">⚠️</span>
-                  <div className="leading-snug">
-                    <span className="font-semibold block">{enhancementErrorMsg}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Primary Enhance Photo Action Button */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="font-semibold uppercase tracking-wider">Enhance Engine:</span>
-                  <div className="flex items-center bg-slate-900/60 dark:bg-slate-950/80 p-0.5 rounded-lg border border-slate-700/50">
-                    <button
-                      type="button"
-                      onClick={() => setEnhanceFastMode(false)}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                        !enhanceFastMode
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                      title="Real-ESRGAN Deep Learning Super-Resolution (Runs off main thread in Web Worker with adaptive tiles)"
-                    >
-                      ✨ Neural HD
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEnhanceFastMode(true)}
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                        enhanceFastMode
-                          ? 'bg-amber-600 text-white shadow-xs'
-                          : 'text-slate-400 hover:text-slate-200'
-                      }`}
-                      title="Fast Mode: Instant studio clarity pass (0s wait, perfect for low-power mobile)"
-                    >
-                      ⚡ Fast Mode
-                    </button>
-                  </div>
-                </div>
-
                 <button
                   type="button"
-                  id="passport-enhance-action-btn"
-                  disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
-                  onClick={handleManualEnhanceClick}
-                  className={`w-full py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer ${
-                    isEnhancing
-                      ? 'bg-blue-650 text-white cursor-wait opacity-80'
-                      : enhanceFastMode
-                        ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-550 hover:to-orange-550 text-white shadow-md shadow-amber-500/20 active:scale-[0.99] border border-amber-400/30'
-                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-550 hover:to-indigo-550 text-white shadow-md shadow-blue-500/20 active:scale-[0.99] border border-blue-400/30'
-                  } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
+                  onClick={() => setActiveTab('adjust')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-all ${
+                    activeTab === 'adjust'
+                      ? theme === 'dark'
+                        ? 'bg-slate-900 text-white shadow-md subtle-glow-active'
+                        : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
+                      : 'text-slate-400 hover:text-inherit'
+                  }`}
                 >
-                  {isEnhancing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                      <span>{enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...')}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className={`w-4 h-4 ${enhanceFastMode ? 'text-yellow-200' : 'text-amber-300'}`} />
-                      <span>
-                        {enhanceCount > 0
-                          ? (enhanceFastMode ? '⚡ Fast Enhance ✓' : '🚀 AI HD Enhance ✓')
-                          : (enhanceFastMode ? '⚡ Fast Studio Enhance' : '🚀 AI HD Enhance')}
-                      </span>
-                    </>
-                  )}
+                  <Sliders className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>{t.cropAndAlign}</span>
                 </button>
-                <p className="text-[11px] text-slate-400 text-center font-medium">
-                  {enhanceFastMode
-                    ? (language === 'hi' ? '⚡ तुरंत 0.1s में स्टूडियो क्लैरिटी पास' : '⚡ Instant studio clarity enhancement (~0.1s)')
-                    : (language === 'hi' ? '🧠 Real-ESRGAN न्यूरल HD: ~20-40s (डिवाइस अनुसार)' : '🧠 Real-ESRGAN Neural HD: ~20–40s (device adaptive)')}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('sheet')}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-all ${
+                    activeTab === 'sheet'
+                      ? theme === 'dark'
+                        ? 'bg-slate-900 text-white shadow-md subtle-glow-active'
+                        : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
+                      : 'text-slate-400 hover:text-inherit'
+                  }`}
+                >
+                  <Layout className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span>
+                    <span className="hidden sm:inline">Print Layup Grid ({selectedSheetPreset.nameEn.split('(')[0].trim()})</span>
+                    <span className="sm:hidden">Print Grid</span>
+                  </span>
+                </button>
               </div>
 
-              {/* Manual Selector: Use Enhanced / Use Original & Level Badge */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-[11px] font-medium text-slate-400">
-                  <span className="flex items-center gap-1.5">
-                    <span>Photo Version:</span>
-                    {enhanceCount > 0 && (
-                      <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">
-                        {enhanceCount}x Level
-                      </span>
-                    )}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      disabled={!enhancedBgImg || isEnhancing}
-                      onClick={() => handleToggleEnhanced(true)}
-                      className={`px-2.5 py-1 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer ${
-                        useEnhancedPhoto && enhancedBgImg
-                          ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
-                          : theme === 'dark' 
-                            ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800' 
-                            : 'bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200'
-                      } ${(!enhancedBgImg || isEnhancing) ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    >
-                      {enhanceCount > 0 ? `Enhanced (${enhanceCount}x)` : 'Enhanced'}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!rawRemovedBgImg || isEnhancing}
-                      onClick={() => handleToggleEnhanced(false)}
-                      className={`px-2.5 py-1 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer ${
-                        !useEnhancedPhoto && rawRemovedBgImg
-                          ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
-                          : theme === 'dark' 
-                            ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800' 
-                            : 'bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200'
-                      } ${(!rawRemovedBgImg || isEnhancing) ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    >
-                      Original (0x)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Before / Enhanced Compact Preview & Info */}
-                {rawRemovedBgImg && (
-                  <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 ${
-                    theme === 'dark' ? 'bg-slate-900/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
-                  }`}>
-                    <div className="flex items-center gap-2.5">
-                      <div className={`relative w-10 h-12 rounded-lg overflow-hidden border shrink-0 ${
-                        theme === 'dark' ? 'border-slate-700 bg-slate-950' : 'border-slate-300 bg-white'
-                      }`}>
-                        <img 
-                          src={useEnhancedPhoto && enhancedBgImg ? enhancedBgImg : rawRemovedBgImg} 
-                          alt="Active Portrait Version" 
-                          className="w-full h-full object-contain"
-                        />
-                        <span className="absolute bottom-0 inset-x-0 text-[7px] font-black text-center bg-black/75 text-white py-0.2 uppercase tracking-tight">
-                          {useEnhancedPhoto && enhancedBgImg ? `${enhanceCount}x Pass` : 'Original'}
-                        </span>
-                      </div>
-                      <div className="text-[10px]">
-                        <div className="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
-                          <span>{useEnhancedPhoto && enhancedBgImg ? `AI Enhanced (Naturally Brighter & Clearer)` : 'Original Extracted Portrait Active'}</span>
-                        </div>
-                        <div className="text-[9px] text-slate-400 font-normal">
-                          {useEnhancedPhoto && enhancedBgImg
-                            ? `${language === 'hi' ? 'नेचुरली ब्राइट, क्लियर और पासपोर्ट प्रिंटिंग के लिए परफेक्ट।' : 'Naturally brighter, clearer & refined for passport printing.'}`
-                            : `${language === 'hi' ? 'बिना किसी एन्हांसमेंट के ओरिजिनल कटआउट।' : 'Original un-enhanced extracted portrait.'}`}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Quick reset button if enhanced */}
-                    {enhanceCount > 0 && (
+              {/* Render selected canvas stage */}
+              <div className={`relative border rounded-2xl min-h-[340px] sm:min-h-[420px] w-full flex flex-col items-center justify-center p-3 sm:p-4 subtle-glow-card ${
+                theme === 'dark' 
+                  ? 'bg-slate-950 border-slate-900 shadow-2xl shadow-blue-500/5' 
+                  : 'bg-stone-50 border-slate-200 shadow-md'
+              }`}>
+                
+                {/* Cropper View */}
+                <div 
+                  className={activeTab === 'adjust' ? 'w-full flex flex-col items-center justify-center' : 'hidden'}
+                >
+                  {/* Before/After Segmented Selector */}
+                  {removedBgImg && (
+                    <div className={`flex p-1 rounded-xl gap-1 mb-2.5 shrink-0 subtle-element-glow ${
+                      theme === 'dark' ? 'bg-slate-900 border border-slate-800' : 'bg-slate-100 border border-slate-200'
+                    }`}>
                       <button
                         type="button"
-                        onClick={handleResetEnhancement}
-                        disabled={isEnhancing}
-                        title={language === 'hi' ? 'ओरिजिनल पर वापस रीसेट करें' : 'Reset to original'}
-                        className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors shrink-0"
+                        onClick={() => setShowBeforePreview(false)}
+                        className={`px-2.5 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer ${
+                          !showBeforePreview
+                            ? theme === 'dark' ? 'bg-blue-600 text-white shadow-md subtle-glow-active' : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
+                            : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
+                        }`}
                       >
-                        ↺ Reset
+                        <span className="hidden sm:inline">AI Bg Removed (After)</span>
+                        <span className="sm:hidden">AI Removed</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowBeforePreview(true)}
+                        className={`px-2.5 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer ${
+                          showBeforePreview
+                            ? theme === 'dark' ? 'bg-slate-800 text-white shadow-md subtle-glow-active' : 'bg-white text-slate-900 shadow-sm subtle-glow-active'
+                            : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-950'
+                        }`}
+                      >
+                        <span className="hidden sm:inline">Original Upload (Before)</span>
+                        <span className="sm:hidden">Original</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] font-medium text-slate-400 mb-2 font-mono flex items-center gap-1.5 uppercase tracking-wide">
+                    <Eye className="w-3.5 h-3.5 text-blue-500" />
+                    Drag inside card to align, zoom with slider in Crop tab
+                  </p>
+
+                  {/* Cropping box viewport reflecting actual aspect-ratio */}
+                  <div 
+                    ref={containerRef}
+                    onMouseDown={handleMouseDown}
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUpOrLeave}
+                    onMouseLeave={handleMouseUpOrLeave}
+                    style={{ aspectRatio: selectedSizePreset.aspectRatio }}
+                    className={`relative w-auto h-[300px] sm:h-[380px] md:h-[420px] max-w-full shadow-2xl overflow-hidden border border-dashed cursor-move select-none rounded-lg subtle-element-glow ${
+                      theme === 'dark' ? 'border-slate-700 bg-slate-900/90 shadow-black' : 'border-slate-300 bg-white shadow-slate-200'
+                    }`}
+                  >
+                    <canvas 
+                      ref={previewCanvasRef} 
+                      className="w-full h-full block object-contain pointer-events-none"
+                    />
+                    
+                    {/* Guideline Overlays */}
+                    <div className="absolute inset-0 border border-blue-500/20 pointer-events-none">
+                      <div className="absolute top-1/4 bottom-1/4 left-0 right-0 border-y border-dashed border-blue-500/15" />
+                      <div className="absolute left-1/3 right-1/3 top-0 bottom-0 border-x border-dashed border-blue-500/15" />
+                      {/* Head contour circle guide for alignment */}
+                      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[60%] w-2/5 h-2/5 rounded-full border border-dashed border-blue-500/25 flex items-center justify-center">
+                        <div className="w-[8px] h-[8px] rounded-full bg-blue-500/30" />
+                      </div>
+                    </div>
+
+                    {/* Unified Automatic Processing Overlay */}
+                    {(isRemovingBg || isEnhancing) && (
+                      <div className="absolute inset-0 z-20 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center select-none animate-fadeIn">
+                        <div className="p-3 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/30 mb-2.5 shadow-lg">
+                          <Sparkles className="w-5 h-5 text-blue-400 animate-spin" />
+                        </div>
+                        <span className="text-xs sm:text-sm font-bold text-white mb-2.5 drop-shadow">
+                          {isEnhancing
+                            ? (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...')
+                            : (aiStep || (language === 'hi' ? 'फोटो प्रोसेस की जा रही है...' : 'Processing photo...'))}
+                        </span>
+                        <div className="w-36 bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700/50 relative">
+                          <div className="bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 h-full rounded-full w-full animate-pulse" />
+                        </div>
+                        <span className="text-[9px] font-mono text-slate-400 mt-2.5">
+                          {language === 'hi' ? '100% सुरक्षित • इन-ब्राउज़र AI' : '100% Private • In-Browser AI'}
+                        </span>
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
 
-              {/* Neural Enhancement Model Indicator */}
-              <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
-                <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span>
-                    {useEnhancedPhoto && enhancedBgImg
-                      ? (language === 'hi' ? 'AI HD एन्हांसमेंट सक्रिय' : 'AI HD Enhanced')
-                      : (language === 'hi' ? 'ओरिजिनल कटआउट (Ready to Enhance)' : 'Original Cutout (Ready)')}
-                  </span>
-                </span>
-                <span className="text-[9px] sm:text-[10px] font-mono text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                  Real-ESRGAN HD
-                </span>
-              </div>
-            </div>
-
-            {/* Panel Card: Background Fill (Available only when AI extracted background) */}
-            <div className={`p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-            } space-y-4`}>
-              <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-500" />
-                  <span>{t.bgColorLabel}</span>
-                </h3>
-                {!removedBgImg && (
-                  <span className="text-[10px] font-mono text-amber-500 font-semibold uppercase leading-none bg-amber-500/10 border border-amber-500/10 px-1.5 py-0.5 rounded subtle-element-glow">
-                    Requires AI Bg Removal
-                  </span>
-                )}
-              </div>
-
-              <div className={`space-y-2.5 ${!removedBgImg ? 'opacity-55 pointer-events-none' : ''}`}>
-                {/* Standard Swatches */}
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('white')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                      bgColorType === 'white'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full border border-slate-300 bg-white" />
-                    <span>White</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('blue')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                      bgColorType === 'blue'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#004494] border border-blue-600" />
-                    <span>Blue</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('lightgray')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                      bgColorType === 'lightgray'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#e5e7eb] border border-slate-400" />
-                    <span>Gray</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('red')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                      bgColorType === 'red'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#d21034] border border-red-600" />
-                    <span>Red</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('cyan')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                      bgColorType === 'cyan'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#38bdf8] border border-sky-400" />
-                    <span>Sky Blue</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('offwhite')}
-                    className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                      bgColorType === 'offwhite'
-                        ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                        : theme === 'dark' ? 'border-slate-800 text-slate-350 bg-slate-900/40 hover:border-slate-700' : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-300'
-                    }`}
-                  >
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#f8fafc] border border-slate-300" />
-                    <span>Off-White</span>
-                  </button>
+                  <div className="mt-2.5 flex items-center gap-4 text-xs font-mono text-slate-500 bg-slate-500/5 px-3 py-1 rounded">
+                    <span>Aspect: {selectedSizePreset.widthMm} x {selectedSizePreset.heightMm} mm</span>
+                    <span>Zoom: {zoom.toFixed(1)}x</span>
+                  </div>
                 </div>
 
-                {/* More Colors & Custom Color Picker */}
-                <div className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
-                  bgColorType === 'custom'
-                    ? 'border-blue-500/60 bg-blue-500/10'
-                    : theme === 'dark' ? 'border-slate-800/80 bg-slate-900/40' : 'border-slate-200 bg-slate-50'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <label className="relative cursor-pointer flex items-center">
-                      <input
-                        type="color"
-                        value={customBgColor}
-                        onChange={(e) => {
-                          setCustomBgColor(e.target.value);
-                          setBgColorType('custom');
-                        }}
-                        className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
-                      />
-                      <div 
-                        className="w-6 h-6 rounded-lg border shadow-xs transition-transform hover:scale-110 flex items-center justify-center"
-                        style={{ backgroundColor: customBgColor }}
-                      >
-                        <Pipette className="w-3 h-3 text-slate-700 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" />
-                      </div>
-                    </label>
-                    <div className="text-[10px]">
-                      <span className="font-bold block text-slate-300">Custom Color</span>
-                      <span className="font-mono text-slate-500 uppercase">{customBgColor}</span>
-                    </div>
+                {/* Sheet Layup Grid Preview */}
+                <div 
+                  className={activeTab === 'sheet' ? 'w-full h-full flex flex-col items-center justify-center' : 'hidden'}
+                >
+                  <div className={`shadow-2xl p-2 border rounded-md max-w-full ${
+                    theme === 'dark' ? 'border-slate-800 bg-slate-900 shadow-black' : 'border-slate-200 bg-white text-slate-900'
+                  }`}>
+                    <canvas 
+                      ref={sheetCanvasRef} 
+                      className="w-auto h-auto max-h-[320px] max-w-full block mx-auto object-contain bg-white shrink-0"
+                    />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setBgColorType('custom')}
-                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer ${
-                      bgColorType === 'custom'
-                        ? 'border-blue-500 bg-blue-500 text-white'
-                        : theme === 'dark' ? 'border-slate-700 bg-slate-800 text-slate-300 hover:text-white' : 'border-slate-300 bg-white text-slate-700'
-                    }`}
-                  >
-                    Apply Custom
-                  </button>
-                </div>
-              </div>
-            </div>
+                  {/* Multi-Page Sheet Navigation Controls */}
+                  {(() => {
+                    const config = getPrintEngineConfig();
+                    const layout = calculateSheetLayout(config, sheetPageIndex);
+                    if (layout.totalPages > 1) {
+                      return (
+                        <div className="mt-2.5 flex items-center justify-center gap-3">
+                          <button
+                            type="button"
+                            disabled={sheetPageIndex <= 0}
+                            onClick={() => setSheetPageIndex(p => Math.max(0, p - 1))}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
+                              sheetPageIndex <= 0
+                                ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900'
+                                : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                            }`}
+                          >
+                            ← Prev Page
+                          </button>
+                          <span className="text-xs font-mono font-bold text-slate-200 bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700">
+                            Sheet {sheetPageIndex + 1} of {layout.totalPages} ({layout.photosOnPage} photos)
+                          </span>
+                          <button
+                            type="button"
+                            disabled={sheetPageIndex >= layout.totalPages - 1}
+                            onClick={() => setSheetPageIndex(p => Math.min(layout.totalPages - 1, p + 1))}
+                            className={`px-3 py-1 rounded-lg text-xs font-bold border cursor-pointer ${
+                              sheetPageIndex >= layout.totalPages - 1
+                                ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600 bg-slate-900'
+                                : 'border-blue-500/40 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+                            }`}
+                          >
+                            Next Page →
+                          </button>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
 
-            {/* Panel Card: Crop Adjustments & Scaling */}
-            <div className={`p-4 sm:p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-            } space-y-3.5`}>
-              <div className="flex items-center justify-between border-b pb-2">
-                <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-blue-500" />
-                  <span>Adjustments & Scaling</span>
-                </h3>
+                  <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-3.5 text-xs text-slate-400 font-medium text-center">
+                    <span className="truncate max-w-[260px] sm:max-w-none">Layout Sheet: {selectedSheetPreset.nameEn} ({photosCopiesCount} Photos Total)</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span>300 DPI Studio Grade Output</span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Re-Upload & AI Status Row */}
+              <div className="flex items-center justify-between gap-2.5">
                 <button
                   type="button"
                   onClick={() => {
-                    setZoom(1.0);
-                    setRotation(0);
-                    setBrightness(100);
-                    setContrast(100);
+                    setOriginalImage(null);
+                    setRemovedBgImg(null);
+                    setRawRemovedBgImg(null);
+                    setEnhancedBgImg(null);
+                    setEnhanceCount(0);
+                    setEnhancementStatus('ready');
+                    setEnhancementErrorMsg(null);
                   }}
-                  className="text-[10px] font-semibold text-slate-400 hover:text-blue-400 flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Reset Adjustments"
+                  className={`flex-1 px-3 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer subtle-glow-button ${
+                    theme === 'dark'
+                      ? 'border-slate-800 hover:bg-slate-900 text-slate-300'
+                      : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+                  }`}
                 >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Reset</span>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>{t.reUploadPhoto}</span>
                 </button>
-              </div>
 
-              {/* Sliders with compact mini bars and Up/Down stepper input boxes in single row */}
-              <div className="space-y-3">
-                {/* 1. Zoom */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                      <Maximize2 className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      {t.zoomLabel}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">0.5x - 4.0x</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Compact Mini Slider Bar */}
-                    <input
-                      type="range"
-                      min="0.5"
-                      max="4.0"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(e) => setZoom(parseFloat(e.target.value))}
-                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
-                    }`}>
-                      <input
-                        type="number"
-                        min="0.5"
-                        max="4.0"
-                        step="0.1"
-                        value={Number(zoom.toFixed(1))}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          if (!isNaN(val)) setZoom(Math.max(0.5, Math.min(4.0, val)));
-                        }}
-                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
-                        }`}
-                      />
-                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
-                        <button
-                          type="button"
-                          onClick={() => setZoom(prev => Math.min(4.0, parseFloat((prev + 0.1).toFixed(1))))}
-                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
-                          title="Increase Zoom (+0.1)"
-                        >
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setZoom(prev => Math.max(0.5, parseFloat((prev - 0.1).toFixed(1))))}
-                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
-                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
-                          }`}
-                          title="Decrease Zoom (-0.1)"
-                        >
-                          <ChevronDown className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Rotation */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                      <RotateCw className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      {t.rotateLabel}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">-180° to +180°</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Compact Mini Slider Bar */}
-                    <input
-                      type="range"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={rotation}
-                      onChange={(e) => setRotation(parseInt(e.target.value))}
-                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
-                    }`}>
-                      <input
-                        type="number"
-                        min="-180"
-                        max="180"
-                        step="1"
-                        value={rotation}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val)) setRotation(Math.max(-180, Math.min(180, val)));
-                        }}
-                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
-                        }`}
-                      />
-                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
-                        <button
-                          type="button"
-                          onClick={() => setRotation(prev => Math.min(180, prev + 1))}
-                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
-                          title="Rotate Right (+1°)"
-                        >
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRotation(prev => Math.max(-180, prev - 1))}
-                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
-                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
-                          }`}
-                          title="Rotate Left (-1°)"
-                        >
-                          <ChevronDown className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Brightness */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                      <Sun className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      {t.brightnessLabel}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">50% - 180%</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Compact Mini Slider Bar */}
-                    <input
-                      type="range"
-                      min="50"
-                      max="180"
-                      step="1"
-                      value={brightness}
-                      onChange={(e) => setBrightness(parseInt(e.target.value))}
-                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
-                    }`}>
-                      <input
-                        type="number"
-                        min="50"
-                        max="180"
-                        step="5"
-                        value={brightness}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val)) setBrightness(Math.max(50, Math.min(180, val)));
-                        }}
-                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
-                        }`}
-                      />
-                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
-                        <button
-                          type="button"
-                          onClick={() => setBrightness(prev => Math.min(180, prev + 5))}
-                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
-                          title="Increase Brightness (+5%)"
-                        >
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setBrightness(prev => Math.max(50, prev - 5))}
-                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
-                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
-                          }`}
-                          title="Decrease Brightness (-5%)"
-                        >
-                          <ChevronDown className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Contrast */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex flex-col">
-                    <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                      <Sliders className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      {t.contrastLabel}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono">50% - 180%</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Compact Mini Slider Bar */}
-                    <input
-                      type="range"
-                      min="50"
-                      max="180"
-                      step="1"
-                      value={contrast}
-                      onChange={(e) => setContrast(parseInt(e.target.value))}
-                      className="w-20 sm:w-28 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    {/* Stepper Box with Up/Down Arrows */}
-                    <div className={`flex items-center rounded-lg border overflow-hidden shrink-0 subtle-element-glow ${
-                      theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-300'
-                    }`}>
-                      <input
-                        type="number"
-                        min="50"
-                        max="180"
-                        step="5"
-                        value={contrast}
-                        onChange={(e) => {
-                          const val = parseInt(e.target.value);
-                          if (!isNaN(val)) setContrast(Math.max(50, Math.min(180, val)));
-                        }}
-                        className={`w-10 py-0.5 text-center font-mono font-bold text-xs bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${
-                          theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
-                        }`}
-                      />
-                      <div className={`flex flex-col border-l ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'}`}>
-                        <button
-                          type="button"
-                          onClick={() => setContrast(prev => Math.min(180, prev + 5))}
-                          className="px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer"
-                          title="Increase Contrast (+5%)"
-                        >
-                          <ChevronUp className="w-2.5 h-2.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setContrast(prev => Math.max(50, prev - 5))}
-                          className={`px-1 py-0.5 hover:bg-blue-500/20 text-slate-400 hover:text-blue-400 transition-colors cursor-pointer border-t ${
-                            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
-                          }`}
-                          title="Decrease Contrast (-5%)"
-                        >
-                          <ChevronDown className="w-2.5 h-2.5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Panel Card: Borders and Outlines */}
-            <div className={`p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
-            } space-y-4`}>
-              <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
-                <Layout className="w-4 h-4 text-blue-500" />
-                <span>{t.borderWidthLabel}</span>
-              </h3>
-              <div className="space-y-4">
-                <div className="grid grid-cols-4 gap-2">
-                  {[0, 0.25, 0.5, 1.0].map((val) => (
+                <div className="flex-1">
+                  {!removedBgImg ? (
                     <button
-                      key={val}
                       type="button"
-                      onClick={() => setBorderWidth(val)}
-                      className={`py-2 rounded-xl text-xs font-bold border cursor-pointer subtle-glow-button ${
-                        borderWidth === val
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
+                      onClick={() => runBackgroundRemoval()}
+                      disabled={isRemovingBg}
+                      className={`w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
+                        isRemovingBg
+                          ? 'bg-blue-600/20 text-blue-400 cursor-not-allowed'
                           : theme === 'dark'
-                            ? 'border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-750 hover:text-white'
-                            : 'border-slate-200 text-slate-650 bg-slate-50 hover:border-slate-350 hover:text-slate-950'
+                            ? 'bg-blue-600/15 border border-blue-500/30 hover:bg-blue-600 text-blue-400 hover:text-white'
+                            : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
                       }`}
                     >
-                      {val === 0 ? 'None' : val === 0.25 ? 'Thin (1px)' : `${val}mm`}
+                      <Sparkles className={`w-3.5 h-3.5 ${isRemovingBg ? 'animate-spin' : ''}`} />
+                      <span>{isRemovingBg ? 'Extracting...' : t.bgRemovalLabel}</span>
                     </button>
-                  ))}
+                  ) : (
+                    <div className="w-full flex items-center justify-center gap-1.5 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 font-bold px-3 py-2 rounded-xl subtle-element-glow">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>AI Extracted</span>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
 
-
-            {/* Downloads & Printing Block Drawer */}
-            <div className={`p-5 rounded-2xl border subtle-glow-card ${
-              theme === 'dark' 
-                ? 'bg-slate-950 border-slate-900 shadow-xl' 
-                : 'bg-white border-slate-200 shadow-md'
-            } space-y-3.5`}>
-              <h4 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-1.5">
-                <Download className="w-4 h-4 text-blue-500" />
-                <span>{language === 'hi' ? 'प्रिंट और डाउनलोड सेंटर (Print & Download)' : 'Print & Download Options'}</span>
-              </h4>
-              <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                {language === 'hi'
-                  ? 'शीट लेआउट तैयार करें और उच्च-गुणवत्ता वाली PNG इमेज या PDF फ़ॉर्मेट तुरंत डाउनलोड करके आसानी से प्रिंट करें।'
-                  : 'Prepare page layout configurations and download high-quality PNG or PDF formatting immediately for clean, professional printing.'}
-              </p>
-
-              <div className="grid grid-cols-1 gap-2 pt-1">
-                
-                {/* 1. DOWNLOAD PNG */}
+              {/* HORIZONTAL ACTION ROW: Print | PDF | JPG | PNG (Compact, No Extra Scroll) */}
+              <div className="grid grid-cols-4 gap-2 w-full pt-0.5">
+                {/* 1. PRINT */}
                 <button
                   type="button"
-                  onClick={sheetSize === 'single' ? downloadSinglePhoto : downloadSheetPng}
-                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer subtle-glow-button ${
-                    theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
+                  id="snapid-passport-print-btn"
+                  onClick={handleDirectPrint}
+                  className="py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer border border-blue-500/20 subtle-glow-button active:scale-[0.98] transition-all shadow-md shadow-blue-600/20"
+                  title="Direct 300 DPI studio print"
                 >
-                  <div className="flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-pink-400 shrink-0" />
-                    <span>Download Layout <span className="hidden sm:inline">(PNG Image)</span><span className="sm:hidden">(PNG)</span></span>
-                  </div>
-                  <Download className="w-4 h-4 text-slate-400 group-hover:text-white shrink-0" />
+                  <Printer className="w-4 h-4 shrink-0" />
+                  <span>{language === 'hi' ? 'प्रिंट' : 'Print'}</span>
                 </button>
 
-                {/* 3. DOWNLOAD PDF */}
+                {/* 2. PDF */}
                 <button
                   type="button"
+                  id="snapid-passport-pdf-btn"
                   onClick={downloadSheetPdf}
-                  className={`w-full px-3 sm:px-4.5 py-3 rounded-xl font-bold text-[11px] sm:text-xs border flex items-center justify-between group cursor-pointer subtle-glow-button ${
-                    theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-205 text-slate-800'
+                  className={`py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm border flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer subtle-glow-button active:scale-[0.98] transition-all ${
+                    theme === 'dark' 
+                      ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-rose-400 hover:text-rose-300' 
+                      : 'bg-white hover:bg-rose-50/50 border-slate-200 text-rose-600 shadow-xs'
                   }`}
+                  title="Download 300 DPI Print-Ready PDF"
                 >
-                  <div className="flex items-center gap-2">
-                    <FileDown className="w-4 h-4 text-red-400 shrink-0" />
-                    <span>Download <span className="hidden sm:inline font-bold">High-Quality </span>PDF <span className="hidden sm:inline">Formatted</span></span>
-                  </div>
-                  <Download className="w-4 h-4 text-slate-400 group-hover:text-white shrink-0" />
+                  <FileDown className="w-4 h-4 shrink-0" />
+                  <span>PDF</span>
                 </button>
 
+                {/* 3. JPG */}
+                <button
+                  type="button"
+                  id="snapid-passport-jpg-btn"
+                  onClick={downloadSheetJpg}
+                  className={`py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm border flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer subtle-glow-button active:scale-[0.98] transition-all ${
+                    theme === 'dark' 
+                      ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-amber-400 hover:text-amber-300' 
+                      : 'bg-white hover:bg-amber-50/50 border-slate-200 text-amber-600 shadow-xs'
+                  }`}
+                  title="Download High-Resolution JPG Photo / Sheet"
+                >
+                  <ImageIcon className="w-4 h-4 shrink-0" />
+                  <span>JPG</span>
+                </button>
+
+                {/* 4. PNG */}
+                <button
+                  type="button"
+                  id="snapid-passport-png-btn"
+                  onClick={sheetSize === 'single' ? downloadSinglePhoto : downloadSheetPng}
+                  className={`py-2.5 px-2 rounded-xl font-bold text-xs sm:text-sm border flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 cursor-pointer subtle-glow-button active:scale-[0.98] transition-all ${
+                    theme === 'dark' 
+                      ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-emerald-400 hover:text-emerald-300' 
+                      : 'bg-white hover:bg-emerald-50/50 border-slate-200 text-emerald-600 shadow-xs'
+                  }`}
+                  title="Download High-Resolution PNG Photo / Sheet"
+                >
+                  <Download className="w-4 h-4 shrink-0" />
+                  <span>PNG</span>
+                </button>
               </div>
+
+              {/* Mobile / Tablet detailed loading state */}
+              {isRemovingBg && (
+                <div className={`p-3.5 rounded-xl border text-center space-y-1.5 animate-pulse subtle-glow-card ${
+                  theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-blue-50/50 border-blue-100'
+                }`}>
+                  <div className="flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
+                    <span className="text-xs font-bold text-blue-500">{aiStep || (language === 'hi' ? 'लोड हो रहा है...' : 'Loading...')}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 max-w-sm mx-auto">
+                    {language === 'hi'
+                      ? 'कृपया प्रतीक्षा करें, फोटो प्रोसेस की जा रही है (100% सुरक्षित एवं निजी)...'
+                      : 'Please wait, processing image securely in your browser...'}
+                  </p>
+                </div>
+              )}
+
             </div>
+
+            {/* RIGHT COLUMN: Tabbed Options Panel */}
+            <div 
+              id="passport-right-options-panel"
+              className="lg:col-span-5 xl:col-span-5 2xl:col-span-5 order-2 lg:order-2 flex flex-col gap-3 pb-8"
+            >
+              {/* HORIZONTAL TAB BAR */}
+              <div className={`p-1.5 rounded-2xl border flex items-center gap-1 shadow-xs ${
+                theme === 'dark' ? 'bg-slate-950 border-slate-800/80' : 'bg-white border-slate-200'
+              }`}>
+                <button
+                  type="button"
+                  id="tab-btn-layout"
+                  onClick={() => setRightPanelTab('layout')}
+                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    rightPanelTab === 'layout'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      : theme === 'dark'
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Layout className="w-3.5 h-3.5 shrink-0" />
+                  <span>Layout</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="tab-btn-crop"
+                  onClick={() => setRightPanelTab('crop')}
+                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    rightPanelTab === 'crop'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      : theme === 'dark'
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Crop className="w-3.5 h-3.5 shrink-0" />
+                  <span>Crop & Align</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="tab-btn-enhance"
+                  onClick={() => setRightPanelTab('enhance')}
+                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    rightPanelTab === 'enhance'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      : theme === 'dark'
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>AI HD</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="tab-btn-dress"
+                  onClick={() => setRightPanelTab('dress')}
+                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                    rightPanelTab === 'dress'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      : theme === 'dark'
+                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  }`}
+                >
+                  <Shirt className="w-3.5 h-3.5 shrink-0" />
+                  <span>Dress & Studio</span>
+                </button>
+              </div>
+
+              {/* TAB CONTENT CONTAINER */}
+              <div className="w-full">
+                {rightPanelTab === 'layout' && (
+                  <PassportLayoutTab
+                    language={language}
+                    theme={theme}
+                    selectedSizePreset={selectedSizePreset}
+                    onSelectSizePreset={(preset) => setSizePreset(preset.id)}
+                    sheetSize={sheetSize}
+                    onSelectSheetSize={setSheetSize}
+                    selectedSheetPreset={selectedSheetPreset}
+                    customWidthMm={customWidthMm}
+                    setCustomWidthMm={setCustomWidthMm}
+                    customHeightMm={customHeightMm}
+                    setCustomHeightMm={setCustomHeightMm}
+                    customPaperWidthMm={customPaperWidthMm}
+                    setCustomPaperWidthMm={setCustomPaperWidthMm}
+                    customPaperHeightMm={customPaperHeightMm}
+                    setCustomPaperHeightMm={setCustomPaperHeightMm}
+                    photosCopiesCount={photosCopiesCount}
+                    setPhotosCopiesCount={setPhotosCopiesCount}
+                    maxCopiesOnPaper={maxCopiesOnPaper}
+                    availablePresetSizes={PASSPORT_PRESETS}
+                    sheetSizePresets={SHEET_SIZE_PRESETS}
+                  />
+                )}
+
+                {rightPanelTab === 'crop' && (
+                  <PassportCropTab
+                    language={language}
+                    theme={theme}
+                    selectedSizePreset={selectedSizePreset}
+                    openPhotoshopCropModal={openPhotoshopCropModal}
+                    zoom={zoom}
+                    setZoom={setZoom}
+                    rotation={rotation}
+                    setRotation={setRotation}
+                    brightness={brightness}
+                    setBrightness={setBrightness}
+                    contrast={contrast}
+                    setContrast={setContrast}
+                    borderWidth={borderWidth}
+                    setBorderWidth={setBorderWidth}
+                    resetAdjustments={() => {
+                      setZoom(1.0);
+                      setRotation(0);
+                      setBrightness(100);
+                      setContrast(100);
+                    }}
+                  />
+                )}
+
+                {rightPanelTab === 'enhance' && (
+                  <PassportEnhanceTab
+                    language={language}
+                    theme={theme}
+                    isRemovingBg={isRemovingBg}
+                    removedBgImg={removedBgImg}
+                    rawRemovedBgImg={rawRemovedBgImg}
+                    enhancedBgImg={enhancedBgImg}
+                    useEnhancedPhoto={useEnhancedPhoto}
+                    isEnhancing={isEnhancing}
+                    enhanceFastMode={enhanceFastMode}
+                    setEnhanceFastMode={setEnhanceFastMode}
+                    enhancementStatus={enhancementStatus}
+                    enhanceStepText={enhanceStepText}
+                    enhancementErrorMsg={enhancementErrorMsg}
+                    enhanceCount={enhanceCount}
+                    handleManualEnhanceClick={handleManualEnhanceClick}
+                    handleToggleEnhanced={handleToggleEnhanced}
+                    handleResetEnhancement={handleResetEnhancement}
+                    runBackgroundRemoval={runBackgroundRemoval}
+                    bgColor={bgColorType}
+                    setBgColor={setBgColorType}
+                    customBgColor={customBgColor}
+                    setCustomBgColor={setCustomBgColor}
+                  />
+                )}
+
+                {rightPanelTab === 'dress' && (
+                  <PassportDressStudioTab
+                    language={language}
+                    theme={theme}
+                    dressState={dressState}
+                    onDressStateChange={handleDressStateChangeFromPanel}
+                    onApplyDress={handleQuickSuitApply}
+                    isBgRemoved={Boolean(removedBgImg)}
+                    bgColorType={bgColorType}
+                    setBgColorType={setBgColorType}
+                    customBgColor={customBgColor}
+                    setCustomBgColor={setCustomBgColor}
+                    borderWidth={borderWidth}
+                    setBorderWidth={setBorderWidth}
+                    t={t}
+                  />
+                )}
+              </div>
+
 
           </div>
 
         </div>
+      </div>
       )}
 
       {/* Background Removal Error Modal Overlay */}
@@ -2987,7 +2354,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 ❌ Background Removal Failed
               </h3>
               <p className={`text-sm leading-relaxed ${
-                theme === 'dark' ? 'text-slate-300' : 'text-slate-650'
+                theme === 'dark' ? 'text-slate-300' : 'text-slate-600'
               }`}>
                 We couldn't remove the background from this image. Please try again or upload a different image.
               </p>
@@ -3442,7 +2809,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                 <button
                   type="button"
                   onClick={applyCrop}
-                  className="flex-1 sm:flex-initial text-center justify-center px-4 sm:px-5 py-2.5 sm:py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-550 text-white shadow-lg shadow-blue-600/30 flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
+                  className="flex-1 sm:flex-initial text-center justify-center px-4 sm:px-5 py-2.5 sm:py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-600/30 flex items-center gap-1.5 cursor-pointer active:scale-[0.98]"
                 >
                   <Check className="w-4 h-4 shrink-0" />
                   <span className="truncate">{language === 'hi' ? 'क्रॉप लागू करें (Apply)' : 'Apply Crop (Enter)'}</span>

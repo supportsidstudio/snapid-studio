@@ -147,7 +147,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
 
           {/* Email Card Highlight */}
           <div className={`p-4 rounded-xl border ${
-            theme === 'dark' ? 'bg-slate-900/40 border-slate-850' : 'bg-slate-50 border-slate-200'
+            theme === 'dark' ? 'bg-slate-900/40 border-slate-800' : 'bg-slate-50 border-slate-200'
           } space-y-2`}>
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
               Support Email Address
@@ -198,7 +198,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                     setMessage('');
                   }}
                   className={`px-4 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
-                    theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:bg-slate-850' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                    theme === 'dark' ? 'bg-slate-900 border-slate-800 hover:bg-slate-800' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
                   }`}
                 >
                   {language === 'hi' ? 'नया लिखें' : 'Write Another'}
@@ -272,7 +272,7 @@ export default function ContactSection({ language, theme }: ContactSectionProps)
                 <button
                   type="submit"
                   disabled={isSending || !message.trim()}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-550 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center gap-2 shadow-md shadow-blue-950/20 cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center gap-2 shadow-md shadow-blue-950/20 cursor-pointer"
                 >
                   <Send className={`w-4 h-4 ${isSending ? 'animate-pulse' : ''}`} />
                   <span>{isSending ? (language === 'hi' ? 'भेजा जा रहा है...' : 'Sending Message...') : t.contactSendBtn}</span>

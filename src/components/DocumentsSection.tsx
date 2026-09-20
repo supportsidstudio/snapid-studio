@@ -36,6 +36,8 @@ import {
 } from '../types';
 import { translations } from '../translations';
 import { jsPDF } from 'jspdf';
+import { printCanvasAsA4Pdf } from '../utils/pdf-print-helper';
+import { generateSampleAadhaarDocuments } from '../utils/sampleAssets';
 
 interface DocumentsSectionProps {
   language: AppLanguage;
@@ -111,6 +113,52 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
 
   // UI Tabs
   const [previewTab, setPreviewTab] = useState<'individual' | 'assembly'>('individual');
+  const [isPrintingDoc, setIsPrintingDoc] = useState(false);
+
+  // Sample Documents State & Loader
+  const [isLoadingSampleDocs, setIsLoadingSampleDocs] = useState(false);
+
+  const handleLoadSampleDocuments = async () => {
+    try {
+      setIsLoadingSampleDocs(true);
+      const { front, back } = await generateSampleAadhaarDocuments();
+      
+      const aadhaarAspect = 85.6 / 54;
+      setActiveDocType('aadhaar');
+
+      // Front side
+      setFrontOriginal(front);
+      setFrontImage(front);
+      setFrontAspect(aadhaarAspect);
+      setFrontZoom(1.0);
+      setFrontPanX(0);
+      setFrontPanY(0);
+      setFrontRot(0);
+      setFrontBright(100);
+      setFrontContrast(100);
+
+      // Back side
+      setBackOriginal(back);
+      setBackImage(back);
+      setBackAspect(aadhaarAspect);
+      setBackZoom(1.0);
+      setBackPanX(0);
+      setBackPanY(0);
+      setBackRot(0);
+      setBackBright(100);
+      setBackContrast(100);
+
+      setActiveSide('front');
+      setDetectionFailedSide(null);
+      setDetectionFailed(false);
+
+      await renderAllDocumentCanvases(front, back, aadhaarAspect, aadhaarAspect);
+    } catch (err) {
+      console.error('Failed to load sample documents:', err);
+    } finally {
+      setIsLoadingSampleDocs(false);
+    }
+  };
 
   // Sync body class to hide overlapping fixed floating widgets (Feedback, etc.) during cropping
   useEffect(() => {
@@ -1576,24 +1624,9 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         aCanvas.width = widthPx;
         aCanvas.height = heightPx;
 
+        // Clean white paper background without grid artifacts
         aCtx.fillStyle = '#ffffff';
         aCtx.fillRect(0, 0, widthPx, heightPx);
-
-        // Draw grid scale markers
-        aCtx.strokeStyle = '#e2e8f0';
-        aCtx.lineWidth = 1;
-        for (let x = 0; x < widthPx; x += Math.round(20 * dpm)) {
-          aCtx.beginPath();
-          aCtx.moveTo(x, 0);
-          aCtx.lineTo(x, heightPx);
-          aCtx.stroke();
-        }
-        for (let y = 0; y < heightPx; y += Math.round(20 * dpm)) {
-          aCtx.beginPath();
-          aCtx.moveTo(0, y);
-          aCtx.lineTo(widthPx, y);
-          aCtx.stroke();
-        }
 
         // Calculate card dimensions on A4 sheet - ALWAYS standard horizontal photocopy card (85.6mm x 54mm)
         const itemWPx = Math.round(selectedDocPreset.widthMm * dpm);
@@ -1986,7 +2019,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     }
   };
 
-  // eMitra / Cyber Cafe Instant direct print system on standard A4 layout
+  // eMitra / Cyber Cafe Instant direct print system on standard A4 layout via 300 DPI PDF hidden iframe
   const handleDirectPrintDoc = async () => {
     if (!frontImage && !backImage) {
       alert(language === 'hi'
@@ -2003,10 +2036,18 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         : 'Print Error: Layout canvas is not available.');
       return;
     }
-    await syncDocPrintArea(canvas);
-    setTimeout(() => {
+
+    try {
+      setIsPrintingDoc(true);
+      await printCanvasAsA4Pdf(canvas, docPrintOrientation);
+    } catch (err) {
+      console.error('[Document PDF Print Error]:', err);
+      // Fallback
+      await syncDocPrintArea(canvas);
       window.print();
-    }, 50);
+    } finally {
+      setIsPrintingDoc(false);
+    }
   };
 
   // Instant Ctrl+P / Cmd+P Keyboard Interceptor for Documents
@@ -2015,10 +2056,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
         if ((frontImage || backImage) && assemblyCanvasRef.current) {
           e.preventDefault();
-          await syncDocPrintArea();
-          setTimeout(() => {
-            window.print();
-          }, 40);
+          handleDirectPrintDoc();
         }
       }
     };
@@ -2102,7 +2140,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 activeDocType === doc.id
                   ? 'border-blue-500 bg-blue-500/10 text-blue-500 shadow-sm'
                   : theme === 'dark' 
-                    ? 'border-slate-800 hover:border-slate-750 text-slate-400 hover:text-white bg-slate-900/30'
+                    ? 'border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white bg-slate-900/30'
                     : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
               }`}
               title={language === 'hi' ? doc.nameHi : doc.nameEn}
@@ -2239,7 +2277,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         onMouseLeave={handleMouseUpOrLeave}
                         style={{ aspectRatio: (activeSide === 'front' ? frontAspect : backAspect) || selectedDocPreset.aspectRatio }}
                         className={`relative w-auto h-full max-h-[290px] shadow-2xl overflow-hidden border-2 select-none cursor-move rounded-md group ${
-                          theme === 'dark' ? 'border-slate-850 bg-slate-900 shadow-black' : 'border-black bg-white'
+                          theme === 'dark' ? 'border-slate-800 bg-slate-900 shadow-black' : 'border-black bg-white'
                         }`}
                       >
                         {/* Front Canvas */}
@@ -2288,7 +2326,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                           ? 'border-blue-500 bg-blue-500/10 scale-[1.03] ring-4 ring-blue-500/10'
                           : theme === 'dark'
                             ? 'border-slate-800 bg-slate-900/40 hover:border-slate-700'
-                            : 'border-slate-200 bg-slate-500/5 hover:border-slate-350'
+                            : 'border-slate-200 bg-slate-500/5 hover:border-slate-400'
                       }`}
                     >
                       <Upload className={`w-10 h-10 mx-auto mb-3 transition-colors ${isDragOverStage ? 'text-blue-500 animate-bounce' : 'text-slate-400'}`} />
@@ -2305,7 +2343,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 {/* Display active modifications tags */}
                 {((activeSide === 'front' && frontImage) || (activeSide === 'back' && backImage)) && (
                   <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3 mt-4">
-                    <div className="flex flex-wrap justify-center sm:justify-start gap-2 sm:gap-4 text-[10px] font-mono text-slate-550 bg-slate-500/5 px-3 py-2 rounded-xl w-full sm:w-auto">
+                    <div className="flex flex-wrap justify-center sm:justify-start gap-2 sm:gap-4 text-[10px] font-mono text-slate-500 bg-slate-500/5 px-3 py-2 rounded-xl w-full sm:w-auto">
                       <span>Target: {selectedDocPreset.widthMm}x{selectedDocPreset.heightMm}mm</span>
                       <span>Rot: {currentRotState}°</span>
                     </div>
@@ -2315,7 +2353,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                         setCropModalSide(activeSide);
                         setCropModalOpen(true);
                       }}
-                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-555 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/15 hover:shadow-lg cursor-pointer active:scale-95 shrink-0"
+                      className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-extrabold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 shadow-md shadow-emerald-950/15 hover:shadow-lg cursor-pointer active:scale-95 shrink-0"
                     >
                       <Sliders className="w-3.5 h-3.5 text-white" />
                       <span>{language === 'hi' ? 'मैन्युअल क्रॉप करें' : 'Manual Crop Document'}</span>
@@ -2349,11 +2387,15 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               type="button"
               id="snapid-doc-print-btn"
               onClick={handleDirectPrintDoc}
-              className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-550 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer border border-blue-500/20 subtle-glow-button active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={!frontImage && !backImage}
+              className="w-full py-2 sm:py-2.5 md:py-3.5 px-2 sm:px-3 md:px-4 rounded-xl font-bold text-[11px] sm:text-xs md:text-sm lg:text-base text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-700 flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer border border-blue-500/20 subtle-glow-button active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={(!frontImage && !backImage) || isPrintingDoc}
             >
-              <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
-              <span>Print</span>
+              {isPrintingDoc ? (
+                <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0 animate-spin" />
+              ) : (
+                <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 shrink-0" />
+              )}
+              <span>{isPrintingDoc ? (language === 'hi' ? 'तैयार हो रहा है...' : 'Preparing...') : 'Print'}</span>
             </button>
             
             {/* 2. PRINT LAYOUT / BACK TO EDIT BUTTON */}
@@ -2459,6 +2501,55 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 <Sparkles className="w-3 h-3 text-blue-500 animate-pulse" />
                 <span>AI Auto-Crop</span>
               </span>
+            </div>
+
+            {/* Instant Try with Sample Documents Feature Card */}
+            <div className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
+              theme === 'dark'
+                ? 'bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900/60 border-blue-500/30 shadow-md'
+                : 'bg-gradient-to-r from-blue-50 via-indigo-50/60 to-sky-50/50 border-blue-200/80 shadow-xs'
+            }`}>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
+                    <Sparkles className="w-5 h-5 text-cyan-300" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        {language === 'hi' ? '⚡ नमूना आधार कार्ड (Front + Back)' : '⚡ Try with Sample Documents'}
+                      </span>
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        DEMO
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {language === 'hi'
+                        ? 'बिना स्कैन किए Realistic Aadhaar (Front + Back) के साथ तुरंत प्रिंट टेस्ट करें'
+                        : 'Instantly test Front & Back printing with realistic specimen Aadhaar cards'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleLoadSampleDocuments}
+                  disabled={isLoadingSampleDocs}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl font-bold text-xs text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 cursor-pointer transform active:scale-95 transition-all disabled:opacity-70 whitespace-nowrap shrink-0"
+                >
+                  {isLoadingSampleDocs ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>{language === 'hi' ? 'तैयार हो रहा है...' : 'Loading Demo Docs...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                      <span>{language === 'hi' ? '⚡ नमूना दस्तावेज़ लोड करें' : '⚡ Load Sample Aadhaar'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Front upload zone */}
@@ -2834,7 +2925,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     layoutStyle === preset.id
                       ? 'border-blue-500 bg-blue-500/5 text-blue-500'
                       : theme === 'dark' 
-                        ? 'border-slate-800 hover:border-slate-750 text-slate-300 hover:text-white bg-slate-900/30'
+                        ? 'border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white bg-slate-900/30'
                         : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
                   }`}
                 >
@@ -2886,7 +2977,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 type="button"
                 onClick={downloadAssemblyPdf}
                 className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer ${
-                  theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-850'
+                  theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -2915,7 +3006,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
         >
           <div 
             className={`w-full max-w-4xl rounded-2xl border ${
-              theme === 'dark' ? 'bg-slate-950 border-slate-800 shadow-black' : 'bg-slate-900 border-slate-750 shadow-2xl'
+              theme === 'dark' ? 'bg-slate-950 border-slate-800 shadow-black' : 'bg-slate-900 border-slate-700 shadow-2xl'
             } p-4 sm:p-5 flex flex-col space-y-3.5 text-white my-auto`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -3010,7 +3101,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 <button
                   type="button"
                   onClick={() => setCropBox({ x: 2, y: 2, w: 96, h: 96 })}
-                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-lg font-bold text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
                   title="Fit entire image"
                 >
                   <Maximize2 className="w-3 h-3 text-slate-400" />
@@ -3020,7 +3111,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             </div>
 
             {/* Stage Container */}
-            <div className="flex-1 flex items-center justify-center bg-slate-950 p-2 sm:p-3 rounded-xl relative border border-slate-850 select-none overflow-hidden min-h-[280px] max-h-[50vh]">
+            <div className="flex-1 flex items-center justify-center bg-slate-950 p-2 sm:p-3 rounded-xl relative border border-slate-800 select-none overflow-hidden min-h-[280px] max-h-[50vh]">
               <div 
                 ref={displayContainerRef}
                 className="relative max-w-full max-h-[46vh] flex items-center justify-center select-none"
@@ -3198,7 +3289,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(-90)}
-                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="-90°"
                   >
                     -90°
@@ -3206,7 +3297,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(-1)}
-                    className="flex-1 px-2 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="-1°"
                   >
                     -1°
@@ -3214,7 +3305,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(1)}
-                    className="flex-1 px-2 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-mono font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="+1°"
                   >
                     +1°
@@ -3222,7 +3313,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => rotateModalBy(90)}
-                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="flex-1 px-2 py-1 rounded text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                     title="+90°"
                   >
                     +90°
@@ -3249,7 +3340,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                   <button
                     type="button"
                     onClick={() => setCropModalOpen(false)}
-                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-750 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors"
                   >
                     Cancel
                   </button>
