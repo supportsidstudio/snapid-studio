@@ -261,9 +261,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         setContrast(100);
         setDressState(INITIAL_DRESS_STATE);
         setActiveTab('adjust');
+        setRightPanelTab('layout');
         setShowBeforePreview(false);
 
-        // Run automatic U²-NetP background removal
+        // Run automatic MODNet background removal
         await runBackgroundRemoval(dataUrl);
       }
     } catch (err) {
@@ -808,7 +809,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     if (typeof window !== 'undefined' && 'caches' in window) {
       window.caches.keys().then((keys) => {
         keys.forEach((key) => {
-          if (key.includes('u2net') || key.startsWith('snapid-u2netp') || key === 'snapid-modnet-model-v1') {
+          if (key !== 'snapid-modnet-model-v3' && (key.includes('u2net') || key.startsWith('snapid-u2netp') || key.startsWith('snapid-modnet-model-'))) {
             console.log(`[Cache Invalidation] Deleting obsolete browser cache: ${key}`);
             window.caches.delete(key).catch(() => {});
           }
@@ -981,9 +982,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       setContrast(100);
       setDressState(INITIAL_DRESS_STATE);
       setActiveTab('adjust');
+      setRightPanelTab('layout');
       setShowBeforePreview(false); // Render the AI background removed by default
 
-      // Run automatic U²-NetP background removal
+      // Run automatic MODNet background removal
       await runBackgroundRemoval(optimizedUrl);
     } catch (err) {
       console.error('Image pre-processing failed:', err);
@@ -1020,7 +1022,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     }
   };
 
-  // Run AI Background removal in browser client-side using U²-NetP ONNX
+  // Run AI Background removal in browser client-side using MODNet ONNX
   const runBackgroundRemoval = (imageSrcToUse?: string) => {
     const src = imageSrcToUse || originalImage;
     if (!src) return;
@@ -1099,6 +1101,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             setEnhancementErrorMsg(null);
             setUseEnhancedPhoto(false);
             setEnhanceCount(0);
+            // Automatically activate Crop & Align tab once background removal finishes
+            setRightPanelTab('crop');
           }
         } catch (err) {
           console.error('Error removing background via MODNet ONNX:', err);
@@ -2053,6 +2057,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     setEnhanceCount(0);
                     setEnhancementStatus('ready');
                     setEnhancementErrorMsg(null);
+                    setRightPanelTab('layout');
                   }}
                   className={`flex-1 px-3 py-2 rounded-xl text-xs font-semibold border flex items-center justify-center gap-1.5 transition-colors cursor-pointer subtle-glow-button ${
                     theme === 'dark'

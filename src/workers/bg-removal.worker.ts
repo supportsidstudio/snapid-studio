@@ -58,7 +58,7 @@ function getModelSources(): string[] {
   ];
 }
 
-const CACHE_NAME = 'snapid-modnet-model-v2';
+const CACHE_NAME = 'snapid-modnet-model-v3';
 
 try {
   ort.env.logLevel = 'error';
@@ -248,6 +248,8 @@ function preprocessImage(
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Could not get 2D context from OffscreenCanvas');
 
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
   const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
   const data = imageData.data;
@@ -302,17 +304,21 @@ async function generateTransparentImage(
     let alphaFloat = Math.max(0, Math.min(1, rawAlpha));
 
     // Refinement curve:
-    // - Pure background noise floor (< 0.03): 100% transparent (alpha = 0)
-    // - Solid subject core (face, eyes, torso, collar, shirt) (> 0.95): 100% solid opaque (alpha = 255)
-    // - Hair strands, ears, and soft boundaries [0.03, 0.95]: smooth natural photographic transition
-    if (alphaFloat <= 0.03) {
+    // MODNet matte ranges from 0.0 (background) to 1.0 (subject).
+    // Subtle ear contours and thin protrusions often produce model confidence around 0.3 - 0.65.
+    // With previous high solid-threshold (0.95), ears stayed semi-transparent or got clipped at edges.
+    // New refined curve:
+    // - Background floor (< 0.04): 100% transparent (cleans up any faint background fog)
+    // - Foreground solid threshold (>= 0.60): 100% fully solid opaque (guarantees ears, hair rims, and collars are completely solid)
+    // - Smooth transition zone [0.04, 0.60]: smooth curve with gentle power gamma (0.75) ensuring thin protrusions like ears get full body
+    if (alphaFloat <= 0.04) {
       alphaFloat = 0;
-    } else if (alphaFloat >= 0.95) {
+    } else if (alphaFloat >= 0.60) {
       alphaFloat = 1.0;
     } else {
-      // Smooth Hermite interpolation for natural boundary softness
-      const t = (alphaFloat - 0.03) / (0.95 - 0.03);
-      alphaFloat = t * t * (3 - 2 * t);
+      const t = (alphaFloat - 0.04) / (0.60 - 0.04);
+      // Gentle curve that boosts midtones (ears, thin hair strands) toward opacity
+      alphaFloat = Math.pow(t, 0.75);
     }
 
     const alphaByte = Math.round(alphaFloat * 255);
