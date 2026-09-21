@@ -100,9 +100,6 @@ export async function printCanvasAsA4Pdf(
   const imgData = canvas.toDataURL('image/png', 1.0);
   doc.addImage(imgData, 'PNG', 0, 0, widthMm, heightMm, undefined, 'FAST');
 
-  // Embed native print open-action directive
-  doc.autoPrint({ variant: 'non-conform' });
-
   const pdfBlob = doc.output('blob');
   return printPdfBlobDirectly(pdfBlob);
 }

@@ -65,8 +65,8 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
   const t = translations[language];
   const [isPaperSizesExpanded, setIsPaperSizesExpanded] = useState<boolean>(false);
 
-  // Top 4 commonly used paper sizes (A4 is standard default for Cyber Cafe & eMitra)
-  const commonSheetIds: SheetSizeId[] = ['size_a4', 'size_4x6', 'size_5x7', 'single'];
+  // Top 4 commonly used paper sizes (4x6 is standard photo paper default)
+  const commonSheetIds: SheetSizeId[] = ['size_4x6', 'size_a4', 'size_5x7', 'single'];
 
   // In collapsed mode, show the 4 common sizes + the currently selected one if it's not in top 4
   const visibleCollapsedSheets = sheetSizePresets.filter(

@@ -20,14 +20,13 @@ function getAppBaseUrl(): string {
     // If worker is located in /assets/ subdirectory
     const assetsIndex = href.lastIndexOf('/assets/');
     if (assetsIndex !== -1) {
-      return href.substring(0, assetsIndex + 1); // e.g. "https://supportsidstudio.github.io/snapid-studio/"
+      return href.substring(0, assetsIndex + 1);
     }
     try {
       const url = new URL(href);
       if (url.origin && !url.origin.startsWith('blob:') && !url.origin.startsWith('file:')) {
         const pathSegments = url.pathname.split('/').filter(Boolean);
         if (pathSegments.length > 1) {
-          // Sub-path deployment (e.g. /snapid-studio/...)
           return `${url.origin}/${pathSegments[0]}/`;
         }
         return `${url.origin}/`;
@@ -44,17 +43,22 @@ function getWasmBasePath(): string {
   return `${base.replace(/\/+$/, '')}/onnxruntime/`;
 }
 
+/**
+ * MODNet: Real-Time Trimap-Free Portrait Matting
+ * Photographic portrait matting model specifically trained on human portraits
+ * (head, hair, eyes, neck, collar, clothes, and shoulders).
+ */
 function getModelSources(): string[] {
   const base = getAppBaseUrl();
-  const localModel = `${base.replace(/\/+$/, '')}/models/u2netp.onnx`;
+  const localModel = `${base.replace(/\/+$/, '')}/models/modnet.onnx`;
   return [
     localModel,
-    'https://huggingface.co/edgetools/u2netp/resolve/main/u2netp.onnx',
-    'https://huggingface.co/Heliosoph/u2net-onnx/resolve/main/u2netp.onnx'
+    'https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/modnet_photographic_portrait_matting.onnx',
+    'https://huggingface.co/DavG25/modnet-pretrained-models/resolve/main/modnet_photographic_portrait_matting.onnx'
   ];
 }
 
-const CACHE_NAME = 'snapid-u2netp-model-v3';
+const CACHE_NAME = 'snapid-modnet-model-v2';
 
 try {
   ort.env.logLevel = 'error';
@@ -70,18 +74,19 @@ try {
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
 
-  // Purge legacy caches asynchronously
+  // Immediately eradicate all legacy caches (old U2NetP models and previous versions)
   if (typeof caches !== 'undefined') {
     caches.keys().then((keys) => {
       keys.forEach((key) => {
-        if (key.startsWith('snapid-u2netp-model-') && key !== CACHE_NAME) {
+        if (key !== CACHE_NAME && (key.includes('u2net') || key.startsWith('snapid-u2netp-model-') || key.startsWith('snapid-modnet-model-'))) {
+          console.log(`[MODNet Worker] Evicting legacy cache: ${key}`);
           caches.delete(key).catch(() => {});
         }
       });
     }).catch(() => {});
   }
 } catch (e) {
-  console.warn('[U2NetP Worker] Initial wasmPaths configuration warning:', e);
+  console.warn('[MODNet Worker] Initial wasmPaths configuration warning:', e);
 }
 
 let session: ort.InferenceSession | null = null;
@@ -95,17 +100,17 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
     resolvedUrl = `${base.replace(/\/+$/, '')}${url}`;
   }
 
-  // 1. Try retrieving from persistent browser Cache API for instantaneous load (<15ms)
+  // 1. Try retrieving from persistent browser Cache API for instantaneous load (<20ms)
   if (typeof caches !== 'undefined') {
     try {
       const cache = await caches.open(CACHE_NAME);
       const cached = await cache.match(resolvedUrl);
       if (cached) {
         const cachedBuffer = await cached.arrayBuffer();
-        if (cachedBuffer.byteLength >= 4000000) {
+        if (cachedBuffer.byteLength >= 20000000) {
           const header = new Uint8Array(cachedBuffer, 0, 4);
           if (header[0] === 0x08) {
-            console.log(`[U2NetP Worker] Loaded model instantly from Cache API (${(cachedBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+            console.log(`[MODNet Worker] Loaded model instantly from Cache API (${(cachedBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
             return cachedBuffer;
           }
         }
@@ -115,16 +120,15 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
     }
   }
 
-  console.log(`[U2NetP Worker] Fetching U²-NetP model binary from: ${resolvedUrl}`);
-  // Use default cache strategy so that stale 404 or corrupted responses are never served
+  console.log(`[MODNet Worker] Fetching MODNet model binary from: ${resolvedUrl}`);
   const response = await fetch(resolvedUrl);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} (${response.statusText})`);
   }
   const buffer = await response.arrayBuffer();
-  if (buffer.byteLength < 4000000) {
-    // Standard U2NetP model is ~4.3MB. Small size means 404 HTML, git lfs pointer, or truncated download
-    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes`);
+  if (buffer.byteLength < 20000000) {
+    // MODNet photographic portrait matting model is ~24-26MB
+    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes (expected >= 20MB)`);
   }
 
   // Validate protobuf ONNX magic header (starts with 0x08)
@@ -140,17 +144,18 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
       await cache.put(resolvedUrl, new Response(buffer.slice(0), {
         headers: { 'Content-Type': 'application/octet-stream' }
       }));
+      console.log(`[MODNet Worker] Cached model binary in browser CacheStorage (${CACHE_NAME})`);
     } catch {
       // Ignore cache put error
     }
   }
 
-  console.log(`[U2NetP Worker] Successfully verified U²-NetP model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB) from: ${resolvedUrl}`);
+  console.log(`[MODNet Worker] Successfully verified MODNet model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB) from: ${resolvedUrl}`);
   return buffer;
 }
 
 /**
- * Loads and caches the U2-NetP ONNX inference session once.
+ * Loads and caches the MODNet ONNX inference session once.
  * Reuses the cached session across all subsequent image requests.
  */
 async function getSession(): Promise<ort.InferenceSession> {
@@ -167,9 +172,6 @@ async function getSession(): Promise<ort.InferenceSession> {
           ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
           : 2)
       : 1;
-
-    // Determine if deployment is GitHub Pages or file protocol
-    const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
 
     // Try creating session with each verified model source until one succeeds
     for (const source of modelSources) {
@@ -201,10 +203,10 @@ async function getSession(): Promise<ort.InferenceSession> {
             ort.env.wasm.simd = true;
             ort.env.wasm.proxy = false;
             createdSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-            console.log(`[U2NetP Worker] U²-NetP session active via ${cfg.label}! Inputs: [${createdSession.inputNames.join(', ')}]`);
+            console.log(`[MODNet Worker] MODNet session active via ${cfg.label}! Inputs: [${createdSession.inputNames.join(', ')}], Outputs: [${createdSession.outputNames.join(', ')}]`);
             break;
           } catch (cfgErr) {
-            console.warn(`[U2NetP Worker] ${cfg.label} initialization failed, trying next configuration...`, cfgErr);
+            console.warn(`[MODNet Worker] ${cfg.label} initialization failed, trying next configuration...`, cfgErr);
             lastInitError = cfgErr;
           }
         }
@@ -216,14 +218,14 @@ async function getSession(): Promise<ort.InferenceSession> {
 
         throw lastInitError || new Error('All WASM initialization attempts failed for this model buffer.');
       } catch (srcErr: any) {
-        console.warn(`[U2NetP Worker] Failed loading model from source ${source}:`, srcErr.message || srcErr);
+        console.warn(`[MODNet Worker] Failed loading model from source ${source}:`, srcErr.message || srcErr);
         lastError = srcErr;
       }
     }
 
     sessionLoadingPromise = null;
-    const finalErr = new Error(`Could not initialize U²-NetP ONNX session from any source. Reason: ${lastError?.message || lastError}`);
-    console.error('[U2NetP Worker] Failed to load ONNX session:', finalErr);
+    const finalErr = new Error(`Could not initialize MODNet ONNX session from any source. Reason: ${lastError?.message || lastError}`);
+    console.error('[MODNet Worker] Failed to load ONNX session:', finalErr);
     throw finalErr;
   })();
 
@@ -231,13 +233,13 @@ async function getSession(): Promise<ort.InferenceSession> {
 }
 
 /**
- * Preprocesses an ImageBitmap into a 320x320 Float32Array NCHW tensor
- * normalized using standard ImageNet mean & std expected by U²-Net.
+ * Preprocesses an ImageBitmap into a 512x512 Float32Array NCHW tensor
+ * normalized using standard MODNet photographic portrait normalization: (pixel - 127.5) / 127.5.
  */
 function preprocessImage(
   imageBitmap: ImageBitmap,
-  targetWidth = 320,
-  targetHeight = 320
+  targetWidth = 512,
+  targetHeight = 512
 ): { tensor: ort.Tensor; origWidth: number; origHeight: number } {
   const origWidth = imageBitmap.width;
   const origHeight = imageBitmap.height;
@@ -253,19 +255,12 @@ function preprocessImage(
   const numPixels = targetWidth * targetHeight;
   const tensorData = new Float32Array(3 * numPixels);
 
-  // ImageNet standard mean and std used by U2-Net
-  const meanR = 0.485, meanG = 0.456, meanB = 0.406;
-  const stdR = 0.229, stdG = 0.224, stdB = 0.225;
-
   for (let i = 0; i < numPixels; i++) {
     const px = i * 4;
-    const r = data[px] / 255.0;
-    const g = data[px + 1] / 255.0;
-    const b = data[px + 2] / 255.0;
-
-    tensorData[i] = (r - meanR) / stdR;                      // Channel 0 (Red)
-    tensorData[numPixels + i] = (g - meanG) / stdG;          // Channel 1 (Green)
-    tensorData[2 * numPixels + i] = (b - meanB) / stdB;      // Channel 2 (Blue)
+    // MODNet normalization: (pixel - 127.5) / 127.5
+    tensorData[i] = (data[px] - 127.5) / 127.5;                   // Channel 0 (Red)
+    tensorData[numPixels + i] = (data[px + 1] - 127.5) / 127.5;   // Channel 1 (Green)
+    tensorData[2 * numPixels + i] = (data[px + 2] - 127.5) / 127.5;// Channel 2 (Blue)
   }
 
   const tensor = new ort.Tensor('float32', tensorData, [1, 3, targetHeight, targetWidth]);
@@ -273,30 +268,25 @@ function preprocessImage(
 }
 
 /**
- * Applies the predicted 320x320 saliency mask back to the original full-resolution image,
- * producing a transparent RGBA PNG Blob with 100% original dimensions preserved.
+ * Applies MODNet's 512x512 photographic portrait alpha matte cleanly onto
+ * the original full-resolution image.
+ *
+ * NOTE: Unlike U2-NetP which required extensive heuristic cones, shoulder protection
+ * bounds, and flood-fill patches, MODNet is natively trained specifically for human portraits.
+ * It detects the entire upper body (face, eyes, neck, collar, clothes, shoulders, and hair)
+ * with studio-grade matting precision and continuous edge blending.
  */
 async function generateTransparentImage(
   imageBitmap: ImageBitmap,
-  d0Data: Float32Array | Float64Array | number[],
-  maskWidth = 320,
-  maskHeight = 320
+  matteData: Float32Array | Float64Array | number[],
+  maskWidth = 512,
+  maskHeight = 512
 ): Promise<Blob> {
   const origWidth = imageBitmap.width;
   const origHeight = imageBitmap.height;
-
-  // 1. Min-max normalization of d0 saliency output
-  let minVal = Infinity;
-  let maxVal = -Infinity;
   const numPixels = maskWidth * maskHeight;
-  for (let i = 0; i < numPixels; i++) {
-    const val = d0Data[i];
-    if (val < minVal) minVal = val;
-    if (val > maxVal) maxVal = val;
-  }
-  const range = (maxVal - minVal) || 1;
 
-  // 2. Generate 320x320 alpha mask ImageData with crisp edge refinement
+  // 1. Construct 512x512 Alpha Matte Canvas
   const maskCanvas = new OffscreenCanvas(maskWidth, maskHeight);
   const maskCtx = maskCanvas.getContext('2d');
   if (!maskCtx) throw new Error('Could not get mask canvas context');
@@ -305,36 +295,42 @@ async function generateTransparentImage(
   const maskData = maskImageData.data;
 
   for (let i = 0; i < numPixels; i++) {
-    let norm = (d0Data[i] - minVal) / range;
-    
-    // Smooth threshold curve for passport photo portrait edges
-    // Cleans up background haze while retaining fine hair edges
-    if (norm < 0.04) {
-      norm = 0;
-    } else if (norm > 0.96) {
-      norm = 1;
-    } else {
-      // Smoothstep curve: 3x^2 - 2x^3
-      norm = norm * norm * (3 - 2 * norm);
-    }
-    
-    const alpha = Math.round(Math.max(0, Math.min(1, norm)) * 255);
     const px = i * 4;
+    const rawAlpha = matteData[i];
+
+    // Clamp value between 0 and 1
+    let alphaFloat = Math.max(0, Math.min(1, rawAlpha));
+
+    // Refinement curve:
+    // - Pure background noise floor (< 0.03): 100% transparent (alpha = 0)
+    // - Solid subject core (face, eyes, torso, collar, shirt) (> 0.95): 100% solid opaque (alpha = 255)
+    // - Hair strands, ears, and soft boundaries [0.03, 0.95]: smooth natural photographic transition
+    if (alphaFloat <= 0.03) {
+      alphaFloat = 0;
+    } else if (alphaFloat >= 0.95) {
+      alphaFloat = 1.0;
+    } else {
+      // Smooth Hermite interpolation for natural boundary softness
+      const t = (alphaFloat - 0.03) / (0.95 - 0.03);
+      alphaFloat = t * t * (3 - 2 * t);
+    }
+
+    const alphaByte = Math.round(alphaFloat * 255);
+
     maskData[px] = 255;
     maskData[px + 1] = 255;
     maskData[px + 2] = 255;
-    maskData[px + 3] = alpha;
+    maskData[px + 3] = alphaByte;
   }
 
   maskCtx.putImageData(maskImageData, 0, 0);
 
-  // 3. Composite onto high-resolution canvas preserving passport-grade sharpness
-  // Clamp maximum dimension to 1600px to avoid huge 20MP+ camera photos choking memory and PNG encoding
+  // 2. Composite onto full-resolution canvas preserving passport photo crispness
   let targetOutW = origWidth;
   let targetOutH = origHeight;
-  const MAX_DIM = 1600;
+  const MAX_DIM = 2000;
   if (targetOutW > MAX_DIM || targetOutH > MAX_DIM) {
-    const scale = Math.min(MAX_DIM / targetOutW, MAX_DIM / targetOutH);
+    const scale = Math.min(MAX_DIM / targetOutW, Math.max(MAX_DIM / targetOutH, 0.1));
     targetOutW = Math.round(targetOutW * scale);
     targetOutH = Math.round(targetOutH * scale);
   }
@@ -343,16 +339,15 @@ async function generateTransparentImage(
   const finalCtx = finalCanvas.getContext('2d');
   if (!finalCtx) throw new Error('Could not get final canvas context');
 
-  // Draw original image scaled smoothly
+  // Draw original image at target dimensions
   finalCtx.drawImage(imageBitmap, 0, 0, targetOutW, targetOutH);
 
-  // Blend mask smoothly using destination-in
+  // Apply alpha mask smoothly with high-quality bicubic interpolation
   finalCtx.globalCompositeOperation = 'destination-in';
   finalCtx.imageSmoothingEnabled = true;
   finalCtx.imageSmoothingQuality = 'high';
   finalCtx.drawImage(maskCanvas, 0, 0, targetOutW, targetOutH);
 
-  // 4. Convert to PNG blob
   const resultBlob = await finalCanvas.convertToBlob({ type: 'image/png' });
   return resultBlob;
 }
@@ -379,36 +374,41 @@ self.onmessage = async (e: MessageEvent) => {
   } else if (type === 'removeBackground') {
     try {
       const startTime = performance.now();
-      self.postMessage({ type: 'progress', step: 'Loading...', percent: 25 });
+      self.postMessage({ type: 'progress', step: 'Loading AI Model...', percent: 25 });
 
       // Get or load cached session
       const activeSession = await getSession();
 
-      self.postMessage({ type: 'progress', step: 'Processing...', percent: 50 });
+      self.postMessage({ type: 'progress', step: 'Extracting portrait...', percent: 50 });
       const imageBitmap = await createImageBitmap(blob);
-      const { tensor, origWidth, origHeight } = preprocessImage(imageBitmap, 320, 320);
+      const { tensor, origWidth, origHeight } = preprocessImage(imageBitmap, 512, 512);
 
-      self.postMessage({ type: 'progress', step: 'Removing background...', percent: 75 });
-      const inputName = activeSession.inputNames[0] || 'input.1';
-      const outputName = activeSession.outputNames[0] || '1959';
+      self.postMessage({ type: 'progress', step: 'Matting background...', percent: 75 });
+      const inputName = activeSession.inputNames[0] || 'input';
+      const outputName = activeSession.outputNames[0] || 'output';
 
       const inferenceStart = performance.now();
       const results = await activeSession.run({ [inputName]: tensor });
       const inferenceElapsed = (performance.now() - inferenceStart).toFixed(1);
-      console.log(`[U2NetP Worker] Inference completed in ${inferenceElapsed}ms`);
+      console.log(`[MODNet Worker] Inference completed in ${inferenceElapsed}ms`);
 
-      self.postMessage({ type: 'progress', step: 'Finishing...', percent: 90 });
+      self.postMessage({ type: 'progress', step: 'Rendering portrait...', percent: 90 });
       const outputTensor = results[outputName];
-      const d0Data = outputTensor.data as Float32Array;
+      const matteData = outputTensor.data as Float32Array;
 
-      const finalBlob = await generateTransparentImage(imageBitmap, d0Data, 320, 320);
+      const finalBlob = await generateTransparentImage(imageBitmap, matteData, 512, 512);
       
       const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
-      console.log(`[U2NetP Worker] Full background removal completed in ${totalTime}s (Original Size: ${origWidth}x${origHeight}px)`);
+      console.log(`[MODNet Worker] Full portrait matting completed in ${totalTime}s (Original Size: ${origWidth}x${origHeight}px)`);
 
-      self.postMessage({ type: 'success', blob: finalBlob, inferenceTimeMs: Number(inferenceElapsed), totalTimeSec: Number(totalTime) });
+      self.postMessage({
+        type: 'success',
+        blob: finalBlob,
+        inferenceTimeMs: Number(inferenceElapsed),
+        totalTimeSec: Number(totalTime)
+      });
     } catch (error: any) {
-      console.error('[U2NetP Worker] Error during background removal:', error);
+      console.error('[MODNet Worker] Error during portrait background removal:', error);
       session = null;
       self.postMessage({ type: 'error', error: error?.message || String(error) });
     }

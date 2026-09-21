@@ -193,60 +193,6 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
 }
 
-/* Zero-delay instant print sheet rules */
-#snapid-global-print-area {
-  display: none !important;
-}
-
-@media print {
-  @page {
-    margin: 0mm !important;
-    size: auto;
-  }
-  
-  html, body {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    width: 100% !important;
-    height: 100% !important;
-    overflow: hidden !important;
-  }
-
-  body > *:not(#snapid-global-print-area) {
-    display: none !important;
-  }
-
-  #snapid-global-print-area {
-    display: flex !important;
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background-color: #ffffff !important;
-    justify-content: center !important;
-    align-items: center !important;
-    z-index: 99999999 !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  #snapid-global-print-area img {
-    max-width: 100% !important;
-    max-height: 100% !important;
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: contain !important;
-    display: block !important;
-    margin: auto !important;
-    image-rendering: -webkit-optimize-contrast !important;
-    image-rendering: high-quality !important;
-  }
-}
-
 /* Hide fixed floating elements (like Feedback pill) when modal/crop station is active */
 body.snapid-modal-open aside[aria-label="User Feedback"] {
   display: none !important;

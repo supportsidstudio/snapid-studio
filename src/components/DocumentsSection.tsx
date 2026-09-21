@@ -1721,11 +1721,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
             drawItem(bCanvas, startX, activeY + itemHPx + marginY, 'Back');
           }
         }
-
-        // Synchronize directly into global print DOM element
-        if (curFront || curBack) {
-          await syncDocPrintArea(aCanvas);
-        }
       }
     }
   };
@@ -1969,56 +1964,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     }
   };
 
-  // Sync document print area with pre-decode and dynamic page rules
-  const syncDocPrintArea = async (customCanvas?: HTMLCanvasElement | null) => {
-    const canvas = customCanvas || assemblyCanvasRef.current;
-    if (!canvas || (!frontImage && !backImage)) return false;
-
-    try {
-      const dataUrl = canvas.toDataURL('image/png');
-      let printContainer = document.getElementById('snapid-global-print-area');
-      if (!printContainer) {
-        printContainer = document.createElement('div');
-        printContainer.id = 'snapid-global-print-area';
-        printContainer.style.display = 'none';
-        document.body.appendChild(printContainer);
-      } else {
-        printContainer.style.display = 'none';
-      }
-
-      let img = printContainer.querySelector('img') as HTMLImageElement | null;
-      if (!img) {
-        img = document.createElement('img');
-        img.alt = 'Document Print Sheet';
-        printContainer.appendChild(img);
-      }
-      img.src = dataUrl;
-
-      let styleEl = document.getElementById('snapid-print-style') as HTMLStyleElement | null;
-      if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = 'snapid-print-style';
-        document.head.appendChild(styleEl);
-      }
-      styleEl.innerHTML = `
-        @media print {
-          @page {
-            size: A4 ${docPrintOrientation} !important;
-            margin: 0mm !important;
-          }
-        }
-      `;
-
-      if (img.decode) {
-        await img.decode().catch(() => {});
-      }
-      return true;
-    } catch (err) {
-      console.warn('Doc print sync error:', err);
-      return false;
-    }
-  };
-
   // eMitra / Cyber Cafe Instant direct print system on standard A4 layout via 300 DPI PDF hidden iframe
   const handleDirectPrintDoc = async () => {
     if (!frontImage && !backImage) {
@@ -2042,9 +1987,9 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       await printCanvasAsA4Pdf(canvas, docPrintOrientation);
     } catch (err) {
       console.error('[Document PDF Print Error]:', err);
-      // Fallback
-      await syncDocPrintArea(canvas);
-      window.print();
+      alert(language === 'hi'
+        ? 'प्रिंट तैयार करने में त्रुटि हुई। कृपया PDF या PNG डाउनलोड करके प्रिंट करें।'
+        : 'Error preparing document print. Please try downloading as PDF or PNG to print.');
     } finally {
       setIsPrintingDoc(false);
     }
@@ -2066,17 +2011,6 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [frontImage, backImage, docPrintOrientation, layoutStyle, docPrintCopiesCount, docPrintCopiesMode]);
-
-  useEffect(() => {
-    const handleBeforePrint = () => {
-      syncDocPrintArea();
-    };
-
-    window.addEventListener('beforeprint', handleBeforePrint);
-    return () => {
-      window.removeEventListener('beforeprint', handleBeforePrint);
-    };
-  }, [frontImage, backImage, docPrintOrientation]);
 
   const currentZoomState = activeSide === 'front' ? frontZoom : backZoom;
   const currentRotState = activeSide === 'front' ? frontRot : backRot;

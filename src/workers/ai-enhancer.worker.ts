@@ -294,15 +294,25 @@ function applyAutoExposure(imageData: ImageData): void {
 
   let gamma = 1.0;
   if (avgLuma < 110) {
-    gamma = Math.max(0.82, 1.0 - (110 - avgLuma) * 0.0026);
+    gamma = Math.max(0.85, 1.0 - (110 - avgLuma) * 0.0022);
   } else if (avgLuma > 165) {
-    gamma = Math.min(1.10, 1.0 + (avgLuma - 165) * 0.0018);
+    gamma = Math.min(1.08, 1.0 + (avgLuma - 165) * 0.0015);
   }
 
   if (Math.abs(gamma - 1.0) > 0.01) {
     const lut = new Uint8Array(256);
     for (let i = 0; i < 256; i++) {
-      lut[i] = Math.max(0, Math.min(255, Math.round(Math.pow(i / 255, gamma) * 255)));
+      if (i < 30) {
+        // PITCH-BLACK LOCK: Preserve deep blacks for pupils, irises & eyelashes (NO LIFT)
+        lut[i] = i;
+      } else if (i < 70) {
+        // Smooth transition from original black level to gamma curve
+        const t = (i - 30) / 40;
+        const gammaVal = Math.round(Math.pow(i / 255, gamma) * 255);
+        lut[i] = Math.max(0, Math.min(255, Math.round(i * (1 - t) + gammaVal * t)));
+      } else {
+        lut[i] = Math.max(0, Math.min(255, Math.round(Math.pow(i / 255, gamma) * 255)));
+      }
     }
     for (let i = 0; i < len; i += 4) {
       if (data[i + 3] > 30) {
@@ -334,26 +344,37 @@ function applyAutoColorAndSkinGuard(imageData: ImageData): void {
   const avgB = sumB / count;
   const avgGray = (avgR + avgG + avgB) / 3;
 
-  const scaleR = Math.max(0.96, Math.min(1.04, avgGray / (avgR || 1)));
-  const scaleG = Math.max(0.97, Math.min(1.03, avgGray / (avgG || 1)));
-  const scaleB = Math.max(0.96, Math.min(1.04, avgGray / (avgB || 1)));
+  const scaleR = Math.max(0.97, Math.min(1.03, avgGray / (avgR || 1)));
+  const scaleG = Math.max(0.98, Math.min(1.02, avgGray / (avgG || 1)));
+  const scaleB = Math.max(0.97, Math.min(1.03, avgGray / (avgB || 1)));
 
   for (let i = 0; i < len; i += 4) {
     if (data[i + 3] > 30) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
+      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
 
-      const isSkin = r > g && g > b && (r - b) > 12;
-      const blend = isSkin ? 0.20 : 0.65;
+      // Dark features (pupils, dark irises, eyelashes, eyebrows, hair) OR non-skin tones MUST NOT be gray-shifted!
+      const isDarkFeature = luma < 55;
+      const isSkin = r > g && g > b && (r - b) > 10;
 
-      const nr = r * (1 - blend + scaleR * blend);
-      const ng = g * (1 - blend + scaleG * blend);
-      const nb = b * (1 - blend + scaleB * blend);
+      let blend = 0.0; // Default zero color shift for non-skin / dark eye features
+      if (isSkin && !isDarkFeature) {
+        blend = 0.18; // Subtle skin color normalization only
+      } else if (!isDarkFeature && luma > 180) {
+        blend = 0.15; // Subtle background / highlight adjustment only
+      }
 
-      data[i] = Math.max(0, Math.min(255, Math.round(nr)));
-      data[i + 1] = Math.max(0, Math.min(255, Math.round(ng)));
-      data[i + 2] = Math.max(0, Math.min(255, Math.round(nb)));
+      if (blend > 0) {
+        const nr = r * (1 - blend + scaleR * blend);
+        const ng = g * (1 - blend + scaleG * blend);
+        const nb = b * (1 - blend + scaleB * blend);
+
+        data[i] = Math.max(0, Math.min(255, Math.round(nr)));
+        data[i + 1] = Math.max(0, Math.min(255, Math.round(ng)));
+        data[i + 2] = Math.max(0, Math.min(255, Math.round(nb)));
+      }
     }
   }
 }
@@ -372,7 +393,7 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
   const src = new Uint8ClampedArray(imageData.data);
   const dst = imageData.data;
 
-  // Multi-band unsharp masking with luminance decomposition
+  // Multi-band unsharp masking with 8-neighbor isotropic local mean & eye feature enhancement
   for (let y = 2; y < h - 2; y++) {
     for (let x = 2; x < w - 2; x++) {
       const idx = (y * w + x) * 4;
@@ -384,24 +405,43 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
       const luma = 0.299 * r + 0.587 * g + 0.114 * b;
 
       // Skin tone detection
-      const isSkin = r > g && g > b && (r - b) > 10 && luma > 35 && luma < 235;
+      const isSkin = r > g && g > b && (r - b) > 10 && luma > 40 && luma < 235;
+      const isEyeFeature = luma < 60 || (luma > 200 && (x > w * 0.25 && x < w * 0.75 && y > h * 0.15 && y < h * 0.60));
 
-      // 1. Fine 3x3 local mean (high-frequency micro-texture / pores)
-      const topIdx = ((y - 1) * w + x) * 4;
-      const botIdx = ((y + 1) * w + x) * 4;
-      const leftIdx = (y * w + (x - 1)) * 4;
-      const rightIdx = (y * w + (x + 1)) * 4;
+      // 1. Isotropic 3x3 8-neighbor local mean (eliminates 4-cross artifacts on circular pupils/irises)
+      const rowTop = (y - 1) * w;
+      const rowMid = y * w;
+      const rowBot = (y + 1) * w;
 
-      // 2. Wide 5x5 local mean (medium-frequency / hair strands & feature edges)
-      const top2Idx = ((y - 2) * w + x) * 4;
-      const bot2Idx = ((y + 2) * w + x) * 4;
-      const left2Idx = (y * w + (x - 2)) * 4;
-      const right2Idx = (y * w + (x + 2)) * 4;
+      const n0 = (rowTop + (x - 1)) * 4;
+      const n1 = (rowTop + x) * 4;
+      const n2 = (rowTop + (x + 1)) * 4;
+      const n3 = (rowMid + (x - 1)) * 4;
+      const n4 = (rowMid + (x + 1)) * 4;
+      const n5 = (rowBot + (x - 1)) * 4;
+      const n6 = (rowBot + x) * 4;
+      const n7 = (rowBot + (x + 1)) * 4;
+
+      // 2. Wide 5x5 8-point outer sampling for medium frequency
+      const rowTop2 = (y - 2) * w;
+      const rowBot2 = (y + 2) * w;
+
+      const w0 = (rowTop2 + x) * 4;
+      const w1 = (rowBot2 + x) * 4;
+      const w2 = (rowMid + (x - 2)) * 4;
+      const w3 = (rowMid + (x + 2)) * 4;
 
       for (let c = 0; c < 3; c++) {
         const val = src[idx + c];
-        const mean3 = (src[topIdx + c] + src[botIdx + c] + src[leftIdx + c] + src[rightIdx + c]) * 0.25;
-        const mean5 = (src[top2Idx + c] + src[bot2Idx + c] + src[left2Idx + c] + src[right2Idx + c]) * 0.25;
+
+        // 8-neighbor isotropic mean
+        const mean3 = (
+          src[n0 + c] + src[n1 + c] + src[n2 + c] +
+          src[n3 + c]               + src[n4 + c] +
+          src[n5 + c] + src[n6 + c] + src[n7 + c]
+        ) * 0.125;
+
+        const mean5 = (src[w0 + c] + src[w1 + c] + src[w2 + c] + src[w3 + c]) * 0.25;
 
         const diffHigh = val - mean3;
         const diffMed = mean3 - mean5;
@@ -409,15 +449,23 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
         let delta = 0;
 
         if (isSkin) {
-          // In skin zones: strongly enhance fine pore range (diffHigh 1.2 to 22) while preventing coarse blotchiness
+          // Skin zones: enhance fine pores while avoiding coarse blotchiness
           if (Math.abs(diffHigh) > 0.8 && Math.abs(diffHigh) < 28) {
             delta += diffHigh * 0.52;
           }
           if (Math.abs(diffMed) > 1.0 && Math.abs(diffMed) < 32) {
             delta += diffMed * 0.28;
           }
+        } else if (isEyeFeature) {
+          // Eye & eyelash zone: ultra-crisp edge definition for iris ring, eyelashes, eyebrows & catchlights
+          if (Math.abs(diffHigh) > 0.5 && Math.abs(diffHigh) < 55) {
+            delta += diffHigh * 0.85; // Strong crisp eye sharpness
+          }
+          if (Math.abs(diffMed) > 0.8 && Math.abs(diffMed) < 65) {
+            delta += diffMed * 0.55;
+          }
         } else {
-          // In non-skin zones (eyes, eyelashes, eyebrows, hair, clothing): sharp crisp edge enhancement
+          // Hair, clothing, background edges
           if (Math.abs(diffHigh) > 0.8 && Math.abs(diffHigh) < 45) {
             delta += diffHigh * 0.65;
           }
@@ -427,10 +475,17 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
         }
 
         // Anti-halo soft roll-off clamp
-        const maxDelta = isSkin ? 24 : 38;
+        const maxDelta = isSkin ? 24 : 45;
         const clampedDelta = Math.max(-maxDelta, Math.min(maxDelta, delta));
 
-        dst[idx + c] = Math.max(0, Math.min(255, Math.round(val + clampedDelta)));
+        let finalVal = val + clampedDelta;
+
+        // PITCH-BLACK PUPIL PROTECTION: Core pupil pixels (< 25 luma) stay deep pitch black
+        if (luma < 25 && c < 3) {
+          finalVal = Math.min(val, finalVal);
+        }
+
+        dst[idx + c] = Math.max(0, Math.min(255, Math.round(finalVal)));
       }
     }
   }

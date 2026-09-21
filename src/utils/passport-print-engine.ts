@@ -476,9 +476,6 @@ export async function executeDedicatedFinalPrint(
       }
     }
 
-    // Embed auto-print command in the PDF catalog
-    doc.autoPrint({ variant: 'non-conform' });
-
     // Output pure in-memory Blob (no download to disk)
     const pdfBlob = doc.output('blob');
 

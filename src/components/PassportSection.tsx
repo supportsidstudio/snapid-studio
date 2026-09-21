@@ -89,9 +89,9 @@ const getWorker = () => {
   return bgWorker;
 };
 
-const U2NETP_CONFIG = {
-  model: 'u2netp.onnx',
-  inputSize: 320,
+const MODNET_CONFIG = {
+  model: 'modnet.onnx',
+  inputSize: 512,
   license: 'Apache-2.0'
 };
 
@@ -143,8 +143,8 @@ export const PASSPORT_PRESETS: PassportSizePreset[] = [
 ];
 
 export const SHEET_SIZE_PRESETS: SheetSizePreset[] = [
-  { id: 'size_a4', nameEn: 'A4 (210 x 297 mm)', nameHi: 'A4 (210x297 mm)', widthMm: 210, heightMm: 297, category: 'Standard Paper' },
   { id: 'size_4x6', nameEn: '4 x 6" (10x15 cm)', nameHi: '4x6" (10x15 cm)', widthMm: 101.6, heightMm: 152.4, category: 'Photo Paper' },
+  { id: 'size_a4', nameEn: 'A4 (210 x 297 mm)', nameHi: 'A4 (210x297 mm)', widthMm: 210, heightMm: 297, category: 'Standard Paper' },
   { id: 'size_5x7', nameEn: '5 x 7" (13x18 cm)', nameHi: '5x7" (13x18 cm)', widthMm: 127, heightMm: 178, category: 'Photo Paper' },
   { id: 'size_a6', nameEn: 'A6 (105 x 148 mm)', nameHi: 'A6 (105x148 mm)', widthMm: 105, heightMm: 148, category: 'Standard Paper' },
   { id: 'size_a5', nameEn: 'A5 (148 x 210 mm)', nameHi: 'A5 (148x210 mm)', widthMm: 148, heightMm: 210, category: 'Standard Paper' },
@@ -193,9 +193,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
   const [enhanceStepText, setEnhanceStepText] = useState<string>('');
   
-  // Settings & Toggles (Default Paper is A4 - standard for Cyber Cafe & eMitra)
+  // Settings & Toggles (Default Paper is 4x6 Photo Paper)
   const [sizePreset, setSizePreset] = useState<PassportPresetId>('eu_uk');
-  const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_a4');
+  const [sheetSize, setSheetSize] = useState<SheetSizeId>('size_4x6');
   const [customWidthMm, setCustomWidthMm] = useState<number>(35);
   const [customHeightMm, setCustomHeightMm] = useState<number>(45);
   const [customPaperWidthMm, setCustomPaperWidthMm] = useState<number>(100);
@@ -299,6 +299,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const sheetCanvasRef = useRef<HTMLCanvasElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Photoshop Pro Studio Crop Station state
   const [cropModalOpen, setCropModalOpen] = useState(false);
@@ -803,6 +804,18 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   }, []);
 
   useEffect(() => {
+    // Eradicate any obsolete U2NetP or legacy model caches directly from the user's browser CacheStorage
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      window.caches.keys().then((keys) => {
+        keys.forEach((key) => {
+          if (key.includes('u2net') || key.startsWith('snapid-u2netp') || key === 'snapid-modnet-model-v1') {
+            console.log(`[Cache Invalidation] Deleting obsolete browser cache: ${key}`);
+            window.caches.delete(key).catch(() => {});
+          }
+        });
+      }).catch(() => {});
+    }
+
     const preloadModel = async () => {
       try {
         await globalPreload();
@@ -996,6 +1009,17 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     }
   };
 
+  const handleUploadBoxClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('button, input, a, label')) {
+      return;
+    }
+    if (isMobile) {
+      galleryInputRef.current?.click();
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
   // Run AI Background removal in browser client-side using U²-NetP ONNX
   const runBackgroundRemoval = (imageSrcToUse?: string) => {
     const src = imageSrcToUse || originalImage;
@@ -1063,7 +1087,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           });
 
           const totalElapsed = ((performance.now() - overallStart) / 1000).toFixed(2);
-          console.log(`[U2-NetP PIPELINE TOTAL] Background removal completed in ${totalElapsed}s`);
+          console.log(`[MODNet PIPELINE TOTAL] Background removal completed in ${totalElapsed}s`);
 
           // Only update the state if this represents the latest requested image
           if (src === latestRequestedSrcRef.current) {
@@ -1077,7 +1101,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             setEnhanceCount(0);
           }
         } catch (err) {
-          console.error('Error removing background via U²-NetP ONNX:', err);
+          console.error('Error removing background via MODNet ONNX:', err);
           setBgRemovalError(true);
         } finally {
           // If no more pending tasks in queue, stop the loading animation
@@ -1089,7 +1113,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         }
       })
       .catch((err) => {
-        console.error('Unhandled error in U²-NetP background removal queue:', err);
+        console.error('Unhandled error in MODNet background removal queue:', err);
         setBgRemovalError(true);
         if (pendingRequestsCountRef.current === 0) {
           setIsRemovingBg(false);
@@ -1656,161 +1680,153 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       </div>
 
       {!originalImage ? (
-        /* Authentic Studio Showcase & Upload Section (Replaces empty curtain/placeholder) */
-        <div className="w-full max-w-5xl mx-auto space-y-6">
+        /* Spacious Studio Upload Section & Sample Photo Station */
+        <div className="w-full max-w-4xl mx-auto space-y-6">
           <div className={`relative overflow-hidden rounded-3xl border p-6 sm:p-10 ${
             theme === 'dark'
               ? 'bg-gradient-to-br from-slate-900/90 via-blue-950/20 to-slate-900/90 border-blue-500/30 shadow-[0_0_30px_rgba(37,99,235,0.15)]'
               : 'bg-gradient-to-br from-white via-blue-50/50 to-indigo-50/30 border-blue-200/80 shadow-[0_8px_30px_rgba(37,99,235,0.08)]'
           }`}>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+            
+            {/* 100% Clickable Main Upload Box / Dropzone */}
+            <div 
+              onClick={handleUploadBoxClick}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`group border-2 border-dashed rounded-2xl p-8 sm:p-12 text-center transition-all cursor-pointer ${
+                isDragOver 
+                  ? 'border-blue-500 bg-blue-500/10 scale-[1.01]' 
+                  : theme === 'dark'
+                    ? 'border-slate-700 hover:border-blue-400 bg-slate-900/50 hover:bg-slate-900/80'
+                    : 'border-slate-300 hover:border-blue-500 bg-white/70 hover:bg-white/90'
+              }`}
+            >
+              <div className="w-14 h-14 rounded-2xl bg-blue-600/15 text-blue-500 group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <Upload className="w-7 h-7" />
+              </div>
               
-              {/* Left Column: Authentic Real Human Passport Photo Studio Mockup */}
-              <div className="md:col-span-5 flex flex-col items-center text-center">
-                <div className="relative group">
-                  {/* Subtle Studio Glow Behind Headshot */}
-                  <div className="absolute -inset-2 bg-gradient-to-tr from-blue-600/30 via-cyan-500/20 to-indigo-600/30 rounded-2xl blur-lg pointer-events-none opacity-80 group-hover:opacity-100 transition-opacity" />
-                  
-                  {/* Framed Real Human Passport Photo */}
-                  <div className="relative w-44 sm:w-52 aspect-[35/45] rounded-xl bg-white p-1.5 shadow-2xl border-2 border-white/80 dark:border-slate-700 overflow-hidden">
-                    <img 
-                      src={samplePhotoPreviewSrc}
-                      onError={() => setSamplePhotoPreviewSrc(SAMPLE_FEMALE_PASSPORT_DATA_URL)}
-                      alt="Professional Real Human Passport Headshot"
-                      className="w-full h-full object-cover rounded-lg"
-                    />
-                    
-                    {/* Corner Registration Crop Guides */}
-                    <div className="absolute top-3 left-3 w-3 h-3 border-t-2 border-l-2 border-cyan-400" />
-                    <div className="absolute top-3 right-3 w-3 h-3 border-t-2 border-r-2 border-cyan-400" />
-                    <div className="absolute bottom-3 left-3 w-3 h-3 border-b-2 border-l-2 border-cyan-400" />
-                    <div className="absolute bottom-3 right-3 w-3 h-3 border-b-2 border-r-2 border-cyan-400" />
+              <h3 className="font-extrabold text-lg sm:text-xl text-slate-900 dark:text-white tracking-tight">
+                {t.photoUploadLabel}
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-1 mb-6">
+                {t.photoUploadSubText}
+              </p>
 
-                    {/* Quality Stamp Badge */}
-                    <div className="absolute bottom-3 inset-x-3 bg-slate-950/85 backdrop-blur-xs text-white rounded-md py-1 px-2 flex items-center justify-between text-[9px] font-mono border border-cyan-400/40">
-                      <span className="font-bold text-cyan-300">300 DPI</span>
-                      <span className="text-emerald-400 font-bold">ICAO 9303</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Instant Try with Sample Photo Button */}
-                <div className="mt-4 w-full max-w-xs">
+              {/* Action Buttons */}
+              {isMobile ? (
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-sm mx-auto">
                   <button
                     type="button"
-                    onClick={handleLoadSamplePhoto}
-                    disabled={isLoadingSample}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 cursor-pointer transform active:scale-95 transition-all disabled:opacity-75"
+                    onClick={(e) => { e.stopPropagation(); cameraInputRef.current?.click(); }}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md cursor-pointer"
                   >
-                    {isLoadingSample ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>{language === 'hi' ? 'लोड हो रहा है...' : 'Loading Sample...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4 text-cyan-300" />
-                        <span>{language === 'hi' ? '⚡ नमूना फोटो से तुरंत आज़माएं' : '⚡ Try with Sample Photo'}</span>
-                      </>
-                    )}
+                    <Camera className="w-4 h-4 shrink-0" />
+                    <span>Open Camera</span>
                   </button>
-                  <p className="text-[10.5px] text-slate-400 mt-1.5">
-                    {language === 'hi' ? 'बिना अपलोड किए सभी टूल्स का तुरंत परीक्षण करें' : 'Instantly test all features without uploading your own file'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Right Column: Upload Area (Drag-and-Drop + Select File) */}
-              <div className="md:col-span-7 flex flex-col justify-center">
-                <div 
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center transition-all ${
-                    isDragOver 
-                      ? 'border-blue-500 bg-blue-500/10 scale-[1.01]' 
-                      : theme === 'dark'
-                        ? 'border-slate-700 hover:border-blue-400 bg-slate-900/50'
-                        : 'border-slate-300 hover:border-blue-500 bg-white/70'
-                  }`}
-                >
-                  <div className="w-12 h-12 rounded-xl bg-blue-600/20 text-blue-500 flex items-center justify-center mx-auto mb-3">
-                    <Upload className="w-6 h-6 animate-bounce" />
-                  </div>
                   
-                  <h3 className="font-extrabold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight">
-                    {t.photoUploadLabel}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1 mb-5">
-                    {t.photoUploadSubText}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); galleryInputRef.current?.click(); }}
+                    className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs sm:text-sm border shadow-xs cursor-pointer ${
+                      theme === 'dark' 
+                        ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' 
+                        : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
+                    <span>Choose from Gallery</span>
+                  </button>
+
+                  <input 
+                    ref={cameraInputRef}
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment"
+                    onChange={handlePhotoUpload} 
+                    className="hidden" 
+                  />
+                  <input 
+                    ref={galleryInputRef}
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handlePhotoUpload} 
+                    className="hidden" 
+                  />
+                </div>
+              ) : (
+                <div className="inline-flex flex-col items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                    className="inline-flex items-center gap-2 px-7 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <Maximize2 className="w-4 h-4" />
+                    <span>Select Local Photo</span>
+                  </button>
+                  <p className="text-[11px] text-blue-600 dark:text-blue-400 font-semibold mt-1.5">
+                    {language === 'hi' ? '👉 या इस बॉक्स में कहीं भी क्लिक करें' : '👉 Or click anywhere inside this box'}
                   </p>
+                  <input 
+                    ref={fileInputRef}
+                    type="file" 
+                    accept="image/*" 
+                    onChange={handlePhotoUpload} 
+                    className="hidden" 
+                  />
+                </div>
+              )}
 
-                  {isMobile ? (
-                    <div className="flex flex-col gap-2.5 w-full max-w-[260px] mx-auto">
-                      <button
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer"
-                      >
-                        <Camera className="w-4 h-4 shrink-0" />
-                        <span>Open Camera</span>
-                      </button>
-                      
-                      <button
-                        onClick={() => galleryInputRef.current?.click()}
-                        className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs border shadow-xs cursor-pointer ${
-                          theme === 'dark' 
-                            ? 'bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200' 
-                            : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
-                        }`}
-                      >
-                        <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
-                        <span>Choose from Gallery</span>
-                      </button>
+              {/* Feature Badges */}
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono">
+                <span className="px-3 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
+                  ⚡ 300 DPI Output
+                </span>
+                <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                  AI Background Removal
+                </span>
+                <span className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
+                  Suits & Formal Attire
+                </span>
+              </div>
+            </div>
 
-                      <input 
-                        ref={cameraInputRef}
-                        type="file" 
-                        accept="image/*" 
-                        capture="environment"
-                        onChange={handlePhotoUpload} 
-                        className="hidden" 
-                      />
-                      <input 
-                        ref={galleryInputRef}
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handlePhotoUpload} 
-                        className="hidden" 
-                      />
-                    </div>
-                  ) : (
-                    <label className="inline-flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md shadow-blue-500/25 hover:shadow-blue-500/40 cursor-pointer active:scale-95 transition-all">
-                      <Maximize2 className="w-4 h-4" />
-                      <span>Select Local Photo</span>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        onChange={handlePhotoUpload} 
-                        className="hidden" 
-                      />
-                    </label>
-                  )}
-
-                  <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-[10.5px] font-mono">
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 font-bold">
-                      ⚡ 300 DPI Output
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
-                      AI Background Removal
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400">
-                      Suits & Formal Attire
-                    </span>
-                  </div>
+            {/* Prominent Full-Size Sample Photo Section */}
+            <div className="mt-6 pt-6 border-t border-slate-200/80 dark:border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/80 dark:bg-slate-900/60 p-5 sm:p-6 rounded-2xl border border-slate-200/60 dark:border-slate-800">
+              <div className="flex items-center gap-3.5 text-left">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+                  <Sparkles className="w-5 h-5 text-cyan-300" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                    {language === 'hi' ? 'कोई फोटो तैयार नहीं है?' : 'No Photo Ready? Try Our Sample Photo'}
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    {language === 'hi' ? 'बिना अपलोड किए सभी टूल्स का तुरंत परीक्षण करें' : 'Instantly test background removal, cropping & studio suits without uploading'}
+                  </p>
                 </div>
               </div>
 
+              <button
+                type="button"
+                onClick={handleLoadSamplePhoto}
+                disabled={isLoadingSample}
+                className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-500/25 cursor-pointer transform active:scale-95 transition-all disabled:opacity-75"
+              >
+                {isLoadingSample ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>{language === 'hi' ? 'लोड हो रहा है...' : 'Loading Sample...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-cyan-300" />
+                    <span>{language === 'hi' ? '⚡ नमूना फोटो से तुरंत आज़माएं' : '⚡ Try with Sample Photo'}</span>
+                  </>
+                )}
+              </button>
             </div>
+
           </div>
         </div>
       ) : (
