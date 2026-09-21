@@ -158,21 +158,21 @@ export default function PassportDressPanel({
       theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
     }`}>
       {/* Header */}
-      <div className="flex items-center justify-between border-b pb-2.5 border-slate-200/60 dark:border-slate-800/60">
+      <div className="flex items-center justify-between border-b pb-2.5 border-slate-200/80 dark:border-slate-800/80">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500 border border-blue-500/20">
-            <Shirt className="w-4 h-4 text-blue-500" />
+          <div className="p-1.5 rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25">
+            <Shirt className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="font-bold text-xs sm:text-sm tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+            <h3 className="font-extrabold text-xs sm:text-sm tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
               <span>{language === 'hi' ? '👔 ड्रेस एवं सूट स्टूडियो' : '👔 Dress & Suit Studio'}</span>
               {isSuitActive && (
-                <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                <span className="text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                   Applied
                 </span>
               )}
             </h3>
-            <p className="text-[10px] text-slate-400 font-medium">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
               {language === 'hi' ? 'फॉर्मल सूट, ब्लेज़र व साड़ी का स्मार्ट ओवरले' : 'Formal suits, blazers & attire overlay'}
             </p>
           </div>
@@ -183,7 +183,7 @@ export default function PassportDressPanel({
           <button
             type="button"
             onClick={handleOpenGuide}
-            className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-500/10 transition-colors cursor-pointer"
             title={language === 'hi' ? 'गाइड और शॉर्टकट' : 'Guide & Keyboard Shortcuts'}
           >
             <HelpCircle className="w-4 h-4" />
@@ -192,10 +192,10 @@ export default function PassportDressPanel({
             <button
               type="button"
               onClick={handleRemoveSuit}
-              className="text-[10px] font-bold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2 py-1 rounded-lg border border-rose-500/20 flex items-center gap-1 transition-colors cursor-pointer"
+              className="text-xs font-bold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1 rounded-lg border border-rose-500/20 flex items-center gap-1 transition-colors cursor-pointer"
               title="Remove Suit Overlay"
             >
-              <Trash2 className="w-3 h-3" />
+              <Trash2 className="w-3.5 h-3.5" />
               <span>Remove</span>
             </button>
           )}
@@ -203,16 +203,16 @@ export default function PassportDressPanel({
       </div>
 
       {/* Category Tabs: Men, Women, Kids */}
-      <div className={`flex p-1 rounded-xl border shrink-0 subtle-element-glow ${
-        theme === 'dark' ? 'bg-slate-900/80 border-slate-800' : 'bg-slate-100 border-slate-200'
+      <div className={`flex p-1 rounded-xl border shrink-0 ${
+        theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-100 border-slate-200'
       }`}>
         <button
           type="button"
           onClick={() => setSelectedCategory('men')}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
             selectedCategory === 'men'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-blue-600 text-white font-extrabold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
           }`}
         >
           <span>👨 {language === 'hi' ? 'पुरुष (Men)' : 'Men'}</span>
@@ -220,10 +220,10 @@ export default function PassportDressPanel({
         <button
           type="button"
           onClick={() => setSelectedCategory('women')}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
             selectedCategory === 'women'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-blue-600 text-white font-extrabold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
           }`}
         >
           <span>👩 {language === 'hi' ? 'महिलाएं (Women)' : 'Women'}</span>
@@ -231,10 +231,10 @@ export default function PassportDressPanel({
         <button
           type="button"
           onClick={() => setSelectedCategory('kids')}
-          className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
             selectedCategory === 'kids'
-              ? 'bg-blue-600 text-white shadow-sm'
-              : 'text-slate-400 hover:text-slate-200'
+              ? 'bg-blue-600 text-white font-extrabold shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold'
           }`}
         >
           <span>🧒 {language === 'hi' ? 'बच्चे (Kids)' : 'Kids'}</span>
@@ -242,13 +242,13 @@ export default function PassportDressPanel({
       </div>
 
       {/* Templates Grid */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs font-extrabold text-slate-800 dark:text-slate-200 uppercase tracking-wide">
           <span>{language === 'hi' ? 'टेम्पलेट चुनें (Select Attire):' : 'Select Attire Template:'}</span>
-          <span>{filteredTemplates.length} Available</span>
+          <span className="text-[11px] font-mono text-slate-500 font-normal">{filteredTemplates.length} Available</span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-xl border border-slate-200/40 dark:border-slate-800/40">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[260px] overflow-y-auto p-1 rounded-xl border border-slate-200 dark:border-slate-800/80">
           {filteredTemplates.map((template) => {
             const isSelected = dressState.templateId === template.id;
             const previewSvg = generateDressVectorDataUrl(template);
@@ -258,12 +258,12 @@ export default function PassportDressPanel({
                 key={template.id}
                 type="button"
                 onClick={() => handleSelectTemplate(template)}
-                className={`relative p-2 rounded-xl border text-left flex flex-col items-center gap-1.5 cursor-pointer transition-all subtle-glow-button group ${
+                className={`relative p-2 rounded-xl text-left flex flex-col items-center gap-1.5 cursor-pointer transition-all group ${
                   isSelected
-                    ? 'border-blue-500 bg-blue-500/15 ring-2 ring-blue-500 shadow-md shadow-blue-500/10'
+                    ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 ring-1 ring-blue-500/30 shadow-md shadow-blue-500/10 scale-[1.02]'
                     : theme === 'dark'
-                      ? 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900'
-                      : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-slate-100'
+                      ? 'border border-slate-800 bg-slate-900/40 hover:border-slate-700 hover:bg-slate-900 font-medium'
+                      : 'border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 font-medium shadow-2xs'
                 }`}
                 title={language === 'hi' ? template.nameHi : template.name}
               >
@@ -275,7 +275,7 @@ export default function PassportDressPanel({
                 )}
 
                 {/* Template Visual Thumbnail */}
-                <div className="w-14 h-16 rounded-lg bg-slate-950/40 border border-slate-700/50 flex items-center justify-center overflow-hidden p-0.5">
+                <div className="w-14 h-16 rounded-lg bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-center overflow-hidden p-0.5">
                   <img
                     src={getAssetUrl(template.imageSrc) || previewSvg}
                     alt={template.name}
@@ -289,10 +289,10 @@ export default function PassportDressPanel({
 
                 {/* Title */}
                 <div className="w-full text-center">
-                  <div className="text-[10px] font-bold truncate leading-tight text-slate-900 dark:text-slate-100">
+                  <div className={`text-xs truncate leading-tight ${isSelected ? 'font-extrabold text-blue-700 dark:text-blue-300' : 'font-bold text-slate-800 dark:text-slate-200'}`}>
                     {language === 'hi' ? template.nameHi.split('(')[0] : template.name.split('(')[0]}
                   </div>
-                  <div className="text-[8px] text-slate-400 font-mono truncate">
+                  <div className={`text-[9px] font-mono truncate mt-0.5 ${isSelected ? 'text-blue-600/80 dark:text-blue-300/80 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
                     {template.style ? template.style : template.category.toUpperCase()}
                   </div>
                 </div>
@@ -314,12 +314,12 @@ export default function PassportDressPanel({
         <button
           type="button"
           onClick={() => customFileInputRef.current?.click()}
-          className={`w-full py-2 px-3 rounded-xl text-xs font-semibold border border-dashed flex items-center justify-center gap-2 cursor-pointer transition-colors ${
+          className={`w-full py-2.5 px-3 rounded-xl text-xs font-bold border border-dashed flex items-center justify-center gap-2 cursor-pointer transition-colors ${
             dressState.templateId === 'custom_upload'
-              ? 'border-blue-500 bg-blue-500/10 text-blue-400 font-bold'
+              ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold'
               : theme === 'dark'
-                ? 'border-slate-700 hover:border-slate-600 text-slate-300 bg-slate-900/30'
-                : 'border-slate-300 hover:border-slate-400 text-slate-700 bg-slate-50'
+                ? 'border-slate-700 hover:border-slate-600 text-slate-300 bg-slate-900/30 hover:bg-slate-900/60'
+                : 'border-slate-300 hover:border-slate-400 text-slate-700 bg-white hover:bg-slate-50 shadow-2xs'
           }`}
         >
           <Upload className="w-3.5 h-3.5 text-blue-500" />

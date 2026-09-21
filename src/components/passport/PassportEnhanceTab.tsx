@@ -74,16 +74,16 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
   return (
     <div className="space-y-3.5">
       {/* 1. ✨ AI Photo Enhance Card */}
-      <div className={`p-4 rounded-2xl border subtle-glow-card ${
+      <div className={`p-4 rounded-2xl border ${
         theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
       } space-y-3.5`}>
-        <div className="flex items-center justify-between border-b pb-2 border-slate-200/60 dark:border-slate-800/60">
+        <div className="flex items-center justify-between border-b pb-2.5 border-slate-200/80 dark:border-slate-800/80">
           <div>
-            <h3 className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-1.5 text-slate-900 dark:text-slate-100">
+            <h3 className="font-extrabold text-xs sm:text-sm tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
               <Sparkles className="w-4 h-4 text-blue-500 shrink-0" />
               <span>✨ AI Photo Enhance</span>
             </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 font-medium">
               Improve clarity & studio print quality
             </p>
           </div>
@@ -91,21 +91,21 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
           {/* Status Badge */}
           <div>
             {enhancementStatus === 'enhancing' ? (
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1 animate-pulse">
-                <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
+                <RefreshCw className="w-3 h-3 animate-spin" />
                 <span>{language === 'hi' ? 'एन्हांस हो रहा है...' : 'Enhancing...'}</span>
               </span>
             ) : enhancementStatus === 'enhanced' ? (
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <Check className="w-2.5 h-2.5" />
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                <Check className="w-3 h-3 stroke-[3]" />
                 <span>Enhanced{enhanceCount > 1 ? ` (${enhanceCount}x)` : ''}</span>
               </span>
             ) : enhancementStatus === 'unavailable' ? (
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
                 Enhancement unavailable
               </span>
             ) : (
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-700/40">
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-700/40">
                 Ready
               </span>
             )}
@@ -114,7 +114,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
 
         {/* Error / Fallback Notification */}
         {enhancementErrorMsg && (
-          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400 flex items-start gap-2">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-500 flex items-start gap-2">
             <span className="text-xs">⚠️</span>
             <div className="leading-snug">
               <span className="font-semibold block">{enhancementErrorMsg}</span>
@@ -123,17 +123,17 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
         )}
 
         {/* Primary Enhance Photo Action Button */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-[10px] text-slate-400">
-            <span className="font-semibold uppercase tracking-wider">Enhance Engine:</span>
-            <div className="flex items-center bg-slate-900/60 dark:bg-slate-950/80 p-0.5 rounded-lg border border-slate-700/50">
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <span className="font-extrabold uppercase tracking-wide text-slate-800 dark:text-slate-200">Enhance Engine:</span>
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900/90 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
               <button
                 type="button"
                 onClick={() => setEnhanceFastMode(false)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
                   !enhanceFastMode
                     ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title={language === 'hi' ? 'उच्च गुणवत्ता AI HD एन्हांस' : 'High Quality AI HD Enhance'}
               >
@@ -142,10 +142,10 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
               <button
                 type="button"
                 onClick={() => setEnhanceFastMode(true)}
-                className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
                   enhanceFastMode
                     ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title={language === 'hi' ? 'फास्ट स्टूडियो क्लैरिटी पास' : 'Fast Studio Clarity Pass'}
               >
@@ -159,12 +159,12 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
             id="passport-enhance-action-btn"
             disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
             onClick={handleManualEnhanceClick}
-            className={`w-full py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+            className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 cursor-pointer transition-all ${
               isEnhancing
                 ? 'bg-blue-600 text-white cursor-wait opacity-80'
                 : enhanceFastMode
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-500/20 active:scale-[0.99] border border-amber-400/30'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 active:scale-[0.99] border border-blue-400/30'
+                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-500/25 active:scale-[0.99] border border-amber-400/40'
+                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 active:scale-[0.99] border border-blue-400/40'
             } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
           >
             {isEnhancing ? (
@@ -183,7 +183,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
               </>
             )}
           </button>
-          <p className="text-[11px] text-slate-400 text-center font-medium">
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
             {enhanceFastMode
               ? (language === 'hi' ? '⚡ तुरंत फोटो क्लैरिटी एन्हांसमेंट' : '⚡ Quick studio clarity enhancement')
               : (language === 'hi' ? '✨ उच्च गुणवत्ता स्टूडियो फोटो एन्हांसमेंट' : '✨ Studio quality photo enhancement')}
@@ -192,26 +192,26 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
 
         {/* Manual Selector: Use Enhanced / Use Original & Level Badge */}
         <div className="space-y-2 pt-1">
-          <div className="flex items-center justify-between text-[11px] font-medium text-slate-400">
+          <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-slate-300">
             <span className="flex items-center gap-1.5">
               <span>Photo Version:</span>
               {enhanceCount > 0 && (
-                <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.2 rounded border border-blue-500/20">
+                <span className="text-[10px] font-mono font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/15 px-2 py-0.5 rounded border border-blue-500/30">
                   {enhanceCount}x Level
                 </span>
               )}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 disabled={!enhancedBgImg || isEnhancing}
                 onClick={() => handleToggleEnhanced(true)}
-                className={`px-2.5 py-1 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer transition-colors ${
+                className={`px-3 py-1.5 text-xs font-extrabold rounded-lg cursor-pointer transition-all ${
                   useEnhancedPhoto && enhancedBgImg
                     ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
                     : theme === 'dark' 
-                      ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800' 
-                      : 'bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200'
+                      ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium' 
+                      : 'bg-white text-slate-600 hover:text-slate-800 border border-slate-200 font-medium'
                 } ${(!enhancedBgImg || isEnhancing) ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
                 {enhanceCount > 0 ? `Enhanced (${enhanceCount}x)` : 'Enhanced'}
@@ -220,12 +220,12 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                 type="button"
                 disabled={!rawRemovedBgImg || isEnhancing}
                 onClick={() => handleToggleEnhanced(false)}
-                className={`px-2.5 py-1 text-[10px] sm:text-xs font-bold rounded-lg cursor-pointer transition-colors ${
+                className={`px-3 py-1.5 text-xs font-extrabold rounded-lg cursor-pointer transition-all ${
                   !useEnhancedPhoto && rawRemovedBgImg
                     ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
                     : theme === 'dark' 
-                      ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800' 
-                      : 'bg-slate-100 text-slate-600 hover:text-slate-800 border border-slate-200'
+                      ? 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 font-medium' 
+                      : 'bg-white text-slate-600 hover:text-slate-800 border border-slate-200 font-medium'
                 } ${(!rawRemovedBgImg || isEnhancing) ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
                 Original (0x)
@@ -235,7 +235,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
 
           {/* Before / Enhanced Compact Preview & Info */}
           {rawRemovedBgImg && (
-            <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 ${
+            <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${
               theme === 'dark' ? 'bg-slate-900/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'
             }`}>
               <div className="flex items-center gap-2.5">
@@ -247,15 +247,15 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                     alt="Active Portrait Version" 
                     className="w-full h-full object-contain"
                   />
-                  <span className="absolute bottom-0 inset-x-0 text-[7px] font-black text-center bg-black/75 text-white py-0.2 uppercase tracking-tight">
+                  <span className="absolute bottom-0 inset-x-0 text-[8px] font-black text-center bg-black/80 text-white py-0.5 uppercase tracking-tight">
                     {useEnhancedPhoto && enhancedBgImg ? `${enhanceCount}x Pass` : 'Original'}
                   </span>
                 </div>
-                <div className="text-[10px]">
-                  <div className="font-bold text-slate-900 dark:text-slate-200 flex items-center gap-1.5">
+                <div className="text-xs">
+                  <div className="font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                     <span>{useEnhancedPhoto && enhancedBgImg ? `AI Enhanced (Clearer & Sharper)` : 'Original Extracted Portrait Active'}</span>
                   </div>
-                  <div className="text-[9px] text-slate-400 font-normal">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">
                     {useEnhancedPhoto && enhancedBgImg
                       ? `${language === 'hi' ? 'नेचुरली ब्राइट, क्लियर और पासपोर्ट प्रिंटिंग के लिए परफेक्ट।' : 'Naturally brighter, clearer & refined for passport printing.'}`
                       : `${language === 'hi' ? 'बिना किसी एन्हांसमेंट के ओरिजिनल कटआउट।' : 'Original un-enhanced extracted portrait.'}`}
@@ -270,7 +270,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                   onClick={handleResetEnhancement}
                   disabled={isEnhancing}
                   title={language === 'hi' ? 'ओरिजिनल पर वापस रीसेट करें' : 'Reset to original'}
-                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer transition-colors shrink-0"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-extrabold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer transition-colors shrink-0"
                 >
                   ↺ Reset
                 </button>
@@ -281,7 +281,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
 
         {/* Studio Enhancement Indicator */}
         <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between">
-          <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400">
             <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
             <span>
               {useEnhancedPhoto && enhancedBgImg
@@ -289,18 +289,18 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                 : (language === 'hi' ? 'ओरिजिनल कटआउट (Ready)' : 'Original Cutout (Ready)')}
             </span>
           </span>
-          <span className="text-[9px] sm:text-[10px] font-mono text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+          <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 font-extrabold bg-blue-500/15 px-2.5 py-0.5 rounded-full border border-blue-500/30">
             {language === 'hi' ? 'स्टूडियो HD' : 'Studio HD'}
           </span>
         </div>
       </div>
 
       {/* 2. Background Color Fill Card */}
-      <div className={`p-4 rounded-2xl border subtle-glow-card ${
+      <div className={`p-4 rounded-2xl border ${
         theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
       } space-y-3`}>
-        <div className="flex items-center justify-between border-b pb-2">
-          <h3 className="font-bold text-xs sm:text-sm tracking-tight flex items-center gap-2">
+        <div className="flex items-center justify-between border-b pb-2.5 border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="font-extrabold text-xs sm:text-sm tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
             <Sparkles className="w-4 h-4 text-blue-500" />
             <span>{t.bgColorLabel}</span>
           </h3>
@@ -309,7 +309,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
               type="button"
               onClick={runBackgroundRemoval}
               disabled={isRemovingBg}
-              className="text-[10px] font-bold text-blue-500 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-lg hover:bg-blue-500/20 cursor-pointer transition-colors"
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/25 px-2.5 py-0.5 rounded-lg hover:bg-blue-500/20 cursor-pointer transition-colors"
             >
               {isRemovingBg ? 'Extracting...' : 'Extract Background'}
             </button>
@@ -326,21 +326,21 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                   key={preset.value}
                   type="button"
                   onClick={() => setBgColor(preset.value)}
-                  className={`p-2 rounded-xl border flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
+                  className={`p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                     isSelected
-                      ? 'border-blue-500 bg-blue-500/10 ring-1 ring-blue-500 text-blue-500'
+                      ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm ring-1 ring-blue-500/30 scale-[1.02]'
                       : theme === 'dark'
-                        ? 'border-slate-800 hover:border-slate-700 bg-slate-900/40 text-slate-400'
-                        : 'border-slate-200 hover:border-slate-300 bg-slate-50 text-slate-700'
+                        ? 'border border-slate-800 hover:border-slate-700 bg-slate-900/40 text-slate-400 font-medium'
+                        : 'border border-slate-200 hover:border-slate-300 bg-white text-slate-700 font-medium shadow-2xs'
                   }`}
                 >
                   <div
                     style={{ backgroundColor: preset.value }}
-                    className={`w-5 h-5 rounded-full shadow-xs ${
+                    className={`w-6 h-6 rounded-full shadow-xs ${
                       preset.border ? 'border border-slate-300 dark:border-slate-600' : ''
                     }`}
                   />
-                  <span className="text-[10px] font-bold truncate max-w-full">
+                  <span className={`text-[11px] truncate max-w-full ${isSelected ? 'font-extrabold text-blue-700 dark:text-blue-300' : 'font-semibold text-slate-700 dark:text-slate-300'}`}>
                     {preset.name}
                   </span>
                 </button>
@@ -370,7 +370,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                   }
                 }}
                 placeholder="#ffffff"
-                className={`flex-1 px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                className={`flex-1 px-3 py-1.5 text-xs font-mono font-bold rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900'
                 }`}
               />
@@ -378,7 +378,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
             <button
               type="button"
               onClick={() => setBgColor(customBgColor)}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer transition-colors shadow-xs"
+              className="px-4 py-2 rounded-lg text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer transition-colors shadow-xs"
             >
               Apply
             </button>

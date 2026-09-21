@@ -2059,23 +2059,23 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       </div>
 
       {/* Preset selection ribbon */}
-      <div className={`p-4 rounded-2xl border ${
+      <div className={`p-4 sm:p-5 rounded-2xl border ${
         theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
       } space-y-3`}>
-        <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest block">
+        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block">
           {t.docSelectLabel}
         </span>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2.5">
           {DOCUMENT_PRESETS.map((doc) => (
             <button
               key={doc.id}
               onClick={() => setActiveDocType(doc.id)}
-              className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-semibold border cursor-pointer max-w-full truncate ${
+              className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm transition-all cursor-pointer max-w-full truncate ${
                 activeDocType === doc.id
-                  ? 'border-blue-500 bg-blue-500/10 text-blue-500 shadow-sm'
+                  ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
                   : theme === 'dark' 
-                    ? 'border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white bg-slate-900/30'
-                    : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
+                    ? 'border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 bg-slate-900/40 font-medium'
+                    : 'border border-slate-200 hover:border-slate-300 text-slate-600 hover:text-slate-900 bg-slate-50 font-medium'
               }`}
               title={language === 'hi' ? doc.nameHi : doc.nameEn}
             >
@@ -2129,14 +2129,14 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 
                 {/* Selector switch between adjusting Front / Back */}
                 <div className="flex flex-col gap-2.5 w-full">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2.5">
                     <button
                       type="button"
                       onClick={() => setActiveSide('front')}
-                      className={`px-4.5 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
+                      className={`px-5 py-2 rounded-xl text-xs sm:text-sm transition-all cursor-pointer ${
                         activeSide === 'front'
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-500'
-                          : theme === 'dark' ? 'border-slate-800 text-slate-400 bg-slate-900/40' : 'border-slate-200 text-slate-700 bg-slate-50'
+                          ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
+                          : theme === 'dark' ? 'border border-slate-800 text-slate-400 bg-slate-900/40 font-medium hover:border-slate-700 hover:text-slate-200' : 'border border-slate-200 text-slate-600 bg-slate-50 font-medium hover:border-slate-300 hover:text-slate-900'
                       }`}
                     >
                       {t.frontSide} Side
@@ -2144,10 +2144,10 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                     <button
                       type="button"
                       onClick={() => setActiveSide('back')}
-                      className={`px-4.5 py-1.5 rounded-lg text-xs font-bold border cursor-pointer ${
+                      className={`px-5 py-2 rounded-xl text-xs sm:text-sm transition-all cursor-pointer ${
                         activeSide === 'back'
-                          ? 'border-blue-500 bg-blue-500/10 text-blue-500'
-                          : theme === 'dark' ? 'border-slate-800 text-slate-400 bg-slate-900/40' : 'border-slate-200 text-slate-700 bg-slate-50'
+                          ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
+                          : theme === 'dark' ? 'border border-slate-800 text-slate-400 bg-slate-900/40 font-medium hover:border-slate-700 hover:text-slate-200' : 'border border-slate-200 text-slate-600 bg-slate-50 font-medium hover:border-slate-300 hover:text-slate-900'
                       }`}
                     >
                       {language === 'hi' ? 'पीछे' : 'Back'} Side
@@ -2845,28 +2845,28 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
           <div className={`p-5 rounded-2xl border ${
             theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
           } space-y-4`}>
-            <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
+            <h3 className="font-bold text-sm sm:text-base tracking-tight border-b border-slate-200 dark:border-slate-800/80 pb-2.5 flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-500" />
               <span>{t.layoutOptions}</span>
             </h3>
 
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {LAYOUT_PRESETS.map((preset) => (
                 <button
                   key={preset.id}
                   onClick={() => setLayoutStyle(preset.id)}
-                  className={`w-full text-left p-3 rounded-xl border flex flex-col gap-0.5 cursor-pointer ${
+                  className={`w-full text-left p-3.5 rounded-xl transition-all flex flex-col gap-1 cursor-pointer ${
                     layoutStyle === preset.id
-                      ? 'border-blue-500 bg-blue-500/5 text-blue-500'
+                      ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 shadow-sm'
                       : theme === 'dark' 
-                        ? 'border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white bg-slate-900/30'
-                        : 'border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
+                        ? 'border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white bg-slate-900/30'
+                        : 'border border-slate-200 hover:border-slate-300 text-slate-700 hover:text-slate-900 bg-slate-50'
                   }`}
                 >
-                  <span className="text-xs font-bold">
+                  <span className={`text-xs sm:text-sm ${layoutStyle === preset.id ? 'font-extrabold text-blue-700 dark:text-blue-300' : 'font-bold'}`}>
                     {language === 'hi' ? preset.labelHi : preset.labelEn}
                   </span>
-                  <span className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal line-clamp-2">
+                  <span className={`text-[11px] leading-normal line-clamp-2 ${layoutStyle === preset.id ? 'text-blue-600/90 dark:text-blue-300/80 font-medium' : 'text-slate-600 dark:text-slate-400'}`}>
                     {language === 'hi' ? preset.descHi : preset.descEn}
                   </span>
                 </button>
@@ -2880,7 +2880,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
               ? 'bg-slate-950 border-slate-900 shadow-xl' 
               : 'bg-white border-slate-200 shadow-md'
           } space-y-3.5`}>
-            <h4 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-1.5">
+            <h4 className="font-bold text-sm sm:text-base tracking-tight border-b border-slate-200 dark:border-slate-800/80 pb-2.5 flex items-center gap-1.5">
               <Download className="w-4 h-4 text-blue-500" />
               <span>{language === 'hi' ? 'प्रिंट और डाउनलोड सेंटर (Print & Download)' : 'Print & Download Options'}</span>
             </h4>
@@ -2890,35 +2890,33 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
                 : 'Prepare document layouts and download high-quality PNG or PDF formatting immediately for clean, professional printing.'}
             </p>
 
-            <div className="grid grid-cols-1 gap-2 pt-1">
+            <div className="grid grid-cols-1 gap-2.5 pt-1">
               {/* 1. DOWNLOAD PNG */}
               <button
                 type="button"
                 onClick={downloadAssemblyPng}
-                className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer ${
-                  theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
-                }`}
+                className="w-full px-4.5 py-3.5 rounded-xl font-bold text-xs sm:text-sm bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/25 flex items-center justify-between group cursor-pointer transition-all active:scale-[0.99]"
               >
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="w-4 h-4 text-pink-400 shrink-0" />
+                <div className="flex items-center gap-2.5">
+                  <ImageIcon className="w-4 h-4 text-blue-100 shrink-0" />
                   <span>Download Photo Layout (PNG)</span>
                 </div>
-                <Download className="w-4 h-4 text-slate-400 group-hover:text-inherit" />
+                <Download className="w-4 h-4 text-blue-100 group-hover:translate-y-0.5 transition-transform" />
               </button>
 
               {/* 4. DOWNLOAD PDF */}
               <button
                 type="button"
                 onClick={downloadAssemblyPdf}
-                className={`w-full px-4.5 py-3 rounded-xl font-semibold text-xs border flex items-center justify-between group cursor-pointer ${
-                  theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                className={`w-full px-4.5 py-3.5 rounded-xl font-bold text-xs sm:text-sm border flex items-center justify-between group cursor-pointer transition-all active:scale-[0.99] ${
+                  theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-white' : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-900'
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5">
                   <FileDown className="w-4 h-4 text-red-500 shrink-0" />
                   <span>Download Ready-to-Print PDF</span>
                 </div>
-                <Download className="w-4 h-4 text-slate-400 group-hover:text-inherit" />
+                <Download className="w-4 h-4 text-slate-400 group-hover:text-inherit group-hover:translate-y-0.5 transition-transform" />
               </button>
 
             </div>

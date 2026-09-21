@@ -264,8 +264,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         setRightPanelTab('layout');
         setShowBeforePreview(false);
 
-        // Run automatic MODNet background removal
-        await runBackgroundRemoval(dataUrl);
+        // Run automatic MODNet background removal and automatically open the Crop Photo dialog modal
+        await runBackgroundRemoval(dataUrl, { autoOpenCropModal: true });
       }
     } catch (err) {
       console.warn('Sample photo load error:', err);
@@ -465,12 +465,13 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   };
 
   const openPhotoshopCropModal = () => {
-    if (!originalImage && !rawSourceImage) return;
+    if (!originalImage && !rawSourceImage && !latestRequestedSrcRef.current) return;
     setCropRotation(0);
     setCropFlipH(false);
     setCropFlipV(false);
     setCropAspectRatio('passport');
     setCropSymmetricMode(true); // Default to Photoshop center symmetrical crop
+    setCropBox(null);
     setCropModalOpen(true);
   };
 
@@ -985,8 +986,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       setRightPanelTab('layout');
       setShowBeforePreview(false); // Render the AI background removed by default
 
-      // Run automatic MODNet background removal
-      await runBackgroundRemoval(optimizedUrl);
+      // Run automatic MODNet background removal and auto-open Crop Photo dialog modal
+      await runBackgroundRemoval(optimizedUrl, { autoOpenCropModal: true });
     } catch (err) {
       console.error('Image pre-processing failed:', err);
       setIsRemovingBg(false);
@@ -1023,9 +1024,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   };
 
   // Run AI Background removal in browser client-side using MODNet ONNX
-  const runBackgroundRemoval = (imageSrcToUse?: string) => {
+  const runBackgroundRemoval = (imageSrcToUse?: string, options?: { autoOpenCropModal?: boolean }) => {
     const src = imageSrcToUse || originalImage;
     if (!src) return;
+
+    const shouldAutoOpenCrop = options?.autoOpenCropModal ?? false;
 
     setBgRemovalError(false);
     setIsRemovingBg(true);
@@ -1053,14 +1056,12 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           const overallStart = performance.now();
 
           // Fetch image and build file blob
-          const fetchStart = performance.now();
           const response = await fetch(src);
           const inputBlob = await response.blob();
           
           const worker = getWorker();
           if (!worker) throw new Error('Worker could not be initialized');
 
-          const aiInferenceStart = performance.now();
           const resultBlob = await new Promise<Blob>((resolve, reject) => {
             const handleMessage = (e: MessageEvent) => {
               if (e.data.type === 'progress') {
@@ -1103,6 +1104,11 @@ export default function PassportSection({ language, theme }: PassportSectionProp
             setEnhanceCount(0);
             // Automatically activate Crop & Align tab once background removal finishes
             setRightPanelTab('crop');
+
+            // Automatically open the Crop Photo dialog modal if this was a fresh photo upload
+            if (shouldAutoOpenCrop) {
+              openPhotoshopCropModal();
+            }
           }
         } catch (err) {
           console.error('Error removing background via MODNet ONNX:', err);

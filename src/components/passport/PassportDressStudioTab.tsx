@@ -48,25 +48,25 @@ export const PassportDressStudioTab: React.FC<PassportDressStudioTabProps> = ({
 
       {/* Panel Card: Background Fill */}
       <div
-        className={`p-3.5 sm:p-4 rounded-2xl border subtle-glow-card ${
+        className={`p-4 rounded-2xl border ${
           theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
         } space-y-3`}
       >
-        <div className="flex items-center justify-between border-b pb-2">
-          <h3 className="font-bold text-sm tracking-tight flex items-center gap-2">
+        <div className="flex items-center justify-between border-b pb-2.5 border-slate-200/80 dark:border-slate-800/80">
+          <h3 className="font-extrabold text-xs sm:text-sm tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
             <Sparkles className="w-4 h-4 text-blue-500" />
             <span>{t.bgColorLabel || 'Background Color'}</span>
           </h3>
           {!isBgRemoved && (
-            <span className="text-[10px] font-mono text-amber-500 font-semibold uppercase leading-none bg-amber-500/10 border border-amber-500/10 px-1.5 py-0.5 rounded subtle-element-glow">
+            <span className="text-[10px] font-mono text-amber-500 font-extrabold uppercase leading-none bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded">
               Requires AI Bg Removal
             </span>
           )}
         </div>
 
-        <div className={`space-y-2.5 ${!isBgRemoved ? 'opacity-55 pointer-events-none' : ''}`}>
+        <div className={`space-y-3 ${!isBgRemoved ? 'opacity-55 pointer-events-none' : ''}`}>
           {/* Standard Swatches */}
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-3 gap-2">
             {[
               { id: 'white', label: 'White', dotBg: 'bg-white', dotBorder: 'border-slate-300' },
               { id: 'blue', label: 'Blue', dotBg: 'bg-[#004494]', dotBorder: 'border-blue-600' },
@@ -74,36 +74,39 @@ export const PassportDressStudioTab: React.FC<PassportDressStudioTabProps> = ({
               { id: 'red', label: 'Red', dotBg: 'bg-[#d21034]', dotBorder: 'border-red-600' },
               { id: 'cyan', label: 'Sky Blue', dotBg: 'bg-[#38bdf8]', dotBorder: 'border-sky-400' },
               { id: 'offwhite', label: 'Off-White', dotBg: 'bg-[#f8fafc]', dotBorder: 'border-slate-300' },
-            ].map((swatch) => (
-              <button
-                key={swatch.id}
-                type="button"
-                onClick={() => setBgColorType(swatch.id)}
-                className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold border flex items-center justify-center gap-1.5 cursor-pointer subtle-glow-button ${
-                  bgColorType === swatch.id
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-500 font-bold ring-1 ring-blue-500 subtle-glow-active'
-                    : theme === 'dark'
-                    ? 'border-slate-800 text-slate-300 bg-slate-900/40 hover:border-slate-700'
-                    : 'border-slate-200 text-slate-600 bg-slate-50 hover:border-slate-300'
-                }`}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full border ${swatch.dotBg} ${swatch.dotBorder}`} />
-                <span>{swatch.label}</span>
-              </button>
-            ))}
+            ].map((swatch) => {
+              const isSelected = bgColorType === swatch.id;
+              return (
+                <button
+                  key={swatch.id}
+                  type="button"
+                  onClick={() => setBgColorType(swatch.id)}
+                  className={`py-2 px-2.5 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    isSelected
+                      ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm ring-1 ring-blue-500/30 scale-[1.02]'
+                      : theme === 'dark'
+                      ? 'border border-slate-800 text-slate-300 bg-slate-900/40 hover:border-slate-700 font-medium'
+                      : 'border border-slate-200 text-slate-700 bg-white hover:border-slate-300 font-medium shadow-2xs'
+                  }`}
+                >
+                  <div className={`w-3 h-3 rounded-full border ${swatch.dotBg} ${swatch.dotBorder}`} />
+                  <span>{swatch.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* More Colors & Custom Color Picker */}
           <div
-            className={`p-2 rounded-xl border flex items-center justify-between gap-2 ${
+            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
               bgColorType === 'custom'
-                ? 'border-blue-500/60 bg-blue-500/10'
+                ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60'
                 : theme === 'dark'
-                ? 'border-slate-800/80 bg-slate-900/40'
-                : 'border-slate-200 bg-slate-50'
+                ? 'border-slate-800 bg-slate-900/40'
+                : 'border-slate-200 bg-white shadow-2xs'
             }`}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <label className="relative cursor-pointer flex items-center">
                 <input
                   type="color"
@@ -115,27 +118,27 @@ export const PassportDressStudioTab: React.FC<PassportDressStudioTabProps> = ({
                   className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 />
                 <div
-                  className="w-6 h-6 rounded-lg border shadow-xs transition-transform hover:scale-110 flex items-center justify-center"
+                  className="w-7 h-7 rounded-lg border shadow-xs transition-transform hover:scale-110 flex items-center justify-center"
                   style={{ backgroundColor: customBgColor }}
                 >
-                  <Pipette className="w-3 h-3 text-slate-700 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" />
+                  <Pipette className="w-3.5 h-3.5 text-slate-700 drop-shadow-[0_1px_1px_rgba(255,255,255,0.8)]" />
                 </div>
               </label>
-              <div className="text-[10px]">
-                <span className="font-bold block text-slate-300">Custom Color</span>
-                <span className="font-mono text-slate-500 uppercase">{customBgColor}</span>
+              <div>
+                <span className="font-extrabold text-xs block text-slate-800 dark:text-slate-200">Custom Color</span>
+                <span className="font-mono text-[10px] text-slate-500 uppercase font-semibold">{customBgColor}</span>
               </div>
             </div>
 
             <button
               type="button"
               onClick={() => setBgColorType('custom')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-extrabold border cursor-pointer transition-colors ${
                 bgColorType === 'custom'
-                  ? 'border-blue-500 bg-blue-500 text-white'
+                  ? 'border-blue-600 bg-blue-600 text-white shadow-xs'
                   : theme === 'dark'
                   ? 'border-slate-700 bg-slate-800 text-slate-300 hover:text-white'
-                  : 'border-slate-300 bg-white text-slate-700'
+                  : 'border-slate-300 bg-slate-50 text-slate-700 hover:bg-slate-100'
               }`}
             >
               Apply Custom
@@ -146,32 +149,35 @@ export const PassportDressStudioTab: React.FC<PassportDressStudioTabProps> = ({
 
       {/* Panel Card: Borders and Outlines */}
       <div
-        className={`p-3.5 sm:p-4 rounded-2xl border subtle-glow-card ${
+        className={`p-4 rounded-2xl border ${
           theme === 'dark' ? 'bg-slate-950 border-slate-900' : 'bg-white border-slate-200 shadow-sm'
         } space-y-3`}
       >
-        <h3 className="font-bold text-sm tracking-tight border-b pb-2 flex items-center gap-2">
+        <h3 className="font-extrabold text-xs sm:text-sm tracking-tight border-b pb-2.5 border-slate-200/80 dark:border-slate-800/80 flex items-center gap-2 text-slate-900 dark:text-slate-100">
           <Layout className="w-4 h-4 text-blue-500" />
           <span>{t.borderWidthLabel || 'Border Outline'}</span>
         </h3>
         <div className="space-y-3">
           <div className="grid grid-cols-4 gap-2">
-            {[0, 0.25, 0.5, 1.0].map((val) => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => setBorderWidth(val)}
-                className={`py-2 rounded-xl text-xs font-bold border cursor-pointer subtle-glow-button ${
-                  borderWidth === val
-                    ? 'border-blue-500 bg-blue-500/10 text-blue-500 ring-1 ring-blue-500 subtle-glow-active'
-                    : theme === 'dark'
-                    ? 'border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-700 hover:text-white'
-                    : 'border-slate-200 text-slate-600 bg-slate-50 hover:border-slate-300 hover:text-slate-950'
-                }`}
-              >
-                {val === 0 ? 'None' : val === 0.25 ? 'Thin (1px)' : `${val}mm`}
-              </button>
-            ))}
+            {[0, 0.25, 0.5, 1.0].map((val) => {
+              const isSelected = borderWidth === val;
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setBorderWidth(val)}
+                  className={`py-2 rounded-xl text-xs transition-all cursor-pointer ${
+                    isSelected
+                      ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm ring-1 ring-blue-500/30 scale-[1.02]'
+                      : theme === 'dark'
+                      ? 'border border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-700 hover:text-white font-medium'
+                      : 'border border-slate-200 text-slate-600 bg-white hover:border-slate-300 hover:text-slate-950 font-medium shadow-2xs'
+                  }`}
+                >
+                  {val === 0 ? 'None' : val === 0.25 ? 'Thin (1px)' : `${val}mm`}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

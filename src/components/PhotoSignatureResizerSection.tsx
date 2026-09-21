@@ -1053,8 +1053,8 @@ export default function PhotoSignatureResizerSection({
             <div className="lg:col-span-7 space-y-6">
               
               {/* 1. Resize Mode: Pixels vs Percentage */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+              <div className="space-y-2.5">
+                <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 block">
                   Resize Mode
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -1063,18 +1063,18 @@ export default function PhotoSignatureResizerSection({
                     onClick={() => {
                       setResizeMode('pixels');
                     }}
-                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 cursor-pointer subtle-glow-button ${
+                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
                       resizeMode === 'pixels'
-                        ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
+                        ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
                         : theme === 'dark'
-                        ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                        ? 'border border-slate-800 bg-slate-950/60 text-slate-400 font-medium hover:border-slate-700 hover:text-slate-200'
+                        : 'border border-slate-200 bg-slate-50/80 text-slate-600 font-medium hover:border-slate-300 hover:text-slate-900'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                      resizeMode === 'pixels' ? 'border-white' : 'border-slate-500'
+                    <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                      resizeMode === 'pixels' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-400'
                     }`}>
-                      {resizeMode === 'pixels' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      {resizeMode === 'pixels' && <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
                     </span>
                     <span>Pixels</span>
                   </button>
@@ -1084,18 +1084,18 @@ export default function PhotoSignatureResizerSection({
                     onClick={() => {
                       setResizeMode('percentage');
                     }}
-                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm font-bold border flex items-center justify-center gap-2 cursor-pointer subtle-glow-button ${
+                    className={`py-3 px-4 rounded-xl text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-2 ${
                       resizeMode === 'percentage'
-                        ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
+                        ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
                         : theme === 'dark'
-                        ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                        : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                        ? 'border border-slate-800 bg-slate-950/60 text-slate-400 font-medium hover:border-slate-700 hover:text-slate-200'
+                        : 'border border-slate-200 bg-slate-50/80 text-slate-600 font-medium hover:border-slate-300 hover:text-slate-900'
                     }`}
                   >
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                      resizeMode === 'percentage' ? 'border-white' : 'border-slate-500'
+                    <span className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
+                      resizeMode === 'percentage' ? 'border-blue-600 dark:border-blue-400' : 'border-slate-400'
                     }`}>
-                      {resizeMode === 'percentage' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      {resizeMode === 'percentage' && <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />}
                     </span>
                     <span>Percentage</span>
                   </button>
@@ -1242,8 +1242,8 @@ export default function PhotoSignatureResizerSection({
               </div>
 
               {/* 4. Output File Type */}
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+              <div className="space-y-2.5">
+                <label className="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200 block">
                   File Type
                 </label>
                 <div className="grid grid-cols-3 gap-3">
@@ -1252,17 +1252,17 @@ export default function PhotoSignatureResizerSection({
                       key={type}
                       type="button"
                       onClick={() => setFileType(type)}
-                      className={`py-2.5 px-3 rounded-xl text-xs font-bold border cursor-pointer flex flex-col items-center justify-center gap-1 subtle-glow-button ${
+                      className={`py-2.5 px-3 rounded-xl text-xs transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
                         fileType === type
-                          ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/20 ring-2 ring-blue-500/30 subtle-glow-active'
+                          ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
                           : theme === 'dark'
-                          ? 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
-                          : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-slate-300'
+                          ? 'border border-slate-800 bg-slate-950/60 text-slate-400 font-medium hover:border-slate-700 hover:text-slate-200'
+                          : 'border border-slate-200 bg-slate-50/80 text-slate-600 font-medium hover:border-slate-300 hover:text-slate-900'
                       }`}
                     >
-                      <span>{type}</span>
-                      <span className={`text-[10px] font-normal ${
-                        fileType === type ? 'text-blue-100' : 'text-slate-500'
+                      <span className="text-xs">{type}</span>
+                      <span className={`text-[10px] ${
+                        fileType === type ? 'text-blue-600 dark:text-blue-300 font-semibold' : 'text-slate-500'
                       }`}>
                         {type === 'JPG' ? 'Photo default' : type === 'PNG' ? 'Transparent' : 'Modern Web'}
                       </span>
@@ -1270,7 +1270,7 @@ export default function PhotoSignatureResizerSection({
                   ))}
                 </div>
                 {fileType === 'PNG' && (
-                  <p className="text-[11px] text-emerald-500 flex items-center gap-1">
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     <span>PNG preserves transparent background for signatures.</span>
                   </p>
@@ -1314,7 +1314,7 @@ export default function PhotoSignatureResizerSection({
                     }}
                     className={`text-[11px] font-bold px-3 py-1.5 rounded-xl border cursor-pointer subtle-glow-button ${
                       useTargetKB
-                        ? 'bg-blue-600 text-white border-blue-500 shadow-sm subtle-glow-active'
+                        ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm'
                         : theme === 'dark'
                         ? 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
                         : 'bg-white text-slate-700 border-slate-300 hover:text-slate-900'
@@ -1385,12 +1385,12 @@ export default function PhotoSignatureResizerSection({
                         key={kb}
                         type="button"
                         onClick={() => handleQuickKBClick(kb)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border cursor-pointer subtle-glow-button ${
+                        className={`px-2.5 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer ${
                           useTargetKB && targetKB === kb
-                            ? 'bg-blue-600 border-blue-500 text-white shadow-xs scale-105 subtle-glow-active'
+                            ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm scale-105'
                             : theme === 'dark'
-                            ? 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
-                            : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                            ? 'border border-slate-800 bg-slate-900/60 text-slate-400 font-medium hover:border-slate-700 hover:text-slate-200'
+                            : 'border border-slate-200 bg-white text-slate-600 font-medium hover:border-slate-300 hover:text-slate-900'
                         }`}
                       >
                         {kb} KB
