@@ -80,12 +80,12 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
       
       {/* Header */}
       <div className="flex items-center justify-between border-b pb-2.5 border-slate-200/80 dark:border-slate-800/80">
-        <h3 className="font-extrabold text-xs sm:text-sm tracking-tight flex items-center gap-2 text-slate-900 dark:text-slate-100">
+        <h3 className="font-black text-xs sm:text-sm tracking-tight flex items-center gap-2 text-slate-900 dark:text-white">
           <Layout className="w-4 h-4 text-blue-500" />
           <span>Layout Specifications</span>
         </h3>
         <span 
-          className="text-[11px] font-mono font-extrabold px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 max-w-[140px] truncate" 
+          className="text-[11px] font-mono font-black px-2.5 py-0.5 rounded-md bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/25 max-w-[150px] truncate" 
           title={selectedSheetPreset.nameEn}
         >
           {selectedSheetPreset.id === 'single' ? 'Single Photo' : selectedSheetPreset.nameEn.split('(')[0].trim()}
@@ -95,11 +95,11 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
       {/* 1. Passport Photo Size Selection */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-extrabold text-slate-900 dark:text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+          <label className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
             <span>{language === 'hi' ? 'फोटो आकार (Photo Size)' : 'Passport Photo Size'}</span>
           </label>
-          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+          <span className="text-[11px] text-slate-700 dark:text-slate-300 font-bold font-mono">
             {selectedSizePreset.widthMm} × {selectedSizePreset.heightMm} mm
           </span>
         </div>
@@ -113,19 +113,19 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
                 onClick={() => onSelectSizePreset(preset)}
                 className={`p-2.5 rounded-xl text-left flex flex-col justify-between transition-all cursor-pointer ${
                   isSelected
-                    ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm ring-1 ring-blue-500/30'
+                    ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-black shadow-sm ring-1 ring-blue-500/30'
                     : theme === 'dark'
-                      ? 'border border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-700 hover:text-white font-medium'
-                      : 'border border-slate-200 text-slate-700 bg-white hover:border-slate-300 hover:text-slate-900 font-medium shadow-2xs'
+                      ? 'border border-slate-800 text-slate-200 bg-slate-900/50 hover:border-slate-700 hover:text-white hover:bg-slate-800/80 font-bold'
+                      : 'border border-slate-200 text-slate-800 bg-slate-50/60 hover:border-slate-300 hover:text-slate-950 hover:bg-slate-100 font-bold shadow-2xs'
                 }`}
               >
                 <div className="flex items-center justify-between w-full">
-                  <span className={`text-xs truncate ${isSelected ? 'font-extrabold text-blue-700 dark:text-blue-300' : 'font-bold text-slate-800 dark:text-slate-200'}`}>
+                  <span className={`text-xs truncate ${isSelected ? 'font-black text-blue-700 dark:text-blue-300' : 'font-bold text-slate-900 dark:text-slate-100'}`}>
                     {language === 'hi' ? preset.nameHi : preset.nameEn}
                   </span>
                   {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 stroke-[3] shrink-0" />}
                 </div>
-                <div className={`text-[10px] font-mono mt-0.5 ${isSelected ? 'text-blue-600/80 dark:text-blue-300/80 font-bold' : 'text-slate-500 dark:text-slate-400 font-medium'}`}>
+                <div className={`text-[10px] font-mono mt-0.5 ${isSelected ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-slate-600 dark:text-slate-400 font-semibold'}`}>
                   {preset.widthMm} x {preset.heightMm} mm
                 </div>
               </button>
@@ -178,11 +178,11 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
           theme === 'dark' ? 'bg-slate-900/60 border-slate-800' : 'bg-slate-50/80 border-slate-200'
         }`}>
           <div className="flex items-center justify-between">
-            <label className="text-xs font-extrabold text-slate-900 dark:text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
-              <Layers className="w-4 h-4 text-blue-500" />
+            <label className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-blue-500 shrink-0" />
               <span>{language === 'hi' ? 'फोटो प्रतियों की संख्या' : 'Copies Quantity'}</span>
             </label>
-            <span className="text-xs font-mono font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-md border border-blue-500/25">
+            <span className="text-xs font-mono font-black text-blue-600 dark:text-blue-400 bg-blue-500/15 px-2.5 py-0.5 rounded-md border border-blue-500/30">
               {photosCopiesCount} Copies Total
             </span>
           </div>
@@ -193,11 +193,11 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
               type="button"
               onClick={() => setPhotosCopiesCount(prev => Math.max(1, prev - 1))}
               className={`p-2.5 rounded-xl border flex items-center justify-center cursor-pointer transition-colors ${
-                theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 shadow-xs'
+                theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-100' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800 shadow-xs'
               }`}
               title="Decrease Copies"
             >
-              <Minus className="w-4 h-4" />
+              <Minus className="w-4 h-4 stroke-[2.5]" />
             </button>
 
             {/* Stepper Input */}
@@ -211,7 +211,7 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
                 if (!isNaN(val)) setPhotosCopiesCount(Math.max(1, Math.min(200, val)));
               }}
               className={`flex-1 py-2 text-center font-mono font-black text-base rounded-xl border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-300 text-slate-900 shadow-xs'
+                theme === 'dark' ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900 shadow-xs'
               }`}
             />
 
@@ -220,11 +220,11 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
               type="button"
               onClick={() => setPhotosCopiesCount(prev => Math.min(200, prev + 1))}
               className={`p-2.5 rounded-xl border flex items-center justify-center cursor-pointer transition-colors ${
-                theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700 shadow-xs'
+                theme === 'dark' ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-100' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-800 shadow-xs'
               }`}
               title="Increase Copies"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
 
@@ -239,8 +239,8 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
                   photosCopiesCount === cnt
                     ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 font-black shadow-xs ring-1 ring-blue-500/25 scale-[1.02]'
                     : theme === 'dark'
-                      ? 'border border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-700 hover:text-white font-medium'
-                      : 'border border-slate-200 text-slate-600 bg-white hover:border-slate-300 hover:text-slate-900 font-medium shadow-2xs'
+                      ? 'border border-slate-800 text-slate-200 bg-slate-900/50 hover:border-slate-700 hover:text-white hover:bg-slate-800/80 font-bold'
+                      : 'border border-slate-200 text-slate-800 bg-slate-50/60 hover:border-slate-300 hover:text-slate-950 hover:bg-slate-100 font-bold shadow-2xs'
                 }`}
               >
                 {cnt} pcs
@@ -249,16 +249,16 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
           </div>
 
           {/* Mathematical Parity & Verification Banner */}
-          <div className={`p-2.5 rounded-xl border flex items-center justify-between text-[11px] font-mono ${
+          <div className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] font-mono ${
             theme === 'dark' 
               ? 'bg-emerald-950/25 border-emerald-500/30 text-emerald-400' 
               : 'bg-emerald-50/90 border-emerald-300 text-emerald-800'
           }`}>
             <div className="flex items-center gap-1.5">
               <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[3] shrink-0" />
-              <span className="font-bold">Verified:</span>
+              <span className="font-extrabold">Verified:</span>
             </div>
-            <span className="font-semibold text-right truncate">
+            <span className="font-bold sm:text-right">
               {photosCopiesCount} Selected = {photosCopiesCount} Printable ({Math.ceil(photosCopiesCount / maxCopiesOnPaper)} {Math.ceil(photosCopiesCount / maxCopiesOnPaper) > 1 ? 'Sheets' : 'Sheet'})
             </span>
           </div>
@@ -268,14 +268,14 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
       {/* 3. Print Sheet & Paper Size */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-extrabold text-slate-900 dark:text-slate-200 uppercase tracking-wide flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+          <label className="text-xs font-black text-slate-900 dark:text-slate-100 uppercase tracking-wide flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
             <span>{language === 'hi' ? 'प्रिंट शीट / पेपर आकार' : 'Print Paper Sheet'}</span>
           </label>
           <button
             type="button"
             onClick={() => setIsPaperSizesExpanded(prev => !prev)}
-            className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded-md hover:bg-blue-500/10"
+            className="text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1 cursor-pointer transition-colors px-2 py-0.5 rounded-md hover:bg-blue-500/10"
           >
             <span>
               {isPaperSizesExpanded 
@@ -296,19 +296,19 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
                 onClick={() => onSelectSheetSize(sheet.id)}
                 className={`p-2.5 rounded-xl text-left flex flex-col justify-between transition-all cursor-pointer ${
                   isSelected
-                    ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm ring-1 ring-blue-500/30'
+                    ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-black shadow-sm ring-1 ring-blue-500/30'
                     : theme === 'dark'
-                      ? 'border border-slate-800 text-slate-400 bg-slate-900/40 hover:border-slate-700 hover:text-white font-medium'
-                      : 'border border-slate-200 text-slate-700 bg-white hover:border-slate-300 hover:text-slate-900 font-medium shadow-2xs'
+                      ? 'border border-slate-800 text-slate-200 bg-slate-900/50 hover:border-slate-700 hover:text-white hover:bg-slate-800/80 font-bold'
+                      : 'border border-slate-200 text-slate-800 bg-slate-50/60 hover:border-slate-300 hover:text-slate-950 hover:bg-slate-100 font-bold shadow-2xs'
                 }`}
               >
                 <div className="flex items-center justify-between w-full">
-                  <span className={`text-xs truncate ${isSelected ? 'font-extrabold text-blue-700 dark:text-blue-300' : 'font-bold text-slate-800 dark:text-slate-200'}`}>
+                  <span className={`text-xs truncate ${isSelected ? 'font-black text-blue-700 dark:text-blue-300' : 'font-bold text-slate-900 dark:text-slate-100'}`}>
                     {language === 'hi' ? sheet.nameHi : sheet.nameEn.split('(')[0].trim()}
                   </span>
                   {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 stroke-[3] shrink-0" />}
                 </div>
-                <div className={`text-[10px] font-mono mt-0.5 ${isSelected ? 'text-blue-600/80 dark:text-blue-300/80 font-bold' : 'text-slate-500 dark:text-slate-400 font-medium'}`}>
+                <div className={`text-[10px] font-mono mt-0.5 ${isSelected ? 'text-blue-600 dark:text-blue-300 font-bold' : 'text-slate-600 dark:text-slate-400 font-semibold'}`}>
                   {sheet.widthMm > 0 ? `${sheet.widthMm}x${sheet.heightMm}mm` : '1 Copy Only'}
                 </div>
               </button>
@@ -320,20 +320,20 @@ export const PassportLayoutTab: React.FC<PassportLayoutTabProps> = ({
         <button
           type="button"
           onClick={() => setIsPaperSizesExpanded(prev => !prev)}
-          className={`w-full py-1.5 px-2.5 rounded-xl border text-[11px] font-medium flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+          className={`w-full py-1.5 px-2.5 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
             theme === 'dark' 
-              ? 'border-slate-800/80 bg-slate-900/30 text-slate-400 hover:text-slate-200 hover:bg-slate-900/60' 
-              : 'border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              ? 'border-slate-800 bg-slate-900/50 text-slate-200 hover:text-white hover:bg-slate-800/80' 
+              : 'border-slate-200 bg-slate-100/80 text-slate-700 hover:text-slate-950 hover:bg-slate-200/80'
           }`}
         >
           {isPaperSizesExpanded ? (
             <>
-              <ChevronUp className="w-3.5 h-3.5 text-blue-500" />
+              <ChevronUp className="w-3.5 h-3.5 text-blue-500 stroke-[2.5]" />
               <span>{language === 'hi' ? 'कम आकार दिखाएं' : 'Collapse paper sizes list'}</span>
             </>
           ) : (
             <>
-              <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
+              <ChevronDown className="w-3.5 h-3.5 text-blue-500 stroke-[2.5]" />
               <span>{language === 'hi' ? 'सभी पेपर आकार दिखाएं (A6, A5, B5, Legal, A3...)' : 'Show all paper sizes (A6, A5, B5, Legal, A3...)'}</span>
             </>
           )}

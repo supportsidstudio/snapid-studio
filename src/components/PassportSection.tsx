@@ -319,16 +319,22 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   });
   const cropDisplayContainerRef = useRef<HTMLDivElement>(null);
 
-  // Sync body class to hide overlapping fixed floating widgets (Feedback, etc.) during cropping
+  // Sync body class and lock scrolling to prevent page scroll/bounce during crop modal
   useEffect(() => {
     if (cropModalOpen) {
       document.body.classList.add('snapid-modal-open');
+      const origOverflow = document.body.style.overflow;
+      const origTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.classList.remove('snapid-modal-open');
+        document.body.style.overflow = origOverflow;
+        document.body.style.touchAction = origTouchAction;
+      };
     } else {
       document.body.classList.remove('snapid-modal-open');
     }
-    return () => {
-      document.body.classList.remove('snapid-modal-open');
-    };
   }, [cropModalOpen]);
 
   // Keyboard Arrow controls for fine-tuning selected dress / suit position & adjustments directly on the photo
@@ -693,6 +699,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   };
 
   const handleCropContainerTouchMove = (e: React.TouchEvent) => {
+    if (e.cancelable) e.preventDefault();
     if (!cropDragAction || !cropDisplayContainerRef.current || !e.touches[0]) return;
     const rect = cropDisplayContainerRef.current.getBoundingClientRect();
     const deltaX = e.touches[0].clientX - cropDragStart.x;
@@ -1237,16 +1244,19 @@ export default function PassportSection({ language, theme }: PassportSectionProp
 
   // Get background color string
   const getBackgroundColor = () => {
+    if (!bgColorType || bgColorType === 'white') return '#ffffff';
+    if (bgColorType === 'transparent') return 'transparent';
+    if (bgColorType === 'custom') return customBgColor || '#ffffff';
+    if (typeof bgColorType === 'string' && (bgColorType.startsWith('#') || bgColorType.startsWith('rgb'))) {
+      return bgColorType;
+    }
     switch (bgColorType) {
-      case 'white': return '#ffffff';
       case 'blue': return '#004494';
       case 'lightgray': return '#e5e7eb';
       case 'red': return '#d21034';
       case 'cyan': return '#38bdf8';
       case 'offwhite': return '#f8fafc';
-      case 'transparent': return 'transparent';
-      case 'custom': return customBgColor || '#ffffff';
-      default: return '#ffffff';
+      default: return bgColorType || '#ffffff';
     }
   };
 
@@ -2196,15 +2206,15 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   type="button"
                   id="tab-btn-layout"
                   onClick={() => setRightPanelTab('layout')}
-                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     rightPanelTab === 'layout'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25 font-extrabold border border-blue-500'
                       : theme === 'dark'
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'text-slate-200 hover:text-white bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800/70 font-bold'
+                        : 'text-slate-700 hover:text-slate-950 bg-slate-100/70 hover:bg-slate-200/70 border border-slate-200/90 font-bold'
                   }`}
                 >
-                  <Layout className="w-3.5 h-3.5 shrink-0" />
+                  <Layout className={`w-3.5 h-3.5 shrink-0 ${rightPanelTab === 'layout' ? 'text-white' : 'text-slate-400 dark:text-slate-300'}`} />
                   <span>Layout</span>
                 </button>
 
@@ -2212,15 +2222,15 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   type="button"
                   id="tab-btn-crop"
                   onClick={() => setRightPanelTab('crop')}
-                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     rightPanelTab === 'crop'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25 font-extrabold border border-blue-500'
                       : theme === 'dark'
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'text-slate-200 hover:text-white bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800/70 font-bold'
+                        : 'text-slate-700 hover:text-slate-950 bg-slate-100/70 hover:bg-slate-200/70 border border-slate-200/90 font-bold'
                   }`}
                 >
-                  <Crop className="w-3.5 h-3.5 shrink-0" />
+                  <Crop className={`w-3.5 h-3.5 shrink-0 ${rightPanelTab === 'crop' ? 'text-white' : 'text-slate-400 dark:text-slate-300'}`} />
                   <span>Crop & Align</span>
                 </button>
 
@@ -2228,15 +2238,15 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   type="button"
                   id="tab-btn-enhance"
                   onClick={() => setRightPanelTab('enhance')}
-                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     rightPanelTab === 'enhance'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25 font-extrabold border border-blue-500'
                       : theme === 'dark'
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'text-slate-200 hover:text-white bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800/70 font-bold'
+                        : 'text-slate-700 hover:text-slate-950 bg-slate-100/70 hover:bg-slate-200/70 border border-slate-200/90 font-bold'
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <Sparkles className={`w-3.5 h-3.5 shrink-0 ${rightPanelTab === 'enhance' ? 'text-white' : 'text-slate-400 dark:text-slate-300'}`} />
                   <span>AI HD</span>
                 </button>
 
@@ -2244,15 +2254,15 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                   type="button"
                   id="tab-btn-dress"
                   onClick={() => setRightPanelTab('dress')}
-                  className={`flex-1 py-2 px-1.5 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                  className={`flex-1 py-2 px-1.5 rounded-xl text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                     rightPanelTab === 'dress'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/25 font-extrabold border border-blue-500'
                       : theme === 'dark'
-                        ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                        ? 'text-slate-200 hover:text-white bg-slate-900/50 hover:bg-slate-800/80 border border-slate-800/70 font-bold'
+                        : 'text-slate-700 hover:text-slate-950 bg-slate-100/70 hover:bg-slate-200/70 border border-slate-200/90 font-bold'
                   }`}
                 >
-                  <Shirt className="w-3.5 h-3.5 shrink-0" />
+                  <Shirt className={`w-3.5 h-3.5 shrink-0 ${rightPanelTab === 'dress' ? 'text-white' : 'text-slate-400 dark:text-slate-300'}`} />
                   <span>Dress & Studio</span>
                 </button>
               </div>
@@ -2344,10 +2354,6 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     onDressStateChange={handleDressStateChangeFromPanel}
                     onApplyDress={handleQuickSuitApply}
                     isBgRemoved={Boolean(removedBgImg)}
-                    bgColorType={bgColorType}
-                    setBgColorType={setBgColorType}
-                    customBgColor={customBgColor}
-                    setCustomBgColor={setCustomBgColor}
                     borderWidth={borderWidth}
                     setBorderWidth={setBorderWidth}
                     t={t}
@@ -2431,7 +2437,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       {/* Interactive Photo Crop Station */}
       {cropModalOpen && (rawSourceImage || originalImage) && (
         <div 
-          className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col justify-between text-white p-2.5 sm:p-4 select-none"
+          className="fixed inset-0 z-[100] bg-slate-950/95 backdrop-blur-md flex flex-col justify-between text-white p-2.5 sm:p-4 select-none touch-none overscroll-none"
           onMouseMove={handleCropContainerMouseMove}
           onTouchMove={handleCropContainerTouchMove}
           onMouseUp={handleCropContainerMouseUp}

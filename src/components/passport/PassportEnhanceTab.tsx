@@ -62,14 +62,34 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
   // Preset studio background colors
   const BG_COLOR_PRESETS = [
     { name: 'White', value: '#ffffff', border: true },
+    { name: 'Passport Blue', value: '#004494', border: false },
     { name: 'Light Blue', value: '#cce3f7', border: false },
-    { name: 'Passport Blue', value: '#3b82f6', border: false },
-    { name: 'Royal Blue', value: '#1d4ed8', border: false },
-    { name: 'Light Gray', value: '#e2e8f0', border: false },
+    { name: 'Sky Blue', value: '#38bdf8', border: false },
+    { name: 'Light Gray', value: '#e5e7eb', border: false },
     { name: 'Off White', value: '#f8fafc', border: true },
+    { name: 'Passport Red', value: '#d21034', border: false },
     { name: 'Soft Red', value: '#fca5a5', border: false },
-    { name: 'Passport Red', value: '#dc2626', border: false },
   ];
+
+  const isPresetSelected = (presetValue: string) => {
+    const current = (bgColor || '').toLowerCase();
+    const target = presetValue.toLowerCase();
+    if (current === target) return true;
+    if (target === '#ffffff' && current === 'white') return true;
+    if (target === '#004494' && (current === 'blue' || current === '#3b82f6' || current === '#004494')) return true;
+    if (target === '#e5e7eb' && (current === 'lightgray' || current === '#e2e8f0')) return true;
+    if (target === '#d21034' && (current === 'red' || current === '#dc2626')) return true;
+    if (target === '#38bdf8' && current === 'cyan') return true;
+    if (target === '#f8fafc' && current === 'offwhite') return true;
+    return false;
+  };
+
+  const handleSelectColor = (val: string) => {
+    setBgColor(val);
+    if (!removedBgImg && !isRemovingBg) {
+      runBackgroundRemoval();
+    }
+  };
 
   return (
     <div className="space-y-3.5">
@@ -320,12 +340,12 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
           {/* Preset Color Swatches */}
           <div className="grid grid-cols-4 gap-2">
             {BG_COLOR_PRESETS.map((preset) => {
-              const isSelected = bgColor.toLowerCase() === preset.value.toLowerCase();
+              const isSelected = isPresetSelected(preset.value);
               return (
                 <button
                   key={preset.value}
                   type="button"
-                  onClick={() => setBgColor(preset.value)}
+                  onClick={() => handleSelectColor(preset.value)}
                   className={`p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                     isSelected
                       ? 'border-2 border-blue-600 dark:border-blue-400 bg-blue-50/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-extrabold shadow-sm ring-1 ring-blue-500/30 scale-[1.02]'
@@ -356,7 +376,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                 value={customBgColor}
                 onChange={(e) => {
                   setCustomBgColor(e.target.value);
-                  setBgColor(e.target.value);
+                  handleSelectColor(e.target.value);
                 }}
                 className="w-8 h-8 rounded-lg cursor-pointer border border-slate-700 bg-transparent p-0 mr-2"
               />
@@ -366,7 +386,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
                 onChange={(e) => {
                   setCustomBgColor(e.target.value);
                   if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
-                    setBgColor(e.target.value);
+                    handleSelectColor(e.target.value);
                   }
                 }}
                 placeholder="#ffffff"
@@ -377,7 +397,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
             </div>
             <button
               type="button"
-              onClick={() => setBgColor(customBgColor)}
+              onClick={() => handleSelectColor(customBgColor)}
               className="px-4 py-2 rounded-lg text-xs font-extrabold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer transition-colors shadow-xs"
             >
               Apply

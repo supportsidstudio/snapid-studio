@@ -160,16 +160,22 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
     }
   };
 
-  // Sync body class to hide overlapping fixed floating widgets (Feedback, etc.) during cropping
+  // Sync body class and lock scrolling to prevent page scroll/bounce during crop modal
   useEffect(() => {
     if (cropModalOpen) {
       document.body.classList.add('snapid-modal-open');
+      const origOverflow = document.body.style.overflow;
+      const origTouchAction = document.body.style.touchAction;
+      document.body.style.overflow = 'hidden';
+      document.body.style.touchAction = 'none';
+      return () => {
+        document.body.classList.remove('snapid-modal-open');
+        document.body.style.overflow = origOverflow;
+        document.body.style.touchAction = origTouchAction;
+      };
     } else {
       document.body.classList.remove('snapid-modal-open');
     }
-    return () => {
-      document.body.classList.remove('snapid-modal-open');
-    };
   }, [cropModalOpen]);
 
   // Edge-detection & Auto-crop loading states
@@ -1436,6 +1442,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
   };
 
   const handleBoxDragMoveTouch = (e: React.TouchEvent) => {
+    if (e.cancelable) e.preventDefault();
     if (!dragAction || !displayContainerRef.current || !e.touches || !e.touches[0]) return;
     const container = displayContainerRef.current.getBoundingClientRect();
     updateCropWithDelta(e.touches[0].clientX - dragStart.x, e.touches[0].clientY - dragStart.y, container.width, container.height);
@@ -2929,7 +2936,7 @@ export default function DocumentsSection({ language, theme }: DocumentsSectionPr
       {/* Precision Crop Modal Overlay */}
       {cropModalOpen && cropImageSrc && (
         <div 
-          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-sm select-none overflow-y-auto"
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-slate-950/90 backdrop-blur-sm select-none touch-none overscroll-none"
           onMouseMove={handleBoxDragMove}
           onMouseUp={handleBoxDragEnd}
           onMouseLeave={handleBoxDragEnd}
