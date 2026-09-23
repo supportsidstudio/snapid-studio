@@ -15,31 +15,26 @@ function getAppBaseUrl(): string {
   if (runtimeAppBaseUrl) {
     return runtimeAppBaseUrl;
   }
-  if (typeof self !== 'undefined' && self.location && self.location.href) {
-    const href = self.location.href;
-    // If worker is located in /assets/ subdirectory
-    const assetsIndex = href.lastIndexOf('/assets/');
-    if (assetsIndex !== -1) {
-      return href.substring(0, assetsIndex + 1);
-    }
+  if (typeof self !== 'undefined' && self.location) {
+    let origin = '';
     try {
-      const url = new URL(href);
-      if (url.origin && !url.origin.startsWith('blob:') && !url.origin.startsWith('file:')) {
-        const pathSegments = url.pathname.split('/').filter(Boolean);
-        if (
-          pathSegments.length > 1 &&
-          pathSegments[0] !== 'src' &&
-          pathSegments[0] !== 'assets' &&
-          pathSegments[0] !== 'workers' &&
-          pathSegments[0] !== '@fs' &&
-          pathSegments[0] !== 'node_modules'
-        ) {
-          return `${url.origin}/${pathSegments[0]}/`;
-        }
-        return `${url.origin}/`;
+      if (self.location.origin && self.location.origin !== 'null' && !self.location.origin.startsWith('file:')) {
+        origin = self.location.origin.replace(/^blob:/, '');
       }
-    } catch (e) {
-      // Fallback
+    } catch {}
+
+    const href = self.location.href || '';
+    const assetsIndex = href.lastIndexOf('/assets/');
+    if (assetsIndex !== -1 && origin) {
+      try {
+        const u = new URL(href);
+        const pathPart = u.pathname.substring(0, u.pathname.lastIndexOf('/assets/') + 1);
+        return `${origin}${pathPart}`;
+      } catch {}
+    }
+
+    if (origin) {
+      return `${origin}/`;
     }
   }
   return '/';
@@ -75,7 +70,11 @@ try {
         : 2)
     : 1;
 
-  ort.env.wasm.wasmPaths = getWasmBasePath();
+  const initialBasePath = getWasmBasePath();
+  ort.env.wasm.wasmPaths = {
+    mjs: `${initialBasePath}ort-wasm-simd-threaded.mjs`,
+    wasm: `${initialBasePath}ort-wasm-simd-threaded.wasm`,
+  };
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
@@ -191,12 +190,19 @@ async function getSession(): Promise<ort.InferenceSession> {
           logVerbosityLevel: 0,
         };
 
+        const basePath = getWasmBasePath();
+        const wasmPathConfig = {
+          mjs: `${basePath}ort-wasm-simd-threaded.mjs`,
+          wasm: `${basePath}ort-wasm-simd-threaded.wasm`,
+        };
+
         // Try candidate configurations in order of performance and compatibility (100% Local)
-        const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
-          { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
-          { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
-          { path: '/onnxruntime/', threads: threads, label: 'Local Root WASM' },
-          { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM (Single-thread)' }
+        const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
+          { path: wasmPathConfig, threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+          { path: basePath, threads: threads, label: `Local WASM Path (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+          { path: wasmPathConfig, threads: 1, label: 'Local WASM (Single-thread fallback)' },
+          { path: basePath, threads: 1, label: 'Local WASM Path (Single-thread fallback)' },
+          { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM' }
         ];
 
         let createdSession: ort.InferenceSession | null = null;
