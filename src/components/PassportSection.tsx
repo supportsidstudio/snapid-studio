@@ -293,6 +293,13 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [rightPanelTab, setRightPanelTab] = useState<'layout' | 'crop' | 'enhance' | 'dress'>('layout');
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Silently preload MODNet background matting model on mount for instant first-time processing
+  useEffect(() => {
+    globalPreload().catch((err) => {
+      console.warn('[SnapID Studio] Background MODNet preload notice:', err?.message || err);
+    });
+  }, []);
+
   // Silently preload Real-ESRGAN AI model in background when Enhance tab is viewed or when photo is ready
   useEffect(() => {
     if (rightPanelTab === 'enhance' || rawRemovedBgImg) {

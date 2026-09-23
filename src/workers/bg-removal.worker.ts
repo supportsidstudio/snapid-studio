@@ -26,7 +26,14 @@ function getAppBaseUrl(): string {
       const url = new URL(href);
       if (url.origin && !url.origin.startsWith('blob:') && !url.origin.startsWith('file:')) {
         const pathSegments = url.pathname.split('/').filter(Boolean);
-        if (pathSegments.length > 1) {
+        if (
+          pathSegments.length > 1 &&
+          pathSegments[0] !== 'src' &&
+          pathSegments[0] !== 'assets' &&
+          pathSegments[0] !== 'workers' &&
+          pathSegments[0] !== '@fs' &&
+          pathSegments[0] !== 'node_modules'
+        ) {
           return `${url.origin}/${pathSegments[0]}/`;
         }
         return `${url.origin}/`;
