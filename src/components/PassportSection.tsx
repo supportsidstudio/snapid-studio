@@ -57,7 +57,7 @@ import {
   cleanupPrintMemory,
   DPI_300_DPM
 } from '../utils/passport-print-engine';
-import { enhancePhotoWithFsrcnn, preloadAiEnhancerModel, isLowSpecDevice } from '../utils/ai-enhancer';
+import { enhancePhotoWithFsrcnn, preloadAiEnhancerModel, isLowSpecDevice, EnhanceProgressData } from '../utils/ai-enhancer';
 import { getSamplePassportPhotoDataUrl, SAMPLE_FEMALE_PASSPORT_DATA_URL } from '../utils/sampleAssets';
 import {
   DressTransformState,
@@ -192,6 +192,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [enhancementErrorMsg, setEnhancementErrorMsg] = useState<string | null>(null);
   const [isEnhancing, setIsEnhancing] = useState<boolean>(false);
   const [enhanceStepText, setEnhanceStepText] = useState<string>('');
+  const [enhanceProgress, setEnhanceProgress] = useState<EnhanceProgressData | null>(null);
   
   // Settings & Toggles (Default Paper is 4x6 Photo Paper)
   const [sizePreset, setSizePreset] = useState<PassportPresetId>('eu_uk');
@@ -1159,21 +1160,33 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       });
   };
 
-  // AI Photo Enhancement runner (Real-ESRGAN general-x4v3 Web Worker pipeline)
+  // AI Photo Enhancement runner (Compact-ESRGAN 2x Web Worker pipeline)
   const runAiPhotoEnhancement = async (inputBlob: Blob, isFirstAutoPass = false): Promise<Blob | null> => {
     setIsEnhancing(true);
     setEnhancementStatus('enhancing');
-    setEnhanceStepText(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
+    setEnhanceStepText(language === 'hi' ? 'फोटो तैयार की जा रही है...' : 'Preparing your photo...');
+    setEnhanceProgress({
+      phase: 'preparing',
+      stepText: 'Preparing your photo...',
+      percent: 0,
+      currentStep: 0,
+      totalSteps: 0,
+      completedSteps: 0,
+      remainingTimeText: null,
+    });
     setEnhancementErrorMsg(null);
 
     const tEnhanceClientStart = performance.now();
-    console.log(`[PassportSection: ENHANCE START] Invoking Real-ESRGAN Neural HD | Input Blob Size: ${inputBlob.size} bytes`);
+    console.log(`[PassportSection: ENHANCE START] Invoking AI HD Neural Super-Resolution | Input Blob Size: ${inputBlob.size} bytes`);
 
     try {
       const enhancedBlob = await enhancePhotoWithFsrcnn(
         inputBlob,
-        (step, _percent) => {
-          const displayMsg = step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
+        (step, _percent, progressData) => {
+          if (progressData) {
+            setEnhanceProgress(progressData);
+          }
+          const displayMsg = step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...');
           setEnhanceStepText(displayMsg);
           setAiStep(displayMsg);
         }
@@ -1196,13 +1209,22 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         });
 
         const clientDuration = (performance.now() - tEnhanceClientStart).toFixed(1);
-        console.log(`[PassportSection: ENHANCE SUCCESS] Received Real-ESRGAN enhanced master | Resolution: ${width}x${height}px | Payload: ${enhancedBlob.size} bytes | Total Round-Trip Time: ${clientDuration}ms`);
+        console.log(`[PassportSection: ENHANCE SUCCESS] Received AI HD enhanced master | Resolution: ${width}x${height}px | Payload: ${enhancedBlob.size} bytes | Total Round-Trip Time: ${clientDuration}ms`);
 
         setEnhancedBgImg(newUrl);
         setRemovedBgImg(newUrl);
         setUseEnhancedPhoto(true);
         setEnhanceCount((prev) => prev + 1);
         setEnhancementStatus('enhanced');
+        setEnhanceProgress((prev) => ({
+          phase: 'complete',
+          stepText: '🎉 Enhancement Complete!',
+          percent: 100,
+          currentStep: prev?.totalSteps || 1,
+          totalSteps: prev?.totalSteps || 1,
+          completedSteps: prev?.totalSteps || 1,
+          remainingTimeText: null,
+        }));
 
         // Reset viewport transforms because existing crop/adjust was cleanly baked into the clean photo pixels
         setPanX(0);
@@ -1216,8 +1238,9 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         throw new Error('Enhanced image payload is invalid or empty');
       }
     } catch (err: any) {
-      console.error('[PassportSection: ENHANCE ERROR] Real-ESRGAN failed:', err);
+      console.error('[PassportSection: ENHANCE ERROR] AI HD Enhancement failed:', err);
       setEnhancementStatus('ready');
+      setEnhanceProgress(null);
       setEnhancementErrorMsg(
         language === 'hi'
           ? 'AI एन्हांसमेंट पूरा नहीं हो सका: ' + (err?.message || 'Error')
@@ -2107,20 +2130,40 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     {/* Unified Automatic Processing Overlay */}
                     {(isRemovingBg || isEnhancing) && (
                       <div className="absolute inset-0 z-20 bg-slate-950/85 backdrop-blur-xs flex flex-col items-center justify-center p-4 text-center select-none animate-fadeIn">
-                        <div className="p-3 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/30 mb-2.5 shadow-lg">
+                        <div className="p-3 rounded-2xl bg-blue-500/15 text-blue-400 border border-blue-500/30 mb-2 shadow-lg">
                           <Sparkles className="w-5 h-5 text-blue-400 animate-spin" />
                         </div>
-                        <span className="text-xs sm:text-sm font-bold text-white mb-2.5 drop-shadow">
+                        <span className="text-xs sm:text-sm font-bold text-white mb-1 drop-shadow">
                           {isEnhancing
-                            ? (enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...'))
+                            ? (enhanceProgress?.phase === 'preparing'
+                                ? (language === 'hi' ? 'फोटो तैयार की जा रही है...' : 'Preparing your photo...')
+                                : (language === 'hi' ? '✨ फोटो एन्हांस की जा रही है...' : '✨ Enhancing your photo...'))
                             : (aiStep || (language === 'hi' ? 'फोटो प्रोसेस की जा रही है...' : 'Processing photo...'))}
                         </span>
-                        <div className="w-36 bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700/50 relative">
-                          <div className="bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 h-full rounded-full w-full animate-pulse" />
+                        {isEnhancing && enhanceProgress && enhanceProgress.totalSteps > 0 && enhanceProgress.phase !== 'preparing' && (
+                          <span className="text-[11px] font-mono font-semibold text-blue-300 mb-2 drop-shadow">
+                            Step {Math.max(1, Math.min(enhanceProgress.totalSteps, enhanceProgress.currentStep))} of {enhanceProgress.totalSteps}
+                          </span>
+                        )}
+                        <div className="w-44 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700/50 relative p-[1px]">
+                          <div
+                            className="bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 h-full rounded-full transition-all duration-500 ease-out shadow-sm shadow-blue-500/50"
+                            style={{
+                              width: isEnhancing
+                                ? `${Math.min(100, Math.max(0, enhanceProgress?.percent ?? 0))}%`
+                                : '100%'
+                            }}
+                          />
                         </div>
-                        <span className="text-[9px] font-mono text-slate-400 mt-2.5">
-                          {language === 'hi' ? '100% सुरक्षित • इन-ब्राउज़र AI' : '100% Private • In-Browser AI'}
-                        </span>
+                        {isEnhancing && enhanceProgress?.remainingTimeText ? (
+                          <span className="text-[10px] font-medium text-blue-300/80 mt-1.5">
+                            {enhanceProgress.remainingTimeText}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-mono text-slate-400 mt-2">
+                            {language === 'hi' ? '100% सुरक्षित • इन-ब्राउज़र AI' : '100% Private • In-Browser AI'}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2463,6 +2506,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     isEnhancing={isEnhancing}
                     enhancementStatus={enhancementStatus}
                     enhanceStepText={enhanceStepText}
+                    enhanceProgress={enhanceProgress}
                     enhancementErrorMsg={enhancementErrorMsg}
                     enhanceCount={enhanceCount}
                     handleManualEnhanceClick={handleManualEnhanceClick}

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { AppLanguage, AppTheme } from '../../types';
 import { translations } from '../../translations';
-import { isLowSpecDevice } from '../../utils/ai-enhancer';
+import { isLowSpecDevice, EnhanceProgressData } from '../../utils/ai-enhancer';
 
 interface PassportEnhanceTabProps {
   language: AppLanguage;
@@ -20,6 +20,7 @@ interface PassportEnhanceTabProps {
   isEnhancing: boolean;
   enhancementStatus: 'ready' | 'enhancing' | 'enhanced' | 'unavailable';
   enhanceStepText: string;
+  enhanceProgress?: EnhanceProgressData | null;
   enhancementErrorMsg: string | null;
   enhanceCount: number;
   handleManualEnhanceClick: () => void;
@@ -43,6 +44,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
   isEnhancing,
   enhancementStatus,
   enhanceStepText,
+  enhanceProgress,
   enhancementErrorMsg,
   enhanceCount,
   handleManualEnhanceClick,
@@ -109,15 +111,19 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
 
           {/* Status Badge */}
           <div>
-            {enhancementStatus === 'enhancing' ? (
-              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
-                <RefreshCw className="w-3 h-3 animate-spin" />
-                <span>{enhanceStepText || (language === 'hi' ? 'एन्हांस हो रहा है...' : 'Enhancing...')}</span>
+            {isEnhancing ? (
+              <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
+                <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                <span>
+                  {enhanceProgress && enhanceProgress.totalSteps > 0 && enhanceProgress.phase !== 'preparing'
+                    ? `Step ${Math.max(1, Math.min(enhanceProgress.totalSteps, enhanceProgress.currentStep))}/${enhanceProgress.totalSteps}`
+                    : (enhanceStepText || (language === 'hi' ? 'तैयार हो रहा है...' : 'Preparing...'))}
+                </span>
               </span>
             ) : enhancementStatus === 'enhanced' ? (
               <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
                 <Check className="w-3 h-3 stroke-[3]" />
-                <span>Enhanced{enhanceCount > 1 ? ` (${enhanceCount}x)` : ''}</span>
+                <span>HD Enhanced{enhanceCount > 1 ? ` (${enhanceCount}x)` : ''}</span>
               </span>
             ) : enhancementStatus === 'unavailable' ? (
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 border border-amber-500/30">
@@ -141,39 +147,133 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
           </div>
         )}
 
-        {/* Primary Enhance Photo Action Button */}
-        <div className="space-y-2.5">
-          <button
-            type="button"
-            id="passport-enhance-action-btn"
-            disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
-            onClick={handleManualEnhanceClick}
-            className={`w-full py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 cursor-pointer transition-all ${
-              isEnhancing
-                ? 'bg-blue-600 text-white cursor-wait opacity-80'
-                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 active:scale-[0.99] border border-blue-400/40'
-            } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
-          >
-            {isEnhancing ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                <span>{enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...')}</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>
-                  {enhanceCount > 0
-                    ? (language === 'hi' ? '🚀 AI HD एन्हांस पुनः लागू करें ✓' : '🚀 Re-apply AI HD Enhance ✓')
-                    : (language === 'hi' ? '🚀 AI HD स्टूडियो एन्हांस' : '🚀 AI HD Studio Enhance')}
+        {/* User-Facing AI HD Enhancement Processing Panel or Action Button */}
+        {isEnhancing ? (
+          <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/90 dark:bg-slate-950/90 border border-blue-500/30 shadow-lg shadow-blue-950/30 space-y-3">
+            {/* Header: Title + Step info + Percentage */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-0.5 min-w-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400 shrink-0 animate-pulse" />
+                  <span className="text-xs sm:text-sm font-extrabold text-white truncate">
+                    {enhanceProgress?.phase === 'preparing' 
+                      ? (language === 'hi' ? 'फोटो तैयार की जा रही है...' : 'Preparing your photo...')
+                      : (language === 'hi' ? '✨ फोटो एन्हांस की जा रही है...' : '✨ Enhancing your photo...')}
+                  </span>
+                </div>
+                {enhanceProgress && enhanceProgress.totalSteps > 0 && enhanceProgress.phase !== 'preparing' && (
+                  <div className="text-[11px] sm:text-xs text-blue-300 font-semibold font-mono pl-6">
+                    Step {Math.max(1, Math.min(enhanceProgress.totalSteps, enhanceProgress.currentStep))} of {enhanceProgress.totalSteps}
+                  </div>
+                )}
+              </div>
+
+              <div className="text-right shrink-0">
+                <span className="text-xs sm:text-sm font-black font-mono text-blue-400">
+                  {enhanceProgress?.percent ?? 0}%
                 </span>
-              </>
+                {enhanceProgress?.remainingTimeText && (
+                  <div className="text-[10px] sm:text-[11px] text-blue-300/80 font-medium mt-0.5">
+                    {enhanceProgress.remainingTimeText}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Progress Bar (Strictly connected to actual completed units) */}
+            <div className="w-full bg-slate-800/90 rounded-full h-2 overflow-hidden border border-slate-700/60 p-[1px]">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 transition-all duration-500 ease-out shadow-sm shadow-blue-500/50"
+                style={{ width: `${Math.min(100, Math.max(0, enhanceProgress?.percent ?? 0))}%` }}
+              />
+            </div>
+
+            {/* Real Work Unit Checklist */}
+            <div className="space-y-1.5 max-h-32 overflow-y-auto pr-0.5 text-xs">
+              {enhanceProgress && enhanceProgress.totalSteps > 0 ? (
+                <>
+                  {Array.from({ length: enhanceProgress.totalSteps }, (_, idx) => idx + 1).map((stepNum) => {
+                    const isDone = stepNum <= (enhanceProgress?.completedSteps ?? 0);
+                    const isCurrent = stepNum === enhanceProgress.currentStep && !isDone;
+
+                    if (!isDone && !isCurrent) return null;
+
+                    return (
+                      <div
+                        key={stepNum}
+                        className={`flex items-center justify-between px-2.5 py-1 rounded-lg text-xs transition-all ${
+                          isDone
+                            ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20'
+                            : 'bg-blue-500/15 text-blue-200 border border-blue-500/30 animate-pulse font-medium'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {isDone ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 stroke-[3]" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin shrink-0" />
+                          )}
+                          <span>
+                            {isDone ? `Step ${stepNum} completed` : `Processing step ${stepNum}...`}
+                          </span>
+                        </div>
+                        {isDone && (
+                          <span className="text-[10px] font-mono text-emerald-400/90 font-bold">✓</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {enhanceProgress.phase === 'finalizing' && (
+                    <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs bg-cyan-500/15 text-cyan-200 border border-cyan-500/30 animate-pulse font-medium">
+                      <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin shrink-0" />
+                      <span>⏳ Finalizing your HD photo...</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs bg-blue-500/10 text-blue-300 border border-blue-500/20 animate-pulse">
+                  <RefreshCw className="w-3.5 h-3.5 text-blue-400 animate-spin shrink-0" />
+                  <span>Preparing photo...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {/* Show Completion Notice if freshly completed */}
+            {enhancementStatus === 'enhanced' && enhanceProgress?.phase === 'complete' && (
+              <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/60 to-blue-950/60 border border-emerald-500/30 text-xs shadow-md space-y-1 animate-fadeIn">
+                <div className="flex items-center gap-2 text-emerald-300 font-extrabold text-xs sm:text-sm">
+                  <span>🎉 Enhancement Complete!</span>
+                </div>
+                <p className="text-[11px] sm:text-xs text-emerald-200/90 font-medium pl-0.5">
+                  Your photo is ready in HD.
+                </p>
+              </div>
             )}
-          </button>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
-            {language === 'hi' ? '✨ उच्च गुणवत्ता स्टूडियो फोटो एन्हांसमेंट (Real-ESRGAN)' : '✨ High-Fidelity Studio Photo Enhancement (Real-ESRGAN)'}
-          </p>
-        </div>
+
+            {/* Primary Enhance Photo Action Button */}
+            <button
+              type="button"
+              id="passport-enhance-action-btn"
+              disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
+              onClick={handleManualEnhanceClick}
+              className={`w-full py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 cursor-pointer transition-all ${
+                'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 active:scale-[0.99] border border-blue-400/40'
+              } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>
+                {enhanceCount > 0
+                  ? (language === 'hi' ? '🚀 AI HD एन्हांस पुनः लागू करें ✓' : '🚀 Re-apply AI HD Enhance ✓')
+                  : (language === 'hi' ? '🚀 AI HD स्टूडियो एन्हांस' : '🚀 AI HD Studio Enhance')}
+              </span>
+            </button>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
+              {language === 'hi' ? '✨ उच्च गुणवत्ता स्टूडियो फोटो एन्हांसमेंट' : '✨ High-Fidelity Studio Photo Enhancement'}
+            </p>
+          </div>
+        )}
 
         {/* Manual Selector: Use Enhanced / Use Original & Level Badge */}
         <div className="space-y-2 pt-1">

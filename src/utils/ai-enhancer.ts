@@ -17,8 +17,18 @@
 
 import AiEnhancerWorker from '../workers/ai-enhancer.worker?worker';
 
+export interface EnhanceProgressData {
+  phase: 'preparing' | 'enhancing' | 'finalizing' | 'complete';
+  stepText: string;
+  percent: number;
+  currentStep: number;
+  totalSteps: number;
+  completedSteps: number;
+  remainingTimeText?: string | null;
+}
+
 export interface EnhancementProgressCallback {
-  (step: string, percent?: number): void;
+  (step: string, percent?: number, progressData?: EnhanceProgressData): void;
 }
 
 export interface EnhanceOptions {
@@ -100,7 +110,15 @@ export async function enhancePhotoWithRealEsrgan(
   options: EnhanceOptions = {}
 ): Promise<Blob> {
   const reqId = `enhance_${++currentRequestId}_${Date.now()}`;
-  onProgress?.('Preparing portrait for AI super-resolution...', 5);
+  onProgress?.('Preparing your photo...', 0, {
+    phase: 'preparing',
+    stepText: 'Preparing your photo...',
+    percent: 0,
+    currentStep: 0,
+    totalSteps: 0,
+    completedSteps: 0,
+    remainingTimeText: null,
+  });
 
   const isMobile = typeof navigator !== 'undefined' && (
     /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
@@ -134,10 +152,28 @@ export async function enhancePhotoWithRealEsrgan(
       if (!data || data.id !== reqId) return;
 
       if (data.type === 'progress') {
-        onProgress?.(data.step, data.percent);
+        const progressData: EnhanceProgressData = {
+          phase: data.phase || 'enhancing',
+          stepText: data.step || '✨ Enhancing your photo...',
+          percent: typeof data.percent === 'number' ? data.percent : 0,
+          currentStep: data.currentStep || 0,
+          totalSteps: data.totalSteps || 0,
+          completedSteps: data.completedSteps || 0,
+          remainingTimeText: data.remainingTimeText || null,
+        };
+        onProgress?.(data.step, data.percent, progressData);
       } else if (data.type === 'complete') {
         worker.removeEventListener('message', handleMessage);
-        onProgress?.('AI HD Enhance ✓', 100);
+        const total = data.diagnostics?.totalTiles || 1;
+        onProgress?.('🎉 Enhancement Complete!', 100, {
+          phase: 'complete',
+          stepText: '🎉 Enhancement Complete!',
+          percent: 100,
+          currentStep: total,
+          totalSteps: total,
+          completedSteps: total,
+          remainingTimeText: null,
+        });
         console.log(`[AI Enhancer Client: COMPLETE] ID: ${reqId} in ${data.elapsedMs}ms | Mode: ${data.mode || 'neural_hd'} | Output Blob: ${data.resultBlob?.size} bytes`, data.diagnostics || {});
         resolve(data.resultBlob);
       } else if (data.type === 'error') {

@@ -118,7 +118,7 @@ let activeBackend: 'webgpu' | 'wasm-threaded' | 'wasm-single' = 'wasm-single';
 let activeThreads: number = 1;
 let webgpuUsable: boolean = false; // ort.wasm bundle is WASM-only; track usability to avoid repeated failed attempts (Fix #6)
 
-async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number) => void): Promise<ArrayBuffer> {
+async function fetchAndCacheModelBuffer(onLog?: (msg: string, pct: number) => void): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
   const sources = getModelSources();
 
@@ -151,7 +151,7 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
     const rawUrl = sources[i];
     const url = rawUrl.startsWith('/') ? `${base.replace(/\/+$/, '')}${rawUrl}` : rawUrl;
     try {
-      postProgress(i === 0 ? 'Loading Compact-ESRGAN 2x model (~2.3MB)...' : 'Retrying AI model load from mirror...', 12);
+      onLog?.(i === 0 ? 'Loading Compact-ESRGAN 2x model (~2.3MB)...' : 'Retrying AI model load from mirror...', 12);
       console.log(`[AI Enhancer Worker] Fetching 2x model binary from: ${url}`);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status} (${res.statusText})`);
@@ -207,14 +207,14 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
   throw lastError || new Error('All model sources failed to load');
 }
 
-async function getOrInitSession(postProgress: (msg: string, pct: number) => void): Promise<ort.InferenceSession> {
+async function getOrInitSession(onLog?: (msg: string, pct: number) => void): Promise<ort.InferenceSession> {
   if (session) return session;
   if (sessionLoadingPromise) return sessionLoadingPromise;
 
   sessionLoadingPromise = (async () => {
     const tStart = performance.now();
-    const modelBuffer = await fetchAndCacheModelBuffer(postProgress);
-    postProgress('Initializing Compact-ESRGAN 2x neural engine...', 25);
+    const modelBuffer = await fetchAndCacheModelBuffer(onLog);
+    onLog?.('Initializing Compact-ESRGAN 2x neural engine...', 25);
 
     const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
     const threads = isIsolated
@@ -629,9 +629,15 @@ async function runCompactEsrgan2xInferenceWorker(
   inWidth: number,
   inHeight: number,
   isLowEnd: boolean,
-  postProgress: (msg: string, pct: number) => void,
-  progressBasePct = 25,
-  progressSpanPct = 65
+  postProgress: (payload: {
+    phase: 'preparing' | 'enhancing' | 'finalizing';
+    step: string;
+    percent: number;
+    currentStep?: number;
+    totalSteps?: number;
+    completedSteps?: number;
+    remainingTimeText?: string | null;
+  }) => void
 ): Promise<{ outCanvas: OffscreenCanvas; totalTiles: number; tileSize: number; tileInferenceTimes: number[] }> {
   const modelScale = 2; // Genuine 2x Native Super-Resolution (Fix #1)
   const outW = inWidth * modelScale;
@@ -647,10 +653,27 @@ async function runCompactEsrgan2xInferenceWorker(
   // Single tile pass: if the entire image fits within the tile size
   if (inWidth <= tileSize && inHeight <= tileSize) {
     console.log(`[AI Enhancer Worker: SINGLE TILE EXECUTION] Input: ${inWidth}x${inHeight}px fits completely in single tile (${tileSize}x${tileSize}px). Running single-pass inference.`);
-    postProgress('AI HD Enhance: processing neural super-resolution...', progressBasePct + Math.round(progressSpanPct * 0.5));
+    postProgress({
+      phase: 'enhancing',
+      step: '✨ Enhancing your photo...',
+      percent: 0,
+      currentStep: 1,
+      totalSteps: 1,
+      completedSteps: 0,
+      remainingTimeText: null,
+    });
     const t0 = performance.now();
     const outCanvas = await runSinglePassSuperResolution(sess, inputCanvas, inWidth, inHeight);
     const tMs = performance.now() - t0;
+    postProgress({
+      phase: 'enhancing',
+      step: '✨ Enhancing your photo...',
+      percent: 100,
+      currentStep: 1,
+      totalSteps: 1,
+      completedSteps: 1,
+      remainingTimeText: null,
+    });
     return { outCanvas, totalTiles: 1, tileSize, tileInferenceTimes: [tMs] };
   }
 
@@ -726,7 +749,16 @@ async function runCompactEsrgan2xInferenceWorker(
 
   console.log(`[AI Enhancer Worker: TILING PLAN] Engine: ${activeBackend} | Input: ${inWidth}x${inHeight}px -> Output: ${outW}x${outH}px | Tile Size: ${tileSize}x${tileSize}px, Overlap: ${tilePad}px (Step: ${step}px) | Grid: ${xPositions.length}x${yPositions.length} = ${totalTiles} tiles`);
 
-  postProgress(`AI HD Enhance: Preparing ${totalTiles} tiles...`, progressBasePct);
+  // When actual processing begins: Show Step 1 of X, 0%
+  postProgress({
+    phase: 'enhancing',
+    step: '✨ Enhancing your photo...',
+    percent: 0,
+    currentStep: 1,
+    totalSteps: totalTiles,
+    completedSteps: 0,
+    remainingTimeText: null,
+  });
 
   let processedTiles = 0;
   let totalTileInferenceMs = 0;
@@ -797,12 +829,40 @@ async function runCompactEsrgan2xInferenceWorker(
         throw new Error('Super-resolution tile output missing');
       }
 
+      const completedSteps = processedTiles;
+      const currentStep = Math.min(totalTiles, processedTiles + 1);
+      const pct = Math.round((completedSteps / totalTiles) * 100);
+
+      // Reliable remaining-time calculation strictly from actual completed units
+      let remainingTimeText: string | null = null;
+      if (completedSteps > 0 && completedSteps < totalTiles) {
+        const avgMs = totalTileInferenceMs / completedSteps;
+        const remTiles = totalTiles - completedSteps;
+        const remSec = Math.round((remTiles * avgMs) / 1000);
+        if (remSec >= 20) {
+          const low = Math.floor((remSec - 3) / 10) * 10;
+          const high = low + 10;
+          remainingTimeText = `About ${low}–${high} sec remaining`;
+        } else if (remSec >= 10) {
+          remainingTimeText = 'About 10–20 sec remaining';
+        } else if (remSec > 0) {
+          remainingTimeText = 'About 5–10 sec remaining';
+        }
+      }
+
+      postProgress({
+        phase: 'enhancing',
+        step: '✨ Enhancing your photo...',
+        percent: pct,
+        currentStep,
+        totalSteps: totalTiles,
+        completedSteps,
+        remainingTimeText,
+      });
+
       const avgTileMs = totalTileInferenceMs / processedTiles;
       const remainingTiles = totalTiles - processedTiles;
       const remainingSec = Math.max(1, Math.round((remainingTiles * avgTileMs) / 1000));
-      const pct = Math.round(progressBasePct + (processedTiles / totalTiles) * progressSpanPct);
-
-      postProgress(`AI HD Enhance: tile ${processedTiles}/${totalTiles} (${(tTileMs / 1000).toFixed(1)}s/tile • ~${remainingSec}s left)`, pct);
       console.log(`[AI Enhancer Worker: TILE INFERENCE] Tile ${processedTiles}/${totalTiles} (${tx}, ${ty}) | Time: ${(tTileMs / 1000).toFixed(2)}s (${tTileMs.toFixed(0)}ms) | Avg: ${(avgTileMs / 1000).toFixed(2)}s/tile | Remaining: ~${remainingSec}s`);
 
       const outTileData = outTensor.data as Float32Array;
@@ -876,18 +936,47 @@ async function handleEnhancementRequest(
 ) {
   const startTime = performance.now();
 
-  const postProgress = (step: string, percent: number) => {
-    self.postMessage({ id: reqId, type: 'progress', step, percent });
+  const postProgress = (payload: {
+    phase: 'preparing' | 'enhancing' | 'finalizing';
+    step: string;
+    percent: number;
+    currentStep?: number;
+    totalSteps?: number;
+    completedSteps?: number;
+    remainingTimeText?: string | null;
+  }) => {
+    self.postMessage({
+      id: reqId,
+      type: 'progress',
+      step: payload.step,
+      percent: payload.percent,
+      phase: payload.phase,
+      currentStep: payload.currentStep ?? 0,
+      totalSteps: payload.totalSteps ?? 0,
+      completedSteps: payload.completedSteps ?? 0,
+      remainingTimeText: payload.remainingTimeText ?? null,
+    });
   };
 
   try {
     const { isMobile = false, isLowEnd = false } = options;
 
-    postProgress('Checking Real-ESRGAN neural engine...', 10);
+    // 1. Before processing starts: Show "Preparing your photo..."
+    postProgress({
+      phase: 'preparing',
+      step: 'Preparing your photo...',
+      percent: 0,
+      currentStep: 0,
+      totalSteps: 0,
+      completedSteps: 0,
+      remainingTimeText: null,
+    });
 
     // 1. Session Retrieval (Cached Session Reused instantly, 0ms on subsequent runs)
     const tModelStart = performance.now();
-    const sess = await getOrInitSession(postProgress);
+    const sess = await getOrInitSession((msg, pct) => {
+      console.log(`[AI Enhancer Worker: SESSION INIT] ${msg} (${pct}%)`);
+    });
     const tModelInitMs = performance.now() - tModelStart;
 
     // 2. Preprocessing & Native Resolution Geometry Calculation
@@ -959,14 +1048,20 @@ async function handleEnhancementRequest(
       neuralInW,
       neuralInH,
       isLowEnd,
-      postProgress,
-      25,
-      65
+      postProgress
     );
     const tInferMs = performance.now() - tInferStart;
 
-    // 4. Postprocessing Refinement (Natural Remini-grade quality: eyes, hair, lips, skin pores)
-    postProgress('Applying natural detail & micro-texture refinement...', 92);
+    // 4. Postprocessing Refinement
+    postProgress({
+      phase: 'finalizing',
+      step: '✨ Enhancing your photo...',
+      percent: 100,
+      currentStep: totalTiles,
+      totalSteps: totalTiles,
+      completedSteps: totalTiles,
+      remainingTimeText: null,
+    });
     const tPostStart = performance.now();
     const finalCtx = aiCanvas.getContext('2d', { willReadFrequently: true })!;
     const finalImgData = finalCtx.getImageData(0, 0, finalW, finalH);
@@ -999,7 +1094,6 @@ async function handleEnhancementRequest(
     finalCtx.putImageData(finalImgData, 0, 0);
     const tPostMs = performance.now() - tPostStart;
 
-    postProgress('Finalizing HD portrait...', 96);
     const tBlobStart = performance.now();
     const resultBlob = await aiCanvas.convertToBlob({ type: 'image/png' });
     const tBlobMs = performance.now() - tBlobStart;
