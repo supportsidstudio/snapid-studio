@@ -240,11 +240,23 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
     };
 
     // WASM execution configurations in priority order (100% Local)
-    const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
-      { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
-      { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
-      { path: '/onnxruntime/', threads: threads, label: 'Local Root WASM' },
-      { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM (Single-thread)' }
+    const basePath = getWasmBasePath();
+    const wasmPathMap: Record<string, string> = {
+      'ort-wasm-simd-threaded.wasm': `${basePath}ort-wasm-simd-threaded.wasm`,
+      'ort-wasm-simd-threaded.mjs': `${basePath}ort-wasm-simd-threaded.mjs`,
+      'ort-wasm-simd-threaded.jspi.wasm': `${basePath}ort-wasm-simd-threaded.jspi.wasm`,
+      'ort-wasm-simd-threaded.jspi.mjs': `${basePath}ort-wasm-simd-threaded.jspi.mjs`,
+      'ort-wasm-simd-threaded.asyncify.wasm': `${basePath}ort-wasm-simd-threaded.asyncify.wasm`,
+      'ort-wasm-simd-threaded.asyncify.mjs': `${basePath}ort-wasm-simd-threaded.asyncify.mjs`,
+      'ort-wasm-simd-threaded.jsep.wasm': `${basePath}ort-wasm-simd-threaded.jsep.wasm`,
+      'ort-wasm-simd-threaded.jsep.mjs': `${basePath}ort-wasm-simd-threaded.jsep.mjs`,
+    };
+
+    const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
+      { path: wasmPathMap, threads: threads, label: `Local WASM Map (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
+      { path: basePath, threads: threads, label: `Local WASM Path (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
+      { path: basePath, threads: 1, label: 'Local WASM (Single-thread fallback)' },
+      { path: '/onnxruntime/', threads: threads, label: 'Local Root WASM' }
     ];
 
     let lastWasmErr: any = null;
@@ -494,35 +506,6 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
   }
 }
 
-/**
- * Fast Classical Enhancement (Low-Power / Fast Mode)
- */
-async function runFastModeEnhance(
-  imageBitmap: ImageBitmap,
-  postProgress: (msg: string, pct: number) => void
-): Promise<Blob> {
-  postProgress('Applying Fast Mode studio enhancement...', 50);
-  const inW = imageBitmap.width;
-  const inH = imageBitmap.height;
-
-  const targetW = Math.round(inW * 2);
-  const targetH = Math.round(inH * 2);
-
-  const canvas = new OffscreenCanvas(targetW, targetH);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(imageBitmap, 0, 0, targetW, targetH);
-
-  const imgData = ctx.getImageData(0, 0, targetW, targetH);
-  applyAutoExposure(imgData);
-  applyAutoColorAndSkinGuard(imgData);
-  applyHighDefinitionDetailRestoration(imgData);
-  ctx.putImageData(imgData, 0, 0);
-
-  postProgress('Finalizing HD portrait...', 95);
-  return await canvas.convertToBlob({ type: 'image/png' });
-}
 
 /**
  * Single Forward Pass Super-Resolution for compact images or face crop
@@ -629,21 +612,21 @@ async function runRealEsrganInferenceWorker(
 
   const isMultiThreadActive = activeBackend === 'wasm-threaded' && activeThreads > 1;
 
-  // Single pass if image is compact
-  const singlePassThreshold = isMultiThreadActive ? 320 : 300;
+  // Single pass if image is ultra-compact (<200px)
+  const singlePassThreshold = 200;
   if (inWidth <= singlePassThreshold && inHeight <= singlePassThreshold) {
-    postProgress('Running Real-ESRGAN neural super-resolution (single pass ~8s)...', progressBasePct + Math.round(progressSpanPct * 0.5));
+    postProgress('Running Real-ESRGAN neural super-resolution (single pass)...', progressBasePct + Math.round(progressSpanPct * 0.5));
     return await runSinglePassSuperResolution(sess, inputCanvas, inWidth, inHeight);
   }
 
-  // Adaptive Tile & Overlap Sizing based on ACTUAL runtime engine & thread count:
-  // - Multi-threaded WASM SIMD (threads >= 2 & crossOriginIsolated): 224px tiles with 12px overlap (parallel thread scaling)
-  // - Single-threaded WASM fallback (Threads: 1 or non-isolated): 160px tiles with 10px overlap (cuts per-tile pixel workload by 50% vs 224px and 60% vs 256px!)
-  const tileSize = isMultiThreadActive ? 224 : 160;
-  const tilePad = isMultiThreadActive ? 12 : 10;
-  const step = tileSize - 2 * tilePad;
+  // Original Production Tiling Standard:
+  // Strictly 160x160px tile size with 10px overlap (step: 140px).
+  // On standard portrait photos (~413x531), this yields exactly 3 columns x 4 rows = 12 TILES!
+  const tileSize = 160;
+  const tilePad = 10;
+  const step = tileSize - 2 * tilePad; // 140px
 
-  console.log(`[AI Enhancer Worker: TILE CONFIG] Active Engine: ${activeBackend} (Threads: ${activeThreads}) | isLowEnd: ${isLowEnd} => Chosen Tile Size: ${tileSize}x${tileSize}px (step: ${step}px, overlap: ${tilePad}px)`);
+  console.log(`[AI Enhancer Worker: TILE CONFIG] Active Engine: ${activeBackend} (Threads: ${activeThreads}) | Chosen Tile Size: ${tileSize}x${tileSize}px (step: ${step}px, overlap: ${tilePad}px)`);
 
   const accumR = new Float32Array(outW * outH);
   const accumG = new Float32Array(outW * outH);
@@ -676,6 +659,11 @@ async function runRealEsrganInferenceWorker(
   // Pre-allocate reusable input tensor and feeds once (zero allocation in loop)
   const tileInput = new Float32Array(3 * tileSize * tileSize);
   const inTilePlane = tileSize * tileSize;
+  const inPlane0 = 0;
+  const inPlane1 = inTilePlane;
+  const inPlane2 = inTilePlane * 2;
+  const INV_255 = 1.0 / 255.0;
+
   const inputTensor = new ort.Tensor('float32', tileInput, [1, 3, tileSize, tileSize]);
   const feeds: Record<string, ort.Tensor> = { [inputName]: inputTensor };
 
@@ -712,6 +700,10 @@ async function runRealEsrganInferenceWorker(
   const wxArr = new Float32Array(tileOutW);
   const wyArr = new Float32Array(tileOutH);
 
+  const outPlane0 = 0;
+  const outPlane1 = tilePlaneSize;
+  const outPlane2 = tilePlaneSize * 2;
+
   for (const ty of yPositions) {
     const isTopEdge = (ty === 0);
     const isBottomEdge = (ty + tileSize >= inHeight);
@@ -742,7 +734,7 @@ async function runRealEsrganInferenceWorker(
         }
       }
 
-      // Populate pre-allocated tile input (zero allocation)
+      // Fast tile input preparation with cached plane offsets and multiply-by-inverse
       for (let y = 0; y < tileSize; y++) {
         const sy = Math.min(inHeight - 1, Math.max(0, ty + y));
         const srcRow = sy * inWidth;
@@ -753,9 +745,9 @@ async function runRealEsrganInferenceWorker(
           const srcIdx = (srcRow + sx) * 4;
           const dstIdx = dstRow + x;
 
-          tileInput[dstIdx] = inPixels[srcIdx] / 255.0;
-          tileInput[inTilePlane + dstIdx] = inPixels[srcIdx + 1] / 255.0;
-          tileInput[inTilePlane * 2 + dstIdx] = inPixels[srcIdx + 2] / 255.0;
+          tileInput[inPlane0 + dstIdx] = inPixels[srcIdx] * INV_255;
+          tileInput[inPlane1 + dstIdx] = inPixels[srcIdx + 1] * INV_255;
+          tileInput[inPlane2 + dstIdx] = inPixels[srcIdx + 2] * INV_255;
         }
       }
 
@@ -785,7 +777,7 @@ async function runRealEsrganInferenceWorker(
 
       const outTileData = outTensor.data as Float32Array;
 
-      // Fast accumulation with precomputed 1D weights
+      // Fast accumulation with hoisted plane offsets and precomputed 1D weights
       for (let y = 0; y < tileOutH; y++) {
         const wy = wyArr[y];
         const destY = ty * modelScale + y;
@@ -801,9 +793,9 @@ async function runRealEsrganInferenceWorker(
           const destIdx = destYOffset + destX;
           const tileIdx = tileYOffset + x;
 
-          accumR[destIdx] += outTileData[tileIdx] * w;
-          accumG[destIdx] += outTileData[tilePlaneSize + tileIdx] * w;
-          accumB[destIdx] += outTileData[tilePlaneSize * 2 + tileIdx] * w;
+          accumR[destIdx] += outTileData[outPlane0 + tileIdx] * w;
+          accumG[destIdx] += outTileData[outPlane1 + tileIdx] * w;
+          accumB[destIdx] += outTileData[outPlane2 + tileIdx] * w;
           accumW[destIdx] += w;
         }
       }
@@ -817,12 +809,12 @@ async function runRealEsrganInferenceWorker(
 
   const totalPixels = outW * outH;
   for (let i = 0; i < totalPixels; i++) {
-    const w = accumW[i] || 1.0;
+    const invW = 255.0 / (accumW[i] || 1.0);
     const destIdx = i * 4;
 
-    outPixels[destIdx] = Math.max(0, Math.min(255, Math.round((accumR[i] / w) * 255.0)));
-    outPixels[destIdx + 1] = Math.max(0, Math.min(255, Math.round((accumG[i] / w) * 255.0)));
-    outPixels[destIdx + 2] = Math.max(0, Math.min(255, Math.round((accumB[i] / w) * 255.0)));
+    outPixels[destIdx] = Math.max(0, Math.min(255, (accumR[i] * invW) + 0.5 | 0));
+    outPixels[destIdx + 1] = Math.max(0, Math.min(255, (accumG[i] * invW) + 0.5 | 0));
+    outPixels[destIdx + 2] = Math.max(0, Math.min(255, (accumB[i] * invW) + 0.5 | 0));
     outPixels[destIdx + 3] = 255;
   }
 
@@ -962,7 +954,6 @@ async function handleEnhancementRequest(
   reqId: string,
   imageBitmap: ImageBitmap,
   options: {
-    fastMode?: boolean;
     isMobile?: boolean;
     isLowEnd?: boolean;
     maxDimension?: number;
@@ -975,23 +966,7 @@ async function handleEnhancementRequest(
   };
 
   try {
-    const { fastMode = false, isMobile = false, isLowEnd = false, maxDimension } = options;
-
-    if (fastMode) {
-      console.log(`[AI Enhancer Worker: START] Request ID: ${reqId} | Mode: FAST_CLASSICAL | Input Dimensions: ${imageBitmap.width}x${imageBitmap.height}px`);
-      const tFastStart = performance.now();
-      const resultBlob = await runFastModeEnhance(imageBitmap, postProgress);
-      const elapsed = (performance.now() - startTime).toFixed(1);
-      console.log(`[AI Enhancer Worker: FAST COMPLETE] Duration: ${elapsed}ms | Output Blob Size: ${resultBlob.size} bytes`);
-      self.postMessage({
-        id: reqId,
-        type: 'complete',
-        resultBlob,
-        elapsedMs: elapsed,
-        mode: 'fast_classical'
-      });
-      return;
-    }
+    const { isMobile = false, isLowEnd = false, maxDimension } = options;
 
     postProgress('Initializing Real-ESRGAN neural engine...', 10);
 
@@ -1000,11 +975,10 @@ async function handleEnhancementRequest(
     const sess = await getOrInitSession(postProgress);
     const tModelInitMs = performance.now() - tModelStart;
 
-    // 2. Adaptive Resolution Caps (calibrated for high fidelity without unnecessary tiling overhead):
-    // - Multi-threaded WASM SIMD (Threads >= 2): up to 512px (Generates up to 2048px 4x master)
-    // - Single-threaded WASM / Low-End / Non-isolated: up to 340px (Generates up to 1360px 4x master, >500 DPI for passport photos!)
+    // 2. Standard Master Resolution: 512px max dimension
+    // With 160x160px tiles and 140px step, standard passport aspect ratio (35x45mm) yields exactly 3 columns x 4 rows = 12 TILES!
     const isMultiThreadActive = activeBackend === 'wasm-threaded' && activeThreads > 1;
-    const defaultMaxDim = isMultiThreadActive ? (isLowEnd ? 420 : 512) : 340;
+    const defaultMaxDim = 512;
     const effectiveMaxDim = maxDimension ? Math.min(maxDimension, defaultMaxDim) : defaultMaxDim;
 
     let inWidth = imageBitmap.width;

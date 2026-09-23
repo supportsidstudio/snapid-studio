@@ -18,8 +18,6 @@ interface PassportEnhanceTabProps {
   enhancedBgImg: string | null;
   useEnhancedPhoto: boolean;
   isEnhancing: boolean;
-  enhanceFastMode: boolean;
-  setEnhanceFastMode: (val: boolean) => void;
   enhancementStatus: 'ready' | 'enhancing' | 'enhanced' | 'unavailable';
   enhanceStepText: string;
   enhancementErrorMsg: string | null;
@@ -43,8 +41,6 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
   enhancedBgImg,
   useEnhancedPhoto,
   isEnhancing,
-  enhanceFastMode,
-  setEnhanceFastMode,
   enhancementStatus,
   enhanceStepText,
   enhancementErrorMsg,
@@ -147,60 +143,15 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
 
         {/* Primary Enhance Photo Action Button */}
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-extrabold uppercase tracking-wide text-slate-800 dark:text-slate-200">Enhance Engine:</span>
-            <div className="flex items-center bg-slate-100 dark:bg-slate-900/90 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={() => setEnhanceFastMode(false)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
-                  !enhanceFastMode
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title={language === 'hi' ? 'उच्च गुणवत्ता AI HD एन्हांस' : 'High Quality AI HD Enhance'}
-              >
-                ✨ AI HD
-              </button>
-              <button
-                type="button"
-                onClick={() => setEnhanceFastMode(true)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
-                  enhanceFastMode
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-                title={language === 'hi' ? 'फास्ट स्टूडियो क्लैरिटी पास' : 'Fast Studio Clarity Pass'}
-              >
-                <span>⚡ Fast Mode</span>
-                {isLowSpec && <span className="text-[9px] bg-amber-700/80 px-1 rounded text-amber-100">★</span>}
-              </button>
-            </div>
-          </div>
-
-          {/* Low-spec device helpful guidance tag */}
-          {isLowSpec && enhanceFastMode && (
-            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
-              <span>⚡</span>
-              <span>
-                {language === 'hi'
-                  ? 'फास्ट मोड सक्रिय (लो-स्पेक पीसी के लिए तुरंत स्टूडियो क्लैरिटी)'
-                  : 'Fast Mode active (Instant studio clarity recommended for this PC)'}
-              </span>
-            </div>
-          )}
-
           <button
             type="button"
             id="passport-enhance-action-btn"
             disabled={(!rawRemovedBgImg && !removedBgImg) || isEnhancing}
             onClick={handleManualEnhanceClick}
-            className={`w-full py-3 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 cursor-pointer transition-all ${
+            className={`w-full py-3.5 px-4 rounded-xl text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2.5 cursor-pointer transition-all ${
               isEnhancing
                 ? 'bg-blue-600 text-white cursor-wait opacity-80'
-                : enhanceFastMode
-                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-md shadow-amber-500/25 active:scale-[0.99] border border-amber-400/40'
-                  : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 active:scale-[0.99] border border-blue-400/40'
+                : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/25 active:scale-[0.99] border border-blue-400/40'
             } ${(!rawRemovedBgImg && !removedBgImg) ? 'opacity-40 cursor-not-allowed' : ''}`}
           >
             {isEnhancing ? (
@@ -210,19 +161,17 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
               </>
             ) : (
               <>
-                <Sparkles className={`w-4 h-4 ${enhanceFastMode ? 'text-yellow-200' : 'text-amber-300'}`} />
+                <Sparkles className="w-4 h-4 text-amber-300" />
                 <span>
                   {enhanceCount > 0
-                    ? (enhanceFastMode ? '⚡ Fast Enhance ✓' : '🚀 AI HD Enhance ✓')
-                    : (enhanceFastMode ? '⚡ Fast Studio Enhance' : '🚀 AI HD Enhance')}
+                    ? (language === 'hi' ? '🚀 AI HD एन्हांस पुनः लागू करें ✓' : '🚀 Re-apply AI HD Enhance ✓')
+                    : (language === 'hi' ? '🚀 AI HD स्टूडियो एन्हांस' : '🚀 AI HD Studio Enhance')}
                 </span>
               </>
             )}
           </button>
           <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
-            {enhanceFastMode
-              ? (language === 'hi' ? '⚡ तुरंत फोटो क्लैरिटी एन्हांसमेंट' : '⚡ Quick studio clarity enhancement')
-              : (language === 'hi' ? '✨ उच्च गुणवत्ता स्टूडियो फोटो एन्हांसमेंट' : '✨ Studio quality photo enhancement')}
+            {language === 'hi' ? '✨ उच्च गुणवत्ता स्टूडियो फोटो एन्हांसमेंट (Real-ESRGAN)' : '✨ High-Fidelity Studio Photo Enhancement (Real-ESRGAN)'}
           </p>
         </div>
 

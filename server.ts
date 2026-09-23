@@ -151,6 +151,14 @@ async function startServer() {
   // Serve static files from public directory with proper MIME types and caching
   app.use(express.static(path.join(process.cwd(), "public"), staticFileOptions));
 
+  // Explicitly prevent *.wasm requests from ever returning HTML (prevents "incorrect response MIME type" warnings)
+  app.use((req, res, next) => {
+    if (req.path.endsWith('.wasm')) {
+      return res.status(404).setHeader('Content-Type', 'application/wasm').end();
+    }
+    next();
+  });
+
   // Vite integration as middleware in development, or static serving in production
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

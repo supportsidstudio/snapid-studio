@@ -12,7 +12,7 @@
  *    - Low-End Mobile (<=4 cores / <=2GB RAM): 640px fallback
  * 3. Stage-1 Face-Crop Re-Pass: High-fidelity facial texture pass targeting skin pores, eyelashes, and hair definition.
  * 4. Overlapped Feathered Tiling: Cosine window accumulation across overlap zones eliminates all seams.
- * 5. Fast Mode Option: Instant classical studio clarity pass for low-power or low-spec devices.
+ * 5. High-Fidelity Neural HD: Pure Real-ESRGAN super-resolution with zero classical quality compromises.
  */
 
 import AiEnhancerWorker from '../workers/ai-enhancer.worker?worker';
@@ -22,7 +22,6 @@ export interface EnhancementProgressCallback {
 }
 
 export interface EnhanceOptions {
-  fastMode?: boolean;
   maxDimension?: number;
 }
 
@@ -90,27 +89,6 @@ export function preloadAiEnhancerModel(): void {
   }
 }
 
-/**
- * Explicit Fast Clarity pass (Only executed when explicitly requested by user in fastMode)
- */
-export async function applyFastClarityPass(
-  inputBlob: Blob,
-  onProgress?: EnhancementProgressCallback
-): Promise<Blob> {
-  onProgress?.('Applying fast clarity pass...', 50);
-  const bitmap = await createImageBitmap(inputBlob);
-  const targetW = Math.round(bitmap.width * 2);
-  const targetH = Math.round(bitmap.height * 2);
-
-  const canvas = new OffscreenCanvas(targetW, targetH);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(bitmap, 0, 0, targetW, targetH);
-
-  onProgress?.('Fast clarity pass complete', 100);
-  return await canvas.convertToBlob({ type: 'image/png' });
-}
 
 /**
  * 🚀 AI HD Photo Enhancement Pipeline (Web Worker Offloaded)
@@ -139,7 +117,7 @@ export async function enhancePhotoWithRealEsrgan(
 
   const isLowEnd = (cores <= 2 || memory <= 4) || (isMobile && (cores <= 4 || memory <= 4));
 
-  console.log(`[AI Enhancer Client: INVOKE] ID: ${reqId} | Mode: ${options.fastMode ? 'Fast Classical' : 'Real-ESRGAN Neural HD'} | Blob Size: ${inputBlob.size} bytes | Device: ${isMobile ? (isLowEnd ? 'Low-End Mobile' : 'Mid/High-End Mobile') : (isLowEnd ? 'Low-Spec Desktop' : 'Standard Desktop')} (cores: ${cores}, RAM: ${memory}GB)`);
+  console.log(`[AI Enhancer Client: INVOKE] ID: ${reqId} | Mode: Real-ESRGAN Neural HD | Blob Size: ${inputBlob.size} bytes | Device: ${isMobile ? (isLowEnd ? 'Low-End Mobile' : 'Mid/High-End Mobile') : (isLowEnd ? 'Low-Spec Desktop' : 'Standard Desktop')} (cores: ${cores}, RAM: ${memory}GB)`);
 
   // Pre-create ImageBitmap to pass to worker
   const imageBitmap = await createImageBitmap(inputBlob);
@@ -189,7 +167,6 @@ export async function enhancePhotoWithRealEsrgan(
         baseUrl,
         imageBitmap,
         options: {
-          fastMode: options.fastMode || false,
           isMobile,
           isLowEnd,
           maxDimension: options.maxDimension

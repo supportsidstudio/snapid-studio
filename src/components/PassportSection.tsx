@@ -205,10 +205,6 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [bgColorType, setBgColorType] = useState<'white' | 'blue' | 'lightgray' | 'red' | 'cyan' | 'offwhite' | 'transparent' | 'custom'>('white');
   const [customBgColor, setCustomBgColor] = useState('#ffffff');
   const [sheetPageIndex, setSheetPageIndex] = useState<number>(0);
-  
-  // AI Enhance Mode (Real-ESRGAN Neural HD vs Fast Classical Mode)
-  // Low-spec devices (2 cores, <=4GB RAM) automatically default to Fast Mode for instant studio results
-  const [enhanceFastMode, setEnhanceFastMode] = useState<boolean>(() => isLowSpecDevice());
 
   // AI Progress
   const [isRemovingBg, setIsRemovingBg] = useState(false);
@@ -1163,7 +1159,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     setEnhancementErrorMsg(null);
 
     const tEnhanceClientStart = performance.now();
-    console.log(`[PassportSection: ENHANCE START] Invoking Real-ESRGAN | FastMode: ${enhanceFastMode} | Input Blob Size: ${inputBlob.size} bytes`);
+    console.log(`[PassportSection: ENHANCE START] Invoking Real-ESRGAN Neural HD | Input Blob Size: ${inputBlob.size} bytes`);
 
     try {
       const enhancedBlob = await enhancePhotoWithFsrcnn(
@@ -1172,8 +1168,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
           const displayMsg = step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
           setEnhanceStepText(displayMsg);
           setAiStep(displayMsg);
-        },
-        { fastMode: enhanceFastMode }
+        }
       );
 
       if (enhancedBlob && enhancedBlob.size > 1000) {
@@ -2345,8 +2340,6 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                     enhancedBgImg={enhancedBgImg}
                     useEnhancedPhoto={useEnhancedPhoto}
                     isEnhancing={isEnhancing}
-                    enhanceFastMode={enhanceFastMode}
-                    setEnhanceFastMode={setEnhanceFastMode}
                     enhancementStatus={enhancementStatus}
                     enhanceStepText={enhanceStepText}
                     enhancementErrorMsg={enhancementErrorMsg}
