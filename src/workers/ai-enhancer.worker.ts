@@ -244,12 +244,6 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
     const wasmPathMap: Record<string, string> = {
       'ort-wasm-simd-threaded.wasm': `${basePath}ort-wasm-simd-threaded.wasm`,
       'ort-wasm-simd-threaded.mjs': `${basePath}ort-wasm-simd-threaded.mjs`,
-      'ort-wasm-simd-threaded.jspi.wasm': `${basePath}ort-wasm-simd-threaded.jspi.wasm`,
-      'ort-wasm-simd-threaded.jspi.mjs': `${basePath}ort-wasm-simd-threaded.jspi.mjs`,
-      'ort-wasm-simd-threaded.asyncify.wasm': `${basePath}ort-wasm-simd-threaded.asyncify.wasm`,
-      'ort-wasm-simd-threaded.asyncify.mjs': `${basePath}ort-wasm-simd-threaded.asyncify.mjs`,
-      'ort-wasm-simd-threaded.jsep.wasm': `${basePath}ort-wasm-simd-threaded.jsep.wasm`,
-      'ort-wasm-simd-threaded.jsep.mjs': `${basePath}ort-wasm-simd-threaded.jsep.mjs`,
     };
 
     const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
