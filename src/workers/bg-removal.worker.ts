@@ -53,8 +53,7 @@ function getModelSources(): string[] {
   const localModel = `${base.replace(/\/+$/, '')}/models/modnet.onnx`;
   return [
     localModel,
-    'https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/modnet_photographic_portrait_matting.onnx',
-    'https://huggingface.co/DavG25/modnet-pretrained-models/resolve/main/modnet_photographic_portrait_matting.onnx'
+    '/models/modnet.onnx'
   ];
 }
 
@@ -185,12 +184,12 @@ async function getSession(): Promise<ort.InferenceSession> {
           logVerbosityLevel: 0,
         };
 
-        // Try candidate configurations in order of performance and compatibility (Local first)
+        // Try candidate configurations in order of performance and compatibility (100% Local)
         const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
           { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
           { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
-          { path: CDN_WASM_PATH, threads: threads, label: 'jsDelivr CDN WASM' },
-          { path: 'https://unpkg.com/onnxruntime-web@1.29.0/dist/', threads: 1, label: 'Unpkg CDN WASM (Single-thread)' }
+          { path: '/onnxruntime/', threads: threads, label: 'Local Root WASM' },
+          { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM (Single-thread)' }
         ];
 
         let createdSession: ort.InferenceSession | null = null;

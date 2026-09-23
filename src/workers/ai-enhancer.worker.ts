@@ -70,9 +70,7 @@ function getModelSources(): string[] {
   const localModel = `${base.replace(/\/+$/, '')}/models/realesr-general-x4v3/model.onnx`;
   return [
     localModel,
-    '/models/realesr-general-x4v3/model.onnx',
-    'https://huggingface.co/CoderViking/realesr-general-x4v3-onnx/resolve/main/realesr-general-x4v3.onnx',
-    'https://raw.githubusercontent.com/CoderViking/realesr-general-x4v3-onnx/main/realesr-general-x4v3.onnx'
+    '/models/realesr-general-x4v3/model.onnx'
   ];
 }
 
@@ -241,12 +239,12 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
       interOpNumThreads: 1,
     };
 
-    // WASM execution configurations in priority order: Local bundled files FIRST
+    // WASM execution configurations in priority order (100% Local)
     const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
       { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
       { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
-      { path: CDN_WASM_PATH, threads: threads, label: 'jsDelivr CDN WASM' },
-      { path: 'https://unpkg.com/onnxruntime-web@1.29.0/dist/', threads: 1, label: 'Unpkg CDN WASM (Single-thread)' }
+      { path: '/onnxruntime/', threads: threads, label: 'Local Root WASM' },
+      { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM (Single-thread)' }
     ];
 
     let lastWasmErr: any = null;
