@@ -309,6 +309,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const dragStartRef = useRef({ x: 0, y: 0 });
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
   const sheetCanvasRef = useRef<HTMLCanvasElement>(null);
+  const preEnhanceTransformRef = useRef<{
+    panX: number;
+    panY: number;
+    zoom: number;
+    rotation: number;
+    brightness: number;
+    contrast: number;
+  } | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1195,6 +1203,14 @@ export default function PassportSection({ language, theme }: PassportSectionProp
         setUseEnhancedPhoto(true);
         setEnhanceCount((prev) => prev + 1);
         setEnhancementStatus('enhanced');
+
+        // Reset viewport transforms because existing crop/adjust was cleanly baked into the clean photo pixels
+        setPanX(0);
+        setPanY(0);
+        setZoom(1.0);
+        setRotation(0);
+        setBrightness(100);
+        setContrast(100);
         return enhancedBlob;
       } else {
         throw new Error('Enhanced image payload is invalid or empty');
@@ -1215,42 +1231,140 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     }
   };
 
-  // Toggle between Enhanced and Original background-removed version
+  /**
+   * Extract clean underlying photo pixels with existing crop/adjust state
+   * (NO UI guide lines, NO dashed lines, NO crop marks, NO dress, NO background color).
+   * Ensures the AI super-resolution processes only the framed subject portrait.
+   */
+  const getCleanUnderlyingPhotoBlob = async (): Promise<Blob | null> => {
+    const activeSrc = (useEnhancedPhoto && enhancedBgImg)
+      ? enhancedBgImg
+      : (removedBgImg || rawRemovedBgImg || originalImage);
+    if (!activeSrc) return null;
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Failed to load photo for enhancement'));
+      img.src = activeSrc;
+    });
+
+    const naturalW = img.naturalWidth || img.width || 600;
+    const naturalH = img.naturalHeight || img.height || 600;
+
+    // Maintain high native resolution according to passport aspect ratio
+    const baseWidth = Math.max(500, Math.min(800, naturalW));
+    const baseHeight = Math.round(baseWidth / (selectedSizePreset?.aspectRatio || (35 / 45)));
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = baseWidth;
+    offscreen.height = baseHeight;
+    const ctx = offscreen.getContext('2d');
+    if (!ctx) return null;
+
+    // Clear completely transparent (or clean) canvas
+    ctx.clearRect(0, 0, baseWidth, baseHeight);
+
+    // Apply the existing crop/adjust transforms ONLY to the clean photo pixels
+    ctx.save();
+    ctx.translate(baseWidth / 2 + panX, baseHeight / 2 + panY);
+    ctx.rotate((rotation * Math.PI) / 180);
+
+    const fitScale = Math.max(baseWidth / naturalW, baseHeight / naturalH);
+    const drawWidth = naturalW * fitScale * zoom;
+    const drawHeight = naturalH * fitScale * zoom;
+
+    ctx.filter = `brightness(${brightness}%) contrast(${contrast}%)`;
+
+    // CRITICAL: Draw ONLY the clean underlying photo pixels
+    // NO background color, NO dress template, NO guidelines, NO dashed lines, NO crop box!
+    ctx.drawImage(
+      img,
+      -drawWidth / 2,
+      -drawHeight / 2,
+      drawWidth,
+      drawHeight
+    );
+    ctx.restore();
+
+    return await new Promise<Blob | null>((resolve) => {
+      offscreen.toBlob((b) => resolve(b), 'image/png');
+    });
+  };
+
+  // Toggle between Enhanced and Original version
   const handleToggleEnhanced = (useEnhanced: boolean) => {
     setUseEnhancedPhoto(useEnhanced);
     if (useEnhanced && enhancedBgImg) {
       setRemovedBgImg(enhancedBgImg);
-    } else if (rawRemovedBgImg) {
-      setRemovedBgImg(rawRemovedBgImg);
+      setPanX(0);
+      setPanY(0);
+      setZoom(1.0);
+      setRotation(0);
+      setBrightness(100);
+      setContrast(100);
+    } else if (rawRemovedBgImg || originalImage) {
+      setRemovedBgImg(rawRemovedBgImg || originalImage);
+      if (preEnhanceTransformRef.current) {
+        const t = preEnhanceTransformRef.current;
+        setPanX(t.panX);
+        setPanY(t.panY);
+        setZoom(t.zoom);
+        setRotation(t.rotation);
+        setBrightness(t.brightness);
+        setContrast(t.contrast);
+      }
     }
   };
 
   // Manual trigger for Enhance Photo button (iterative multi-pass enhancement on each click)
   const handleManualEnhanceClick = async () => {
-    // If currently using enhanced version, enhance that version further; otherwise enhance raw original
-    const srcToEnhance = (useEnhancedPhoto && enhancedBgImg) ? enhancedBgImg : (rawRemovedBgImg || removedBgImg);
-    if (!srcToEnhance || isEnhancing) return;
+    if (isEnhancing) return;
 
     try {
-      const resp = await fetch(srcToEnhance);
-      const blob = await resp.blob();
-      await runAiPhotoEnhancement(blob, false);
-    } catch (err) {
-      console.warn('Manual enhancement fetch failed:', err);
+      // 1. Capture clean underlying photo pixels with existing crop/adjust state
+      // (NO UI guide lines, NO dashed lines, NO dress, NO background color)
+      const cleanBlob = await getCleanUnderlyingPhotoBlob();
+      if (!cleanBlob) {
+        throw new Error('No photo available to enhance');
+      }
+
+      // Save pre-enhance transform state on first enhance pass so Reset restores it
+      if (!useEnhancedPhoto || enhanceCount === 0) {
+        preEnhanceTransformRef.current = { panX, panY, zoom, rotation, brightness, contrast };
+      }
+
+      await runAiPhotoEnhancement(cleanBlob, false);
+    } catch (err: any) {
+      console.warn('Manual enhancement failed:', err);
       setEnhancementStatus('unavailable');
-      setEnhancementErrorMsg("AI enhancement couldn't be completed. Original photo is ready.");
+      setEnhancementErrorMsg(
+        language === 'hi'
+          ? 'AI एन्हांसमेंट पूरा नहीं हो सका: ' + (err?.message || 'Error')
+          : "AI enhancement couldn't be completed: " + (err?.message || 'Error')
+      );
     }
   };
 
   // Reset enhancement back to 0x Original
   const handleResetEnhancement = () => {
-    if (!rawRemovedBgImg) return;
     setUseEnhancedPhoto(false);
-    setRemovedBgImg(rawRemovedBgImg);
+    setRemovedBgImg(rawRemovedBgImg || originalImage);
     setEnhancedBgImg(null);
     setEnhanceCount(0);
     setEnhancementStatus('ready');
     setEnhancementErrorMsg(null);
+    if (preEnhanceTransformRef.current) {
+      const t = preEnhanceTransformRef.current;
+      setPanX(t.panX);
+      setPanY(t.panY);
+      setZoom(t.zoom);
+      setRotation(t.rotation);
+      setBrightness(t.brightness);
+      setContrast(t.contrast);
+    }
+    preEnhanceTransformRef.current = null;
   };
 
   // Get background color string

@@ -525,6 +525,91 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
 
 
 /**
+ * High-Fidelity 4x to 2x Catmull-Rom Bicubic Downsampler
+ * Preserves Nyquist frequency edges, eliminating the blur/softness of naive bilinear downsampling.
+ */
+function downsample4xTo2xCatmullRom(
+  srcCanvas: OffscreenCanvas,
+  dstW: number,
+  dstH: number
+): OffscreenCanvas {
+  const srcW = dstW * 2;
+  const srcH = dstH * 2;
+  const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true })!;
+  const srcImgData = srcCtx.getImageData(0, 0, srcW, srcH);
+  const srcData = srcImgData.data;
+
+  const outCanvas = new OffscreenCanvas(dstW, dstH);
+  const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })!;
+  const outImgData = outCtx.createImageData(dstW, dstH);
+  const outData = outImgData.data;
+
+  // Catmull-Rom cubic downsampling weights with anti-blur frequency retention
+  const k0 = -0.0625;
+  const k1 = 0.5625;
+  const k2 = 0.5625;
+  const k3 = -0.0625;
+
+  // Pass 1: Horizontal downsample (srcW -> dstW, keeping srcH)
+  const interm = new Float32Array(dstW * srcH * 4);
+  for (let y = 0; y < srcH; y++) {
+    const rowSrc = y * srcW * 4;
+    const rowDst = y * dstW * 4;
+    for (let x = 0; x < dstW; x++) {
+      const x0 = Math.max(0, 2 * x - 1) * 4;
+      const x1 = (2 * x) * 4;
+      const x2 = Math.min(srcW - 1, 2 * x + 1) * 4;
+      const x3 = Math.min(srcW - 1, 2 * x + 2) * 4;
+      const dIdx = rowDst + x * 4;
+
+      for (let c = 0; c < 4; c++) {
+        interm[dIdx + c] = (
+          k0 * srcData[rowSrc + x0 + c] +
+          k1 * srcData[rowSrc + x1 + c] +
+          k2 * srcData[rowSrc + x2 + c] +
+          k3 * srcData[rowSrc + x3 + c]
+        );
+      }
+    }
+  }
+
+  // Pass 2: Vertical downsample (srcH -> dstH)
+  for (let y = 0; y < dstH; y++) {
+    const y0 = Math.max(0, 2 * y - 1) * dstW * 4;
+    const y1 = (2 * y) * dstW * 4;
+    const y2 = Math.min(srcH - 1, 2 * y + 1) * dstW * 4;
+    const y3 = Math.min(srcH - 1, 2 * y + 2) * dstW * 4;
+    const rowDst = y * dstW * 4;
+
+    for (let x = 0; x < dstW; x++) {
+      const colOffset = x * 4;
+      const dIdx = rowDst + colOffset;
+
+      for (let c = 0; c < 3; c++) {
+        const v = (
+          k0 * interm[y0 + colOffset + c] +
+          k1 * interm[y1 + colOffset + c] +
+          k2 * interm[y2 + colOffset + c] +
+          k3 * interm[y3 + colOffset + c]
+        );
+        outData[dIdx + c] = Math.max(0, Math.min(255, Math.round(v)));
+      }
+      // Alpha: clean downsampling
+      const a = (
+        k0 * interm[y0 + colOffset + 3] +
+        k1 * interm[y1 + colOffset + 3] +
+        k2 * interm[y2 + colOffset + 3] +
+        k3 * interm[y3 + colOffset + 3]
+      );
+      outData[dIdx + 3] = Math.max(0, Math.min(255, Math.round(a)));
+    }
+  }
+
+  outCtx.putImageData(outImgData, 0, 0);
+  return outCanvas;
+}
+
+/**
  * Single Forward Pass Super-Resolution for compact images or face crop
  */
 async function runSinglePassSuperResolution(
@@ -885,16 +970,15 @@ async function handleEnhancementRequest(
     const sess = await getOrInitSession(postProgress);
     const tModelInitMs = performance.now() - tModelStart;
 
-    // 2. Preprocessing & True 2x Geometry Calculation
+    // 2. Preprocessing & Native Resolution Geometry Calculation
     const tPreStart = performance.now();
     const origW = imageBitmap.width;
     const origH = imageBitmap.height;
 
     // Standard Passport Preprocessing:
-    // A standard passport photo is typically ~413x531 (35x45mm at 300 DPI).
-    // For large uploads (e.g. multi-megapixel camera shots), cap working dimension to 512px
-    // to avoid processing unnecessary pixels before enhancement (Requirement 8 & 9).
-    const maxDimCap = 512;
+    // Retain 100% of native portrait resolution up to 800px.
+    // NEVER downscale 50% before neural processing!
+    const maxDimCap = 800;
     let procW = origW;
     let procH = origH;
     if (Math.max(procW, procH) > maxDimCap) {
@@ -903,18 +987,12 @@ async function handleEnhancementRequest(
       procH = Math.round(procH * downscale);
     }
 
-    // TRUE 2x Output Workflow (Requirement 3, 4, 5):
-    // Final required enhanced output is EXACTLY 2x relative to the processed input:
-    // finalW = procW * 2
-    // finalH = procH * 2
-    // Because Real-ESRGAN neural model has an inherent 4x upscale factor,
-    // we size the neural input to neuralInW = finalW / 4 = procW / 2
-    // so that the neural model output is DIRECTLY finalW x finalH!
-    // NO intermediate 4x master is created, and NO second resize is performed.
-    const neuralInW = Math.max(16, Math.round(procW / 2));
-    const neuralInH = Math.max(16, Math.round(procH / 2));
-    const finalW = neuralInW * 4;
-    const finalH = neuralInH * 4;
+    // Direct Neural Input: The neural net processes the native pixels!
+    const neuralInW = procW;
+    const neuralInH = procH;
+    // Final required enhanced output is EXACTLY 2x relative to the input:
+    const finalW = procW * 2;
+    const finalH = procH * 2;
 
     // Detect background transparency & foreground tone
     const sampleCanvas = new OffscreenCanvas(Math.min(procW, 80), Math.min(procH, 80));
@@ -937,7 +1015,7 @@ async function handleEnhancementRequest(
       }
     }
 
-    // Prepare neural input canvas directly at (neuralInW x neuralInH)
+    // Prepare neural input canvas directly at native resolution (neuralInW x neuralInH)
     const prepCanvas = new OffscreenCanvas(neuralInW, neuralInH);
     const prepCtx = prepCanvas.getContext('2d', { willReadFrequently: true })!;
     prepCtx.imageSmoothingEnabled = true;
@@ -953,11 +1031,11 @@ async function handleEnhancementRequest(
     prepCtx.drawImage(imageBitmap, 0, 0, neuralInW, neuralInH);
     const tPreMs = performance.now() - tPreStart;
 
-    console.log(`[AI Enhancer Worker: PREPROCESSING COMPLETE] Original: ${origW}x${origH}px -> Processed: ${procW}x${procH}px -> Direct Neural Input: ${neuralInW}x${neuralInH}px -> Target 2x Output: ${finalW}x${finalH}px (Pre-prep time: ${tPreMs.toFixed(1)}ms)`);
+    console.log(`[AI Enhancer Worker: PREPROCESSING COMPLETE] Original: ${origW}x${origH}px -> Native Neural Input: ${neuralInW}x${neuralInH}px -> Target 2x Output: ${finalW}x${finalH}px (Pre-prep time: ${tPreMs.toFixed(1)}ms)`);
 
-    // 3. Neural Inference (True 2x Output, no intermediate 4x master)
+    // 3. Neural Inference (Full Native Input Resolution)
     const tInferStart = performance.now();
-    const { outCanvas: aiCanvas, totalTiles, tileSize } = await runRealEsrganInferenceWorker(
+    const { outCanvas: neural4xCanvas, totalTiles, tileSize } = await runRealEsrganInferenceWorker(
       sess,
       prepCanvas,
       neuralInW,
@@ -965,11 +1043,18 @@ async function handleEnhancementRequest(
       isLowEnd,
       postProgress,
       25,
-      65
+      75
     );
     const tInferMs = performance.now() - tInferStart;
 
-    // 4. Postprocessing Refinement (Natural quality: mild denoise, natural sharpening, face identity preserved, no plastic look)
+    // 4. High-Fidelity 4x to 2x Catmull-Rom Bicubic Downsampling
+    // Downsamples the 4x super-resolution master to exact 2x with zero edge blur or softness
+    postProgress('Creating high-definition 2x portrait...', 88);
+    const tDownsampleStart = performance.now();
+    const aiCanvas = downsample4xTo2xCatmullRom(neural4xCanvas, finalW, finalH);
+    const tDownsampleMs = performance.now() - tDownsampleStart;
+
+    // 5. Postprocessing Refinement (Natural Remini-grade quality: eyes, hair, lips, skin pores)
     postProgress('Applying natural detail & micro-texture refinement...', 92);
     const tPostStart = performance.now();
     const finalCtx = aiCanvas.getContext('2d', { willReadFrequently: true })!;
@@ -1001,7 +1086,7 @@ async function handleEnhancementRequest(
     }
 
     finalCtx.putImageData(finalImgData, 0, 0);
-    const tPostMs = performance.now() - tPostStart;
+    const tPostMs = performance.now() - tPostStart + tDownsampleMs;
 
     postProgress('Finalizing HD portrait...', 96);
     const tBlobStart = performance.now();
@@ -1009,25 +1094,25 @@ async function handleEnhancementRequest(
     const tBlobMs = performance.now() - tBlobStart;
     const totalElapsedMs = performance.now() - startTime;
 
-    // Detailed console timing breakdown (Requirement 18)
+    // Detailed console timing breakdown
     console.log(`
 ===============================================================
-[AI ENHANCER WORKER: EXECUTION SUMMARY (TRUE 2x WORKFLOW)]
+[AI ENHANCER WORKER: EXECUTION SUMMARY (TRUE 2x REMINI-GRADE WORKFLOW)]
 ---------------------------------------------------------------
-Mode:                         REAL-ESRGAN NEURAL HD (TRUE 2x Output Pipeline)
+Mode:                         REAL-ESRGAN NEURAL HD (Native Input + Catmull-Rom 2x Output)
 Input Resolution:             ${origW}x${origH}px
-Processed Input:              ${procW}x${procH}px
-Direct Neural Input:          ${neuralInW}x${neuralInH}px
-Direct Neural Output:         ${finalW}x${finalH}px (NO 4x master, NO second resize)
-Genuine Scale Factor:         ${(finalW / procW).toFixed(2)}x
+Native Neural Input:          ${neuralInW}x${neuralInH}px (Full Resolution, No Pre-Downscaling)
+Neural 4x Super-Resolution:   ${neuralInW * 4}x${neuralInH * 4}px
+Final 2x Output:              ${finalW}x${finalH}px (Catmull-Rom Anti-Blur Downsampled)
+Genuine Scale Factor:         2.00x
 Tile Configuration:           ${totalTiles} tile(s) | Tile Size: ${tileSize}x${tileSize}px
 Engine Backend:               ${activeBackend} (Threads: ${activeThreads})
 ---------------------------------------------------------------
 DETAILED TIMING BREAKDOWN:
 - Model/Session Initialization: ${tModelInitMs.toFixed(1)} ms ${tModelInitMs < 10 ? '(CACHED REUSED SESSION ✓)' : '(Cold Start)'}
 - Preprocessing:                ${tPreMs.toFixed(1)} ms
-- Inference:                    ${tInferMs.toFixed(1)} ms (${(tInferMs / totalTiles).toFixed(1)} ms/tile)
-- Postprocessing:               ${tPostMs.toFixed(1)} ms
+- Neural Inference:             ${tInferMs.toFixed(1)} ms (${(tInferMs / totalTiles).toFixed(1)} ms/tile)
+- 4x->2x Catmull-Rom & Refine:  ${tPostMs.toFixed(1)} ms
 - Output PNG Encoding:          ${tBlobMs.toFixed(1)} ms
 ---------------------------------------------------------------
 TOTAL TIME:                     ${totalElapsedMs.toFixed(1)} ms (${(totalElapsedMs / 1000).toFixed(2)}s)
