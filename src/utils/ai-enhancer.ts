@@ -29,6 +29,20 @@ export interface EnhanceOptions {
 let enhancerWorker: Worker | null = null;
 let currentRequestId = 0;
 
+/**
+ * Detects if current machine is a low-spec device (e.g. 2 cores, <=4GB RAM, or low-tier mobile)
+ * Commonly found in Cyber Cafes, eMitra centers, and budget setups.
+ */
+export function isLowSpecDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const cores = typeof navigator.hardwareConcurrency === 'number' ? navigator.hardwareConcurrency : 4;
+  const memory = typeof (navigator as any)?.deviceMemory === 'number' ? (navigator as any).deviceMemory : 4;
+  const isMobile = typeof window !== 'undefined' && (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth <= 768
+  );
+  return (cores <= 2 || memory <= 4) || (isMobile && (cores <= 4 || memory <= 4));
+}
+
 function getClientBaseUrl(): string {
   if (typeof window !== 'undefined' && window.location) {
     const origin = window.location.origin;

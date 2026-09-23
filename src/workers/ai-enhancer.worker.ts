@@ -122,6 +122,7 @@ try {
 let session: ort.InferenceSession | null = null;
 let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
 let activeBackend: 'wasm-threaded' | 'wasm-single' = 'wasm-single';
+let activeThreads: number = 1;
 
 async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number) => void): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
@@ -236,11 +237,13 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
       enableCpuMemArena: true,
       enableMemPattern: true,
       logSeverityLevel: 3,
+      intraOpNumThreads: threads,
+      interOpNumThreads: 1,
     };
 
     // WASM execution configurations in priority order: Local bundled files FIRST
     const wasmConfigs: Array<{ path: string; threads: number; label: string }> = [
-      { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread SIMD' : 'Single-thread SIMD'})` },
+      { path: getWasmBasePath(), threads: threads, label: `Local WASM (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
       { path: getWasmBasePath(), threads: 1, label: 'Local WASM (Single-thread fallback)' },
       { path: CDN_WASM_PATH, threads: threads, label: 'jsDelivr CDN WASM' },
       { path: 'https://unpkg.com/onnxruntime-web@1.29.0/dist/', threads: 1, label: 'Unpkg CDN WASM (Single-thread)' }
@@ -256,8 +259,10 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
         ort.env.wasm.proxy = false;
 
         const wasmSession = await ort.InferenceSession.create(modelBuffer.slice(0), sessionOptions);
-        activeBackend = (isIsolated && cfg.threads > 1) ? 'wasm-threaded' : 'wasm-single';
-        console.log(`[AI Enhancer Worker] Real-ESRGAN session ACTIVE via ${cfg.label} (Engine: ${activeBackend}, Threads: ${cfg.threads}, Isolated: ${isIsolated}) in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${wasmSession.inputNames.join(', ')}] Outputs: [${wasmSession.outputNames.join(', ')}]`);
+        const isSharedArrayBufferAvailable = typeof SharedArrayBuffer !== 'undefined';
+        activeBackend = (isIsolated && isSharedArrayBufferAvailable && cfg.threads > 1) ? 'wasm-threaded' : 'wasm-single';
+        activeThreads = activeBackend === 'wasm-threaded' ? cfg.threads : 1;
+        console.log(`[AI Enhancer Worker] Real-ESRGAN session ACTIVE via ${cfg.label} (Engine: ${activeBackend}, Threads: ${activeThreads}, Isolated: ${isIsolated}, SharedArrayBuffer: ${isSharedArrayBufferAvailable}) in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${wasmSession.inputNames.join(', ')}] Outputs: [${wasmSession.outputNames.join(', ')}]`);
         session = wasmSession;
         return wasmSession;
       } catch (cfgErr: any) {
@@ -624,19 +629,23 @@ async function runRealEsrganInferenceWorker(
   const inputName = sess.inputNames[0] || 'input';
   const outputName = sess.outputNames[0] || 'output';
 
-  // Single pass if image is compact (<= 320px)
-  if (inWidth <= 320 && inHeight <= 320) {
-    postProgress('Running Real-ESRGAN neural super-resolution (single pass ~3s)...', progressBasePct + Math.round(progressSpanPct * 0.5));
+  const isMultiThreadActive = activeBackend === 'wasm-threaded' && activeThreads > 1;
+
+  // Single pass if image is compact
+  const singlePassThreshold = isMultiThreadActive ? 320 : 300;
+  if (inWidth <= singlePassThreshold && inHeight <= singlePassThreshold) {
+    postProgress('Running Real-ESRGAN neural super-resolution (single pass ~8s)...', progressBasePct + Math.round(progressSpanPct * 0.5));
     return await runSinglePassSuperResolution(sess, inputCanvas, inWidth, inHeight);
   }
 
-  // Adaptive Tile & Overlap Sizing:
-  // - Pure CPU/WASM SIMD: 160px tiles (cuts per-tile pixel workload by 50% vs 224px!)
-  const tileSize = 160;
-  const tilePad = 10;
+  // Adaptive Tile & Overlap Sizing based on ACTUAL runtime engine & thread count:
+  // - Multi-threaded WASM SIMD (threads >= 2 & crossOriginIsolated): 224px tiles with 12px overlap (parallel thread scaling)
+  // - Single-threaded WASM fallback (Threads: 1 or non-isolated): 160px tiles with 10px overlap (cuts per-tile pixel workload by 50% vs 224px and 60% vs 256px!)
+  const tileSize = isMultiThreadActive ? 224 : 160;
+  const tilePad = isMultiThreadActive ? 12 : 10;
   const step = tileSize - 2 * tilePad;
 
-  console.log(`[AI Enhancer Worker: TILE CONFIG] Active Engine: ${activeBackend} | isLowEnd: ${isLowEnd} => Chosen Tile Size: ${tileSize}x${tileSize}px (step: ${step}px, overlap: ${tilePad}px)`);
+  console.log(`[AI Enhancer Worker: TILE CONFIG] Active Engine: ${activeBackend} (Threads: ${activeThreads}) | isLowEnd: ${isLowEnd} => Chosen Tile Size: ${tileSize}x${tileSize}px (step: ${step}px, overlap: ${tilePad}px)`);
 
   const accumR = new Float32Array(outW * outH);
   const accumG = new Float32Array(outW * outH);
@@ -994,9 +1003,10 @@ async function handleEnhancementRequest(
     const tModelInitMs = performance.now() - tModelStart;
 
     // 2. Adaptive Resolution Caps (calibrated for high fidelity without unnecessary tiling overhead):
-    // - Multi-threaded WASM SIMD: up to 720px (Generates up to 2880px 4x master)
-    // - Single-threaded WASM / Low-End: up to 540px (Generates up to 2160px 4x master, 1080px final output - over 500 DPI for passport photos!)
-    const defaultMaxDim = (isLowEnd || activeBackend === 'wasm-single') ? 540 : 720;
+    // - Multi-threaded WASM SIMD (Threads >= 2): up to 512px (Generates up to 2048px 4x master)
+    // - Single-threaded WASM / Low-End / Non-isolated: up to 340px (Generates up to 1360px 4x master, >500 DPI for passport photos!)
+    const isMultiThreadActive = activeBackend === 'wasm-threaded' && activeThreads > 1;
+    const defaultMaxDim = isMultiThreadActive ? (isLowEnd ? 420 : 512) : 340;
     const effectiveMaxDim = maxDimension ? Math.min(maxDimension, defaultMaxDim) : defaultMaxDim;
 
     let inWidth = imageBitmap.width;

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { AppLanguage, AppTheme } from '../../types';
 import { translations } from '../../translations';
+import { isLowSpecDevice } from '../../utils/ai-enhancer';
 
 interface PassportEnhanceTabProps {
   language: AppLanguage;
@@ -84,6 +85,8 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
     return false;
   };
 
+  const isLowSpec = isLowSpecDevice();
+
   const handleSelectColor = (val: string) => {
     setBgColor(val);
     if (!removedBgImg && !isRemovingBg) {
@@ -113,7 +116,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
             {enhancementStatus === 'enhancing' ? (
               <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-blue-500/15 text-blue-500 border border-blue-500/30 flex items-center gap-1.5 animate-pulse">
                 <RefreshCw className="w-3 h-3 animate-spin" />
-                <span>{language === 'hi' ? 'एन्हांस हो रहा है...' : 'Enhancing...'}</span>
+                <span>{enhanceStepText || (language === 'hi' ? 'एन्हांस हो रहा है...' : 'Enhancing...')}</span>
               </span>
             ) : enhancementStatus === 'enhanced' ? (
               <span className="text-[10px] font-mono font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
@@ -162,17 +165,30 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
               <button
                 type="button"
                 onClick={() => setEnhanceFastMode(true)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-extrabold transition-all cursor-pointer flex items-center gap-1 ${
                   enhanceFastMode
                     ? 'bg-amber-600 text-white shadow-xs'
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
                 title={language === 'hi' ? 'फास्ट स्टूडियो क्लैरिटी पास' : 'Fast Studio Clarity Pass'}
               >
-                ⚡ Fast Mode
+                <span>⚡ Fast Mode</span>
+                {isLowSpec && <span className="text-[9px] bg-amber-700/80 px-1 rounded text-amber-100">★</span>}
               </button>
             </div>
           </div>
+
+          {/* Low-spec device helpful guidance tag */}
+          {isLowSpec && enhanceFastMode && (
+            <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
+              <span>⚡</span>
+              <span>
+                {language === 'hi'
+                  ? 'फास्ट मोड सक्रिय (लो-स्पेक पीसी के लिए तुरंत स्टूडियो क्लैरिटी)'
+                  : 'Fast Mode active (Instant studio clarity recommended for this PC)'}
+              </span>
+            </div>
+          )}
 
           <button
             type="button"
@@ -190,7 +206,7 @@ export const PassportEnhanceTab: React.FC<PassportEnhanceTabProps> = ({
             {isEnhancing ? (
               <>
                 <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                <span>{language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...'}</span>
+                <span>{enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...')}</span>
               </>
             ) : (
               <>

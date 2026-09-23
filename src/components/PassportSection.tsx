@@ -57,7 +57,7 @@ import {
   cleanupPrintMemory,
   DPI_300_DPM
 } from '../utils/passport-print-engine';
-import { enhancePhotoWithFsrcnn, preloadAiEnhancerModel } from '../utils/ai-enhancer';
+import { enhancePhotoWithFsrcnn, preloadAiEnhancerModel, isLowSpecDevice } from '../utils/ai-enhancer';
 import { getSamplePassportPhotoDataUrl, SAMPLE_FEMALE_PASSPORT_DATA_URL } from '../utils/sampleAssets';
 import {
   DressTransformState,
@@ -207,7 +207,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [sheetPageIndex, setSheetPageIndex] = useState<number>(0);
   
   // AI Enhance Mode (Real-ESRGAN Neural HD vs Fast Classical Mode)
-  const [enhanceFastMode, setEnhanceFastMode] = useState<boolean>(false);
+  // Low-spec devices (2 cores, <=4GB RAM) automatically default to Fast Mode for instant studio results
+  const [enhanceFastMode, setEnhanceFastMode] = useState<boolean>(() => isLowSpecDevice());
 
   // AI Progress
   const [isRemovingBg, setIsRemovingBg] = useState(false);
@@ -291,6 +292,13 @@ export default function PassportSection({ language, theme }: PassportSectionProp
   const [activeTab, setActiveTab] = useState<'adjust' | 'sheet'>('adjust');
   const [rightPanelTab, setRightPanelTab] = useState<'layout' | 'crop' | 'enhance' | 'dress'>('layout');
   const [isDragOver, setIsDragOver] = useState(false);
+
+  // Silently preload Real-ESRGAN AI model in background when Enhance tab is viewed or when photo is ready
+  useEffect(() => {
+    if (rightPanelTab === 'enhance' || rawRemovedBgImg) {
+      preloadAiEnhancerModel();
+    }
+  }, [rightPanelTab, rawRemovedBgImg]);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1153,9 +1161,10 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     try {
       const enhancedBlob = await enhancePhotoWithFsrcnn(
         inputBlob,
-        (_step, _percent) => {
-          setEnhanceStepText(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
-          setAiStep(language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...');
+        (step, _percent) => {
+          const displayMsg = step || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing photo...');
+          setEnhanceStepText(displayMsg);
+          setAiStep(displayMsg);
         },
         { fastMode: enhanceFastMode }
       );
@@ -1980,7 +1989,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
                         </div>
                         <span className="text-xs sm:text-sm font-bold text-white mb-2.5 drop-shadow">
                           {isEnhancing
-                            ? (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...')
+                            ? (enhanceStepText || (language === 'hi' ? 'फोटो एन्हांस की जा रही है...' : 'Enhancing your photo...'))
                             : (aiStep || (language === 'hi' ? 'फोटो प्रोसेस की जा रही है...' : 'Processing photo...'))}
                         </span>
                         <div className="w-36 bg-slate-800 rounded-full h-1.5 overflow-hidden border border-slate-700/50 relative">
