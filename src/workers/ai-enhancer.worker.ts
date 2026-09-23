@@ -63,31 +63,28 @@ function getWasmBasePath(): string {
 
 function getModelSources(): string[] {
   const base = getAppBaseUrl();
-  const localModel = `${base.replace(/\/+$/, '')}/models/realesr-general-x4v3/model.onnx`;
+  const localModel = `${base.replace(/\/+$/, '')}/models/compact-esrgan-x2/model.onnx`;
   return [
     localModel,
-    '/models/realesr-general-x4v3/model.onnx'
+    '/models/compact-esrgan-x2/model.onnx'
   ];
 }
 
-const CACHE_NAME = 'snapid-realesrgan-model-v3';
-const EXPECTED_LOCAL_MODEL_SIZE = 4866417; // Exact byte length of realesr-general-x4v3.onnx
+const CACHE_NAME = 'snapid-compact-esrgan-2x-v1';
+const EXPECTED_LOCAL_MODEL_SIZE = 2411189; // Exact byte length of compact-esrgan-x2/model.onnx (2.30 MB)
 
 try {
   ort.env.logLevel = 'error';
   const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
   const safeThreads = isIsolated
     ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-        ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+        ? Math.min(2, Math.max(1, navigator.hardwareConcurrency))
         : 2)
     : 1;
 
-  // Always point to local WASM binaries first (shipped in /onnxruntime/)
+  // Configure WASM base path ending with /
   const initialBasePath = getWasmBasePath();
-  ort.env.wasm.wasmPaths = {
-    mjs: `${initialBasePath}ort-wasm-simd-threaded.mjs`,
-    wasm: `${initialBasePath}ort-wasm-simd-threaded.wasm`,
-  };
+  ort.env.wasm.wasmPaths = initialBasePath;
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
@@ -96,7 +93,7 @@ try {
   if (typeof caches !== 'undefined') {
     caches.keys().then((keys) => {
       keys.forEach((key) => {
-        if (key.startsWith('snapid-realesrgan-model-') && key !== CACHE_NAME) {
+        if (key.startsWith('snapid-realesrgan-') || (key.startsWith('snapid-compact-esrgan-') && key !== CACHE_NAME)) {
           caches.delete(key).catch(() => {});
         }
       });
@@ -108,10 +105,8 @@ try {
     allocatedThreads: safeThreads,
     hardwareConcurrency: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 'unknown',
     isSharedArrayBufferAvailable: typeof SharedArrayBuffer !== 'undefined',
-    wasmPath: getWasmBasePath(),
-    environmentNotice: isIsolated
-      ? 'Cross-Origin Isolation ACTIVE (Multi-threaded WASM SIMD enabled)'
-      : 'Embedded/Iframe Context: crossOriginIsolated is FALSE. Multi-threading is locked by browser security. In standalone/production tab, COOP/COEP enables multi-threading.'
+    wasmPath: initialBasePath,
+    modelTarget: 'Compact-ESRGAN-2x (Native 2x Super-Resolution)',
   });
 } catch (e) {
   console.warn('[AI Enhancer Worker] Initial ORT environment warning:', e);
@@ -121,6 +116,7 @@ let session: ort.InferenceSession | null = null;
 let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
 let activeBackend: 'webgpu' | 'wasm-threaded' | 'wasm-single' = 'wasm-single';
 let activeThreads: number = 1;
+let webgpuUsable: boolean = false; // ort.wasm bundle is WASM-only; track usability to avoid repeated failed attempts (Fix #6)
 
 async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number) => void): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
@@ -135,7 +131,7 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
         const cached = await cache.match(resolved);
         if (cached) {
           const buffer = await cached.arrayBuffer();
-          if (buffer.byteLength >= 4800000 && buffer.byteLength <= 5000000) {
+          if (buffer.byteLength >= 2300000 && buffer.byteLength <= 2600000) {
             const header = new Uint8Array(buffer, 0, 4);
             if (header[0] === 0x08) {
               console.log(`[AI Enhancer Worker] Model verified from Cache API (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB, ${buffer.byteLength} bytes)`);
@@ -155,8 +151,8 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
     const rawUrl = sources[i];
     const url = rawUrl.startsWith('/') ? `${base.replace(/\/+$/, '')}${rawUrl}` : rawUrl;
     try {
-      postProgress(i === 0 ? 'Loading Real-ESRGAN AI model (~4.86MB)...' : 'Retrying AI model load from mirror...', 12);
-      console.log(`[AI Enhancer Worker] Fetching Real-ESRGAN model binary from: ${url}`);
+      postProgress(i === 0 ? 'Loading Compact-ESRGAN 2x model (~2.3MB)...' : 'Retrying AI model load from mirror...', 12);
+      console.log(`[AI Enhancer Worker] Fetching 2x model binary from: ${url}`);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status} (${res.statusText})`);
 
@@ -172,9 +168,9 @@ async function fetchAndCacheModelBuffer(postProgress: (msg: string, pct: number)
       console.log(`[AI Enhancer Worker] Model fetch completed from ${url}. Headers: [Content-Length: ${cLength}, Content-Encoding: ${cEncoding || 'none'}], Decompressed Payload: ${buffer.byteLength} bytes`);
 
       // Integrity checks:
-      // A: Size validation (Real-ESRGAN general x4v3 compact ONNX is ~4.86MB)
-      if (buffer.byteLength < 4800000 || buffer.byteLength > 5000000) {
-        throw new Error(`Model binary size mismatch: expected ~${EXPECTED_LOCAL_MODEL_SIZE} bytes (4.86MB), received ${buffer.byteLength} bytes. File is likely corrupted or truncated.`);
+      // A: Size validation (Compact-ESRGAN 2x ONNX is ~2.4MB)
+      if (buffer.byteLength < 2300000 || buffer.byteLength > 2600000) {
+        throw new Error(`Model binary size mismatch: expected ~${EXPECTED_LOCAL_MODEL_SIZE} bytes (2.4MB), received ${buffer.byteLength} bytes. File is likely corrupted or truncated.`);
       }
 
       // B: Protobuf ONNX Magic Byte check (All valid ONNX models begin with 0x08 tag 1)
@@ -218,23 +214,21 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
   sessionLoadingPromise = (async () => {
     const tStart = performance.now();
     const modelBuffer = await fetchAndCacheModelBuffer(postProgress);
-    postProgress('Initializing Real-ESRGAN neural engine...', 25);
+    postProgress('Initializing Compact-ESRGAN 2x neural engine...', 25);
 
     const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
     const threads = isIsolated
       ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-          ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+          ? Math.min(2, Math.max(1, navigator.hardwareConcurrency))
           : 2)
       : 1;
 
-    const isGitHub = typeof self !== 'undefined' && self.location && (self.location.hostname.includes('github.io') || self.location.protocol === 'file:');
-
-    // 1. WebGPU Execution Provider (Prefer WebGPU if available and stable)
-    if (typeof navigator !== 'undefined' && 'gpu' in navigator && (navigator as any).gpu) {
+    // 1. WebGPU Execution Provider (Only attempt if marked usable to avoid failed attempt delays - Fix #6)
+    if (webgpuUsable && typeof navigator !== 'undefined' && 'gpu' in navigator && (navigator as any).gpu) {
       try {
         const adapter = await (navigator as any).gpu.requestAdapter();
         if (adapter) {
-          console.log('[AI Enhancer Worker] WebGPU adapter detected. Initializing Real-ESRGAN with WebGPU...');
+          console.log('[AI Enhancer Worker] Attempting WebGPU EP...');
           const gpuSession = await ort.InferenceSession.create(modelBuffer.slice(0), {
             executionProviders: ['webgpu'],
             graphOptimizationLevel: 'all',
@@ -242,11 +236,12 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
           activeBackend = 'webgpu';
           activeThreads = 1;
           session = gpuSession;
-          console.log(`[AI Enhancer Worker] Real-ESRGAN session ACTIVE via WebGPU in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${gpuSession.inputNames.join(', ')}] Outputs: [${gpuSession.outputNames.join(', ')}]`);
+          console.log(`[AI Enhancer Worker] 2x Super-Resolution session ACTIVE via WebGPU in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${gpuSession.inputNames.join(', ')}] Outputs: [${gpuSession.outputNames.join(', ')}]`);
           return gpuSession;
         }
       } catch (gpuErr: any) {
-        console.warn('[AI Enhancer Worker] WebGPU session initialization failed, falling back to WASM:', gpuErr?.message || gpuErr);
+        webgpuUsable = false;
+        console.warn('[AI Enhancer Worker] WebGPU session initialization not usable, falling back to WASM:', gpuErr?.message || gpuErr);
       }
     }
 
@@ -269,17 +264,17 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
     };
 
     const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
-      { path: wasmPathConfig, threads: threads, label: `Local WASM (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
-      { path: basePath, threads: threads, label: `Local WASM Path (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
-      { path: wasmPathConfig, threads: 1, label: 'Local WASM (Single-thread fallback)' },
+      { path: basePath, threads: threads, label: `Local WASM (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
+      { path: wasmPathConfig, threads: threads, label: `Local WASM Config (${threads > 1 ? `${threads}-thread SIMD` : 'Single-thread SIMD'})` },
       { path: basePath, threads: 1, label: 'Local WASM Path (Single-thread fallback)' },
+      { path: wasmPathConfig, threads: 1, label: 'Local WASM (Single-thread fallback)' },
       { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM' }
     ];
 
     let lastWasmErr: any = null;
     for (const cfg of wasmConfigs) {
       try {
-        console.log(`[AI Enhancer Worker] Attempting session creation with: ${cfg.label} (path: ${cfg.path}, threads: ${cfg.threads})`);
+        console.log(`[AI Enhancer Worker] Attempting session creation with: ${cfg.label} (threads: ${cfg.threads})`);
         ort.env.wasm.wasmPaths = cfg.path;
         ort.env.wasm.numThreads = cfg.threads;
         ort.env.wasm.simd = true;
@@ -289,7 +284,15 @@ async function getOrInitSession(postProgress: (msg: string, pct: number) => void
         const isSharedArrayBufferAvailable = typeof SharedArrayBuffer !== 'undefined';
         activeBackend = (isIsolated && isSharedArrayBufferAvailable && cfg.threads > 1) ? 'wasm-threaded' : 'wasm-single';
         activeThreads = activeBackend === 'wasm-threaded' ? cfg.threads : 1;
-        console.log(`[AI Enhancer Worker] Real-ESRGAN session ACTIVE via ${cfg.label} (Engine: ${activeBackend}, Threads: ${activeThreads}, Isolated: ${isIsolated}, SharedArrayBuffer: ${isSharedArrayBufferAvailable}) in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${wasmSession.inputNames.join(', ')}] Outputs: [${wasmSession.outputNames.join(', ')}]`);
+
+        // Warmup pass with tiny 16x16 tensor so JIT kernels are compiled upfront (Fix #5)
+        try {
+          const inName = wasmSession.inputNames[0] || 'image';
+          const dummy = new Float32Array(3 * 16 * 16);
+          await wasmSession.run({ [inName]: new ort.Tensor('float32', dummy, [1, 3, 16, 16]) });
+        } catch {}
+
+        console.log(`[AI Enhancer Worker] Compact-ESRGAN 2x session ACTIVE via ${cfg.label} (Engine: ${activeBackend}, Threads: ${activeThreads}, Isolated: ${isIsolated}, SharedArrayBuffer: ${isSharedArrayBufferAvailable}) in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${wasmSession.inputNames.join(', ')}] Outputs: [${wasmSession.outputNames.join(', ')}]`);
         session = wasmSession;
         return wasmSession;
       } catch (cfgErr: any) {
@@ -524,93 +527,10 @@ function applyHighDefinitionDetailRestoration(imageData: ImageData): void {
 }
 
 
-/**
- * High-Fidelity 4x to 2x Catmull-Rom Bicubic Downsampler
- * Preserves Nyquist frequency edges, eliminating the blur/softness of naive bilinear downsampling.
- */
-function downsample4xTo2xCatmullRom(
-  srcCanvas: OffscreenCanvas,
-  dstW: number,
-  dstH: number
-): OffscreenCanvas {
-  const srcW = dstW * 2;
-  const srcH = dstH * 2;
-  const srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true })!;
-  const srcImgData = srcCtx.getImageData(0, 0, srcW, srcH);
-  const srcData = srcImgData.data;
 
-  const outCanvas = new OffscreenCanvas(dstW, dstH);
-  const outCtx = outCanvas.getContext('2d', { willReadFrequently: true })!;
-  const outImgData = outCtx.createImageData(dstW, dstH);
-  const outData = outImgData.data;
-
-  // Catmull-Rom cubic downsampling weights with anti-blur frequency retention
-  const k0 = -0.0625;
-  const k1 = 0.5625;
-  const k2 = 0.5625;
-  const k3 = -0.0625;
-
-  // Pass 1: Horizontal downsample (srcW -> dstW, keeping srcH)
-  const interm = new Float32Array(dstW * srcH * 4);
-  for (let y = 0; y < srcH; y++) {
-    const rowSrc = y * srcW * 4;
-    const rowDst = y * dstW * 4;
-    for (let x = 0; x < dstW; x++) {
-      const x0 = Math.max(0, 2 * x - 1) * 4;
-      const x1 = (2 * x) * 4;
-      const x2 = Math.min(srcW - 1, 2 * x + 1) * 4;
-      const x3 = Math.min(srcW - 1, 2 * x + 2) * 4;
-      const dIdx = rowDst + x * 4;
-
-      for (let c = 0; c < 4; c++) {
-        interm[dIdx + c] = (
-          k0 * srcData[rowSrc + x0 + c] +
-          k1 * srcData[rowSrc + x1 + c] +
-          k2 * srcData[rowSrc + x2 + c] +
-          k3 * srcData[rowSrc + x3 + c]
-        );
-      }
-    }
-  }
-
-  // Pass 2: Vertical downsample (srcH -> dstH)
-  for (let y = 0; y < dstH; y++) {
-    const y0 = Math.max(0, 2 * y - 1) * dstW * 4;
-    const y1 = (2 * y) * dstW * 4;
-    const y2 = Math.min(srcH - 1, 2 * y + 1) * dstW * 4;
-    const y3 = Math.min(srcH - 1, 2 * y + 2) * dstW * 4;
-    const rowDst = y * dstW * 4;
-
-    for (let x = 0; x < dstW; x++) {
-      const colOffset = x * 4;
-      const dIdx = rowDst + colOffset;
-
-      for (let c = 0; c < 3; c++) {
-        const v = (
-          k0 * interm[y0 + colOffset + c] +
-          k1 * interm[y1 + colOffset + c] +
-          k2 * interm[y2 + colOffset + c] +
-          k3 * interm[y3 + colOffset + c]
-        );
-        outData[dIdx + c] = Math.max(0, Math.min(255, Math.round(v)));
-      }
-      // Alpha: clean downsampling
-      const a = (
-        k0 * interm[y0 + colOffset + 3] +
-        k1 * interm[y1 + colOffset + 3] +
-        k2 * interm[y2 + colOffset + 3] +
-        k3 * interm[y3 + colOffset + 3]
-      );
-      outData[dIdx + 3] = Math.max(0, Math.min(255, Math.round(a)));
-    }
-  }
-
-  outCtx.putImageData(outImgData, 0, 0);
-  return outCanvas;
-}
 
 /**
- * Single Forward Pass Super-Resolution for compact images or face crop
+ * Single Forward Pass Super-Resolution for compact images or face crop (Native 2x)
  */
 async function runSinglePassSuperResolution(
   sess: ort.InferenceSession,
@@ -618,7 +538,7 @@ async function runSinglePassSuperResolution(
   width: number,
   height: number
 ): Promise<OffscreenCanvas> {
-  const modelScale = 4;
+  const modelScale = 2; // Native 2x Model (Fix #1)
   const outW = width * modelScale;
   const outH = height * modelScale;
 
@@ -649,7 +569,7 @@ async function runSinglePassSuperResolution(
     }
   }
 
-  const inputName = sess.inputNames[0] || 'input';
+  const inputName = sess.inputNames[0] || 'image';
   const outputName = sess.outputNames[0] || 'output';
 
   const inputTensor = new ort.Tensor('float32', tensorData, [1, 3, padH, padW]);
@@ -661,7 +581,7 @@ async function runSinglePassSuperResolution(
   const tInferMs = performance.now() - tInferStart;
 
   if (!outTensor || !outTensor.data) {
-    throw new Error('Real-ESRGAN output tensor missing');
+    throw new Error('Super-resolution output tensor missing');
   }
 
   console.log(`[AI Enhancer Worker: INFERENCE COMPLETE] Single Pass | Output Tensor Shape: [${outTensor.dims.join(', ')}] | Inference Time: ${tInferMs.toFixed(1)}ms`);
@@ -703,7 +623,7 @@ async function runSinglePassSuperResolution(
  * Core Real-ESRGAN Neural Inference with Overlapped Cosine Hann-Window Tiling
  * Highly optimized: Reusable tensor buffers, precomputed 1D Cosine Hann LUTs, zero-allocation tile loop
  */
-async function runRealEsrganInferenceWorker(
+async function runCompactEsrgan2xInferenceWorker(
   sess: ort.InferenceSession,
   inputCanvas: OffscreenCanvas,
   inWidth: number,
@@ -712,28 +632,26 @@ async function runRealEsrganInferenceWorker(
   postProgress: (msg: string, pct: number) => void,
   progressBasePct = 25,
   progressSpanPct = 65
-): Promise<{ outCanvas: OffscreenCanvas; totalTiles: number; tileSize: number }> {
-  const modelScale = 4;
+): Promise<{ outCanvas: OffscreenCanvas; totalTiles: number; tileSize: number; tileInferenceTimes: number[] }> {
+  const modelScale = 2; // Genuine 2x Native Super-Resolution (Fix #1)
   const outW = inWidth * modelScale;
   const outH = inHeight * modelScale;
 
-  // Adaptive Tile Size (Requirement 6 & 7):
-  // Target 256x256 tiles with minimal safe overlap (8px pad, step: 240px).
-  // If image dimensions are within 320x320, we can run a single tile of 320px for zero seams!
-  let tileSize = 256;
-  if (inWidth <= 320 && inHeight <= 320 && (inWidth > 256 || inHeight > 256)) {
-    tileSize = 320;
-  }
+  // Adaptive Tile Size (Fix #3, #4):
+  // 208x208 with 8px overlap (step: 192px).
+  // For a typical passport portrait (~400x514px), this yields exactly 2 x 3 = 6 tiles total!
+  let tileSize = 208;
   const tilePad = 8;
-  const step = tileSize - 2 * tilePad; // 240px
+  const step = tileSize - 2 * tilePad; // 192px
 
-  // Single tile pass: if the entire image fits within the tile size (Requirement 6, 8, 9)
-  // On standard passport photos, the 2x neural input is ~199x256, which fits in 1 single tile!
+  // Single tile pass: if the entire image fits within the tile size
   if (inWidth <= tileSize && inHeight <= tileSize) {
     console.log(`[AI Enhancer Worker: SINGLE TILE EXECUTION] Input: ${inWidth}x${inHeight}px fits completely in single tile (${tileSize}x${tileSize}px). Running single-pass inference.`);
     postProgress('AI HD Enhance: processing neural super-resolution...', progressBasePct + Math.round(progressSpanPct * 0.5));
+    const t0 = performance.now();
     const outCanvas = await runSinglePassSuperResolution(sess, inputCanvas, inWidth, inHeight);
-    return { outCanvas, totalTiles: 1, tileSize };
+    const tMs = performance.now() - t0;
+    return { outCanvas, totalTiles: 1, tileSize, tileInferenceTimes: [tMs] };
   }
 
   console.log(`[AI Enhancer Worker: TILE CONFIG] Active Engine: ${activeBackend} (Threads: ${activeThreads}) | Chosen Tile Size: ${tileSize}x${tileSize}px (step: ${step}px, overlap: ${tilePad}px)`);
@@ -742,7 +660,7 @@ async function runRealEsrganInferenceWorker(
   const inImgData = ctx.getImageData(0, 0, inWidth, inHeight);
   const inPixels = inImgData.data;
 
-  const inputName = sess.inputNames[0] || 'input';
+  const inputName = sess.inputNames[0] || 'image';
   const outputName = sess.outputNames[0] || 'output';
 
   const accumR = new Float32Array(outW * outH);
@@ -812,6 +730,7 @@ async function runRealEsrganInferenceWorker(
 
   let processedTiles = 0;
   let totalTileInferenceMs = 0;
+  const tileInferenceTimes: number[] = [];
 
   const wxArr = new Float32Array(tileOutW);
   const wyArr = new Float32Array(tileOutH);
@@ -872,9 +791,10 @@ async function runRealEsrganInferenceWorker(
       const outTensor = results[outputName];
       const tTileMs = performance.now() - tTileStart;
       totalTileInferenceMs += tTileMs;
+      tileInferenceTimes.push(tTileMs);
 
       if (!outTensor || !outTensor.data) {
-        throw new Error('Real-ESRGAN tile output missing');
+        throw new Error('Super-resolution tile output missing');
       }
 
       const avgTileMs = totalTileInferenceMs / processedTiles;
@@ -883,7 +803,7 @@ async function runRealEsrganInferenceWorker(
       const pct = Math.round(progressBasePct + (processedTiles / totalTiles) * progressSpanPct);
 
       postProgress(`AI HD Enhance: tile ${processedTiles}/${totalTiles} (${(tTileMs / 1000).toFixed(1)}s/tile • ~${remainingSec}s left)`, pct);
-      console.log(`[AI Enhancer Worker: TILE INFERENCE] Tile ${processedTiles}/${totalTiles} (${tx}, ${ty}) | Engine: ${activeBackend} | Size: ${tileSize}x${tileSize}px | Time: ${tTileMs.toFixed(0)}ms | Measured Avg: ${avgTileMs.toFixed(0)}ms/tile | Remaining: ~${remainingSec}s`);
+      console.log(`[AI Enhancer Worker: TILE INFERENCE] Tile ${processedTiles}/${totalTiles} (${tx}, ${ty}) | Time: ${(tTileMs / 1000).toFixed(2)}s (${tTileMs.toFixed(0)}ms) | Avg: ${(avgTileMs / 1000).toFixed(2)}s/tile | Remaining: ~${remainingSec}s`);
 
       const outTileData = outTensor.data as Float32Array;
 
@@ -939,7 +859,7 @@ async function runRealEsrganInferenceWorker(
   }
 
   outCtx.putImageData(outImgData, 0, 0);
-  return { outCanvas, totalTiles, tileSize };
+  return { outCanvas, totalTiles, tileSize, tileInferenceTimes };
 }
 
 /**
@@ -975,10 +895,8 @@ async function handleEnhancementRequest(
     const origW = imageBitmap.width;
     const origH = imageBitmap.height;
 
-    // Standard Passport Preprocessing:
-    // Retain 100% of native portrait resolution up to 800px.
-    // NEVER downscale 50% before neural processing!
-    const maxDimCap = 800;
+    // Intelligent maximum processing dimension around 512–540px for passport photo (Fix #2)
+    const maxDimCap = 540;
     let procW = origW;
     let procH = origH;
     if (Math.max(procW, procH) > maxDimCap) {
@@ -1033,9 +951,9 @@ async function handleEnhancementRequest(
 
     console.log(`[AI Enhancer Worker: PREPROCESSING COMPLETE] Original: ${origW}x${origH}px -> Native Neural Input: ${neuralInW}x${neuralInH}px -> Target 2x Output: ${finalW}x${finalH}px (Pre-prep time: ${tPreMs.toFixed(1)}ms)`);
 
-    // 3. Neural Inference (Full Native Input Resolution)
+    // 3. Genuine 2x Neural Inference (Fix #1: NO 4x generation, NO downscaling from 4x)
     const tInferStart = performance.now();
-    const { outCanvas: neural4xCanvas, totalTiles, tileSize } = await runRealEsrganInferenceWorker(
+    const { outCanvas: aiCanvas, totalTiles, tileSize, tileInferenceTimes } = await runCompactEsrgan2xInferenceWorker(
       sess,
       prepCanvas,
       neuralInW,
@@ -1043,18 +961,11 @@ async function handleEnhancementRequest(
       isLowEnd,
       postProgress,
       25,
-      75
+      65
     );
     const tInferMs = performance.now() - tInferStart;
 
-    // 4. High-Fidelity 4x to 2x Catmull-Rom Bicubic Downsampling
-    // Downsamples the 4x super-resolution master to exact 2x with zero edge blur or softness
-    postProgress('Creating high-definition 2x portrait...', 88);
-    const tDownsampleStart = performance.now();
-    const aiCanvas = downsample4xTo2xCatmullRom(neural4xCanvas, finalW, finalH);
-    const tDownsampleMs = performance.now() - tDownsampleStart;
-
-    // 5. Postprocessing Refinement (Natural Remini-grade quality: eyes, hair, lips, skin pores)
+    // 4. Postprocessing Refinement (Natural Remini-grade quality: eyes, hair, lips, skin pores)
     postProgress('Applying natural detail & micro-texture refinement...', 92);
     const tPostStart = performance.now();
     const finalCtx = aiCanvas.getContext('2d', { willReadFrequently: true })!;
@@ -1086,7 +997,7 @@ async function handleEnhancementRequest(
     }
 
     finalCtx.putImageData(finalImgData, 0, 0);
-    const tPostMs = performance.now() - tPostStart + tDownsampleMs;
+    const tPostMs = performance.now() - tPostStart;
 
     postProgress('Finalizing HD portrait...', 96);
     const tBlobStart = performance.now();
@@ -1094,25 +1005,25 @@ async function handleEnhancementRequest(
     const tBlobMs = performance.now() - tBlobStart;
     const totalElapsedMs = performance.now() - startTime;
 
-    // Detailed console timing breakdown
+    // Detailed console timing breakdown (Fix #10)
     console.log(`
 ===============================================================
-[AI ENHANCER WORKER: EXECUTION SUMMARY (TRUE 2x REMINI-GRADE WORKFLOW)]
+[AI ENHANCER WORKER: EXECUTION SUMMARY (GENUINE 2x PIPELINE)]
 ---------------------------------------------------------------
-Mode:                         REAL-ESRGAN NEURAL HD (Native Input + Catmull-Rom 2x Output)
+Mode:                         COMPACT-ESRGAN NATIVE 2x (No 4x Waste, Direct 2x Inference)
 Input Resolution:             ${origW}x${origH}px
-Native Neural Input:          ${neuralInW}x${neuralInH}px (Full Resolution, No Pre-Downscaling)
-Neural 4x Super-Resolution:   ${neuralInW * 4}x${neuralInH * 4}px
-Final 2x Output:              ${finalW}x${finalH}px (Catmull-Rom Anti-Blur Downsampled)
+Native Neural Input:          ${neuralInW}x${neuralInH}px
+Target 2x Output:             ${finalW}x${finalH}px (Direct Neural 2x Output)
 Genuine Scale Factor:         2.00x
 Tile Configuration:           ${totalTiles} tile(s) | Tile Size: ${tileSize}x${tileSize}px
+Tile Inference Times:         [${tileInferenceTimes.map(t => (t / 1000).toFixed(2) + 's').join(', ')}]
 Engine Backend:               ${activeBackend} (Threads: ${activeThreads})
 ---------------------------------------------------------------
-DETAILED TIMING BREAKDOWN:
+DETAILED TIMING BREAKDOWN (Fix #10):
 - Model/Session Initialization: ${tModelInitMs.toFixed(1)} ms ${tModelInitMs < 10 ? '(CACHED REUSED SESSION ✓)' : '(Cold Start)'}
 - Preprocessing:                ${tPreMs.toFixed(1)} ms
-- Neural Inference:             ${tInferMs.toFixed(1)} ms (${(tInferMs / totalTiles).toFixed(1)} ms/tile)
-- 4x->2x Catmull-Rom & Refine:  ${tPostMs.toFixed(1)} ms
+- Neural Inference:             ${tInferMs.toFixed(1)} ms (${(tInferMs / 1000).toFixed(2)}s total, ${(tInferMs / totalTiles / 1000).toFixed(2)}s/tile)
+- Postprocessing & Refine:      ${tPostMs.toFixed(1)} ms
 - Output PNG Encoding:          ${tBlobMs.toFixed(1)} ms
 ---------------------------------------------------------------
 TOTAL TIME:                     ${totalElapsedMs.toFixed(1)} ms (${(totalElapsedMs / 1000).toFixed(2)}s)

@@ -6,7 +6,22 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     base: './',
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'wasm-mime-handler',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            const url = req.url ? req.url.split('?')[0] : '';
+            if (url.endsWith('.wasm')) {
+              res.setHeader('Content-Type', 'application/wasm');
+            }
+            next();
+          });
+        },
+      },
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

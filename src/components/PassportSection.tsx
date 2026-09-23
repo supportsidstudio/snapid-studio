@@ -1253,9 +1253,16 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     const naturalW = img.naturalWidth || img.width || 600;
     const naturalH = img.naturalHeight || img.height || 600;
 
-    // Maintain high native resolution according to passport aspect ratio
-    const baseWidth = Math.max(500, Math.min(800, naturalW));
-    const baseHeight = Math.round(baseWidth / (selectedSizePreset?.aspectRatio || (35 / 45)));
+    // Intelligent maximum processing dimension around 512–540px for passport-photo neural input (Fix #2)
+    const aspect = selectedSizePreset?.aspectRatio || (35 / 45);
+    let targetW = 400;
+    let targetH = Math.round(targetW / aspect);
+    if (targetH > 540) {
+      targetH = 540;
+      targetW = Math.round(targetH * aspect);
+    }
+    const baseWidth = targetW;
+    const baseHeight = targetH;
 
     const offscreen = document.createElement('canvas');
     offscreen.width = baseWidth;
