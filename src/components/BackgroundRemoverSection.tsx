@@ -230,26 +230,33 @@ export default function BackgroundRemoverSection({
       initializeEditorCanvas(dataUrl, result.maskDataUrl);
     } catch (err: any) {
       console.error('Background removal error:', err);
-      // Automatic graceful fallback to server if client worker fails
-      if (engineType === 'worker') {
+      // Automatic graceful fallback in-browser (RMBG -> MODNet)
+      if (engineType === 'worker' && modelType !== 'modnet') {
         try {
-          setProgressStep('In-browser engine busy, falling back to AI Cloud Server...');
+          setProgressStep('Retrying with in-browser portrait matting model...');
           setProgressPercent(40);
-          const serverResult = await removeBackgroundOnServer(dataUrl, {
-            modelType,
-            category: subjectCategory,
-          }, (prog) => {
+
+          let blob: Blob;
+          if (originalFile) {
+            blob = originalFile;
+          } else {
+            const res = await fetch(dataUrl);
+            blob = await res.blob();
+          }
+
+          const fallbackResult = await removeBackgroundInBrowser(blob, 'modnet', (prog) => {
             setProgressStep(prog.step);
             setProgressPercent(prog.percent);
           });
-          setResultCutout(serverResult.cutoutDataUrl);
-          setResultMask(serverResult.maskDataUrl);
-          setModelUsedInfo(serverResult.modelUsed + ' (Auto-Fallback)');
-          setInferenceTimeMs(serverResult.inferenceTimeMs);
-          initializeEditorCanvas(dataUrl, serverResult.maskDataUrl);
+
+          setResultCutout(fallbackResult.cutoutDataUrl);
+          setResultMask(fallbackResult.maskDataUrl);
+          setModelUsedInfo(fallbackResult.modelUsed + ' (Client Fallback)');
+          setInferenceTimeMs(fallbackResult.inferenceTimeMs);
+          initializeEditorCanvas(dataUrl, fallbackResult.maskDataUrl);
           return;
-        } catch (serverErr: any) {
-          setRemovalError(serverErr.message || 'Background removal failed');
+        } catch (fallbackErr: any) {
+          setRemovalError(fallbackErr.message || 'Background removal failed');
         }
       } else {
         setRemovalError(err.message || 'Background removal failed');
