@@ -2,7 +2,6 @@ import * as ort from 'onnxruntime-web';
 
 // Matching onnxruntime-web package version in package.json
 const ORT_VERSION = '1.29.0';
-const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
 let runtimeAppBaseUrl: string | null = null;
 
@@ -45,21 +44,8 @@ function getWasmBasePath(): string {
   return `${base.replace(/\/+$/, '')}/onnxruntime/`;
 }
 
-/**
- * MODNet: Real-Time Trimap-Free Portrait Matting
- * Photographic portrait matting model specifically trained on human portraits
- * (head, hair, eyes, neck, collar, clothes, and shoulders).
- */
-function getModelSources(): string[] {
-  const base = getAppBaseUrl();
-  const localModel = `${base.replace(/\/+$/, '')}/models/modnet.onnx`;
-  return [
-    localModel,
-    '/models/modnet.onnx'
-  ];
-}
-
-const CACHE_NAME = 'snapid-modnet-model-v3';
+const MODNET_CACHE_NAME = 'snapid-modnet-model-v3';
+const RMBG_CACHE_NAME = 'snapid-rmbg-model-v1';
 
 try {
   ort.env.logLevel = 'error';
@@ -78,26 +64,18 @@ try {
   ort.env.wasm.numThreads = safeThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
-
-  // Immediately eradicate all legacy caches (old U2NetP models and previous versions)
-  if (typeof caches !== 'undefined') {
-    caches.keys().then((keys) => {
-      keys.forEach((key) => {
-        if (key !== CACHE_NAME && (key.includes('u2net') || key.startsWith('snapid-u2netp-model-') || key.startsWith('snapid-modnet-model-'))) {
-          console.log(`[MODNet Worker] Evicting legacy cache: ${key}`);
-          caches.delete(key).catch(() => {});
-        }
-      });
-    }).catch(() => {});
-  }
 } catch (e) {
-  console.warn('[MODNet Worker] Initial wasmPaths configuration warning:', e);
+  console.warn('[AI Bg Worker] Initial wasmPaths configuration warning:', e);
 }
 
-let session: ort.InferenceSession | null = null;
-let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
+// Cached sessions
+let modnetSession: ort.InferenceSession | null = null;
+let modnetLoadingPromise: Promise<ort.InferenceSession> | null = null;
 
-async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
+let rmbgSession: ort.InferenceSession | null = null;
+let rmbgLoadingPromise: Promise<ort.InferenceSession> | null = null;
+
+async function fetchValidModelBuffer(url: string, cacheName: string, minBytes: number): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
   let resolvedUrl = url;
 
@@ -105,17 +83,17 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
     resolvedUrl = `${base.replace(/\/+$/, '')}${url}`;
   }
 
-  // 1. Try retrieving from persistent browser Cache API for instantaneous load (<20ms)
+  // 1. Try retrieving from persistent browser Cache API for instantaneous load
   if (typeof caches !== 'undefined') {
     try {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(cacheName);
       const cached = await cache.match(resolvedUrl);
       if (cached) {
         const cachedBuffer = await cached.arrayBuffer();
-        if (cachedBuffer.byteLength >= 20000000) {
+        if (cachedBuffer.byteLength >= minBytes) {
           const header = new Uint8Array(cachedBuffer, 0, 4);
           if (header[0] === 0x08) {
-            console.log(`[MODNet Worker] Loaded model instantly from Cache API (${(cachedBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
+            console.log(`[AI Bg Worker] Loaded model instantly from Cache API (${(cachedBuffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
             return cachedBuffer;
           }
         }
@@ -125,15 +103,14 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
     }
   }
 
-  console.log(`[MODNet Worker] Fetching MODNet model binary from: ${resolvedUrl}`);
+  console.log(`[AI Bg Worker] Fetching model binary from: ${resolvedUrl}`);
   const response = await fetch(resolvedUrl);
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} (${response.statusText})`);
   }
   const buffer = await response.arrayBuffer();
-  if (buffer.byteLength < 20000000) {
-    // MODNet photographic portrait matting model is ~24-26MB
-    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes (expected >= 20MB)`);
+  if (buffer.byteLength < minBytes) {
+    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes (expected >= ${minBytes})`);
   }
 
   // Validate protobuf ONNX magic header (starts with 0x08)
@@ -145,208 +122,300 @@ async function fetchValidModelBuffer(url: string): Promise<ArrayBuffer> {
   // Store in Cache API for zero-delay subsequent loads
   if (typeof caches !== 'undefined') {
     try {
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await caches.open(cacheName);
       await cache.put(resolvedUrl, new Response(buffer.slice(0), {
         headers: { 'Content-Type': 'application/octet-stream' }
       }));
-      console.log(`[MODNet Worker] Cached model binary in browser CacheStorage (${CACHE_NAME})`);
+      console.log(`[AI Bg Worker] Cached model binary in browser CacheStorage (${cacheName})`);
     } catch {
       // Ignore cache put error
     }
   }
 
-  console.log(`[MODNet Worker] Successfully verified MODNet model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB) from: ${resolvedUrl}`);
+  console.log(`[AI Bg Worker] Successfully verified model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
   return buffer;
 }
 
 /**
- * Loads and caches the MODNet ONNX inference session once.
- * Reuses the cached session across all subsequent image requests.
+ * Creates an inference session with fallback paths and thread configurations.
  */
-async function getSession(): Promise<ort.InferenceSession> {
-  if (session) return session;
-  if (sessionLoadingPromise) return sessionLoadingPromise;
+async function createConfiguredSession(buffer: ArrayBuffer, modelLabel: string): Promise<ort.InferenceSession> {
+  const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+  const threads = isIsolated
+    ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+        ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
+        : 2)
+    : 1;
 
-  sessionLoadingPromise = (async () => {
-    let lastError: any = null;
-    const modelSources = getModelSources();
+  const sessionOptions: ort.InferenceSession.SessionOptions = {
+    executionProviders: ['wasm'],
+    graphOptimizationLevel: 'all',
+    logSeverityLevel: 3,
+    logVerbosityLevel: 0,
+  };
 
-    const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
-    const threads = isIsolated
-      ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-          ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
-          : 2)
-      : 1;
+  const basePath = getWasmBasePath();
+  const wasmPathConfig = {
+    mjs: `${basePath}ort-wasm-simd-threaded.mjs`,
+    wasm: `${basePath}ort-wasm-simd-threaded.wasm`,
+  };
 
-    // Try creating session with each verified model source until one succeeds
-    for (const source of modelSources) {
-      try {
-        const buffer = await fetchValidModelBuffer(source);
+  const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
+    { path: wasmPathConfig, threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+    { path: basePath, threads: threads, label: `Local WASM Path (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
+    { path: wasmPathConfig, threads: 1, label: 'Local WASM (Single-thread fallback)' },
+    { path: basePath, threads: 1, label: 'Local WASM Path (Single-thread fallback)' },
+    { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM' }
+  ];
 
-        const sessionOptions: ort.InferenceSession.SessionOptions = {
-          executionProviders: ['wasm'],
-          graphOptimizationLevel: 'all',
-          logSeverityLevel: 3,
-          logVerbosityLevel: 0,
-        };
-
-        const basePath = getWasmBasePath();
-        const wasmPathConfig = {
-          mjs: `${basePath}ort-wasm-simd-threaded.mjs`,
-          wasm: `${basePath}ort-wasm-simd-threaded.wasm`,
-        };
-
-        // Try candidate configurations in order of performance and compatibility (100% Local)
-        const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
-          { path: wasmPathConfig, threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
-          { path: basePath, threads: threads, label: `Local WASM Path (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
-          { path: wasmPathConfig, threads: 1, label: 'Local WASM (Single-thread fallback)' },
-          { path: basePath, threads: 1, label: 'Local WASM Path (Single-thread fallback)' },
-          { path: '/onnxruntime/', threads: 1, label: 'Local Root WASM' }
-        ];
-
-        let createdSession: ort.InferenceSession | null = null;
-        let lastInitError: any = null;
-
-        for (const cfg of wasmConfigs) {
-          try {
-            ort.env.wasm.wasmPaths = cfg.path;
-            ort.env.wasm.numThreads = cfg.threads;
-            ort.env.wasm.simd = true;
-            ort.env.wasm.proxy = false;
-            createdSession = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-            console.log(`[MODNet Worker] MODNet session active via ${cfg.label}! Inputs: [${createdSession.inputNames.join(', ')}], Outputs: [${createdSession.outputNames.join(', ')}]`);
-            break;
-          } catch (cfgErr) {
-            console.warn(`[MODNet Worker] ${cfg.label} initialization failed, trying next configuration...`, cfgErr);
-            lastInitError = cfgErr;
-          }
-        }
-
-        if (createdSession) {
-          session = createdSession;
-          return createdSession;
-        }
-
-        throw lastInitError || new Error('All WASM initialization attempts failed for this model buffer.');
-      } catch (srcErr: any) {
-        console.warn(`[MODNet Worker] Failed loading model from source ${source}:`, srcErr.message || srcErr);
-        lastError = srcErr;
-      }
+  let lastError: any = null;
+  for (const cfg of wasmConfigs) {
+    try {
+      ort.env.wasm.wasmPaths = cfg.path;
+      ort.env.wasm.numThreads = cfg.threads;
+      ort.env.wasm.simd = true;
+      ort.env.wasm.proxy = false;
+      const session = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
+      console.log(`[AI Bg Worker] ${modelLabel} session active via ${cfg.label}! Inputs: [${session.inputNames.join(', ')}], Outputs: [${session.outputNames.join(', ')}]`);
+      return session;
+    } catch (err) {
+      lastError = err;
     }
+  }
 
-    sessionLoadingPromise = null;
-    const finalErr = new Error(`Could not initialize MODNet ONNX session from any source. Reason: ${lastError?.message || lastError}`);
-    console.error('[MODNet Worker] Failed to load ONNX session:', finalErr);
-    throw finalErr;
-  })();
-
-  return sessionLoadingPromise;
+  throw lastError || new Error(`Failed to initialize session for ${modelLabel}`);
 }
 
 /**
- * Preprocesses an ImageBitmap into a 512x512 Float32Array NCHW tensor
- * normalized using standard MODNet photographic portrait normalization: (pixel - 127.5) / 127.5.
+ * Loads and caches the universal RMBG-1.4 model (People, Animals, Products, Fur, Glass, Objects)
  */
-function preprocessImage(
-  imageBitmap: ImageBitmap,
-  targetWidth = 512,
-  targetHeight = 512
-): { tensor: ort.Tensor; origWidth: number; origHeight: number } {
+async function getRmbgSession(): Promise<ort.InferenceSession> {
+  if (rmbgSession) return rmbgSession;
+  if (rmbgLoadingPromise) return rmbgLoadingPromise;
+
+  rmbgLoadingPromise = (async () => {
+    const base = getAppBaseUrl();
+    const sources = [
+      `${base.replace(/\/+$/, '')}/models/rmbg-1.4.onnx`,
+      '/models/rmbg-1.4.onnx'
+    ];
+
+    let lastError: any = null;
+    for (const src of sources) {
+      try {
+        const buffer = await fetchValidModelBuffer(src, RMBG_CACHE_NAME, 30000000);
+        rmbgSession = await createConfiguredSession(buffer, 'RMBG-1.4');
+        return rmbgSession;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[AI Bg Worker] RMBG source ${src} failed:`, err?.message || err);
+      }
+    }
+
+    rmbgLoadingPromise = null;
+    throw new Error(`Failed to load RMBG-1.4 ONNX model: ${lastError?.message || lastError}`);
+  })();
+
+  return rmbgLoadingPromise;
+}
+
+/**
+ * Loads and caches the MODNet model (human portrait matting)
+ */
+async function getModnetSession(): Promise<ort.InferenceSession> {
+  if (modnetSession) return modnetSession;
+  if (modnetLoadingPromise) return modnetLoadingPromise;
+
+  modnetLoadingPromise = (async () => {
+    const base = getAppBaseUrl();
+    const sources = [
+      `${base.replace(/\/+$/, '')}/models/modnet.onnx`,
+      '/models/modnet.onnx'
+    ];
+
+    let lastError: any = null;
+    for (const src of sources) {
+      try {
+        const buffer = await fetchValidModelBuffer(src, MODNET_CACHE_NAME, 20000000);
+        modnetSession = await createConfiguredSession(buffer, 'MODNet');
+        return modnetSession;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[AI Bg Worker] MODNet source ${src} failed:`, err?.message || err);
+      }
+    }
+
+    modnetLoadingPromise = null;
+    throw new Error(`Failed to load MODNet ONNX model: ${lastError?.message || lastError}`);
+  })();
+
+  return modnetLoadingPromise;
+}
+
+/**
+ * Preprocesses an ImageBitmap for RMBG-1.4
+ * Shape: [1, 3, 1024, 1024]
+ * ImageNet Normalization: (RGB / 255 - mean) / std
+ * mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225]
+ */
+function preprocessRmbgImage(imageBitmap: ImageBitmap): { tensor: ort.Tensor; origWidth: number; origHeight: number } {
+  const targetW = 1024;
+  const targetH = 1024;
   const origWidth = imageBitmap.width;
   const origHeight = imageBitmap.height;
 
-  const canvas = new OffscreenCanvas(targetWidth, targetHeight);
+  const canvas = new OffscreenCanvas(targetW, targetH);
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) throw new Error('Could not get 2D context from OffscreenCanvas');
 
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
-  const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-  const data = imageData.data;
+  ctx.drawImage(imageBitmap, 0, 0, targetW, targetH);
 
-  const numPixels = targetWidth * targetHeight;
+  const imageData = ctx.getImageData(0, 0, targetW, targetH);
+  const data = imageData.data;
+  const numPixels = targetW * targetH;
   const tensorData = new Float32Array(3 * numPixels);
+
+  const meanR = 0.485, meanG = 0.456, meanB = 0.406;
+  const stdR = 0.229, stdG = 0.224, stdB = 0.225;
 
   for (let i = 0; i < numPixels; i++) {
     const px = i * 4;
-    // MODNet normalization: (pixel - 127.5) / 127.5
-    tensorData[i] = (data[px] - 127.5) / 127.5;                   // Channel 0 (Red)
-    tensorData[numPixels + i] = (data[px + 1] - 127.5) / 127.5;   // Channel 1 (Green)
-    tensorData[2 * numPixels + i] = (data[px + 2] - 127.5) / 127.5;// Channel 2 (Blue)
+    const r = data[px] / 255.0;
+    const g = data[px + 1] / 255.0;
+    const b = data[px + 2] / 255.0;
+
+    tensorData[i] = (r - meanR) / stdR;
+    tensorData[numPixels + i] = (g - meanG) / stdG;
+    tensorData[2 * numPixels + i] = (b - meanB) / stdB;
   }
 
-  const tensor = new ort.Tensor('float32', tensorData, [1, 3, targetHeight, targetWidth]);
+  const tensor = new ort.Tensor('float32', tensorData, [1, 3, targetH, targetW]);
   return { tensor, origWidth, origHeight };
 }
 
 /**
- * Applies MODNet's 512x512 photographic portrait alpha matte cleanly onto
- * the original full-resolution image.
- *
- * NOTE: Unlike U2-NetP which required extensive heuristic cones, shoulder protection
- * bounds, and flood-fill patches, MODNet is natively trained specifically for human portraits.
- * It detects the entire upper body (face, eyes, neck, collar, clothes, shoulders, and hair)
- * with studio-grade matting precision and continuous edge blending.
+ * Preprocesses an ImageBitmap for MODNet
+ * Shape: [1, 3, 512, 512]
+ * Normalization: (pixel - 127.5) / 127.5
  */
-async function generateTransparentImage(
+function preprocessModnetImage(imageBitmap: ImageBitmap): { tensor: ort.Tensor; origWidth: number; origHeight: number } {
+  const targetW = 512;
+  const targetH = 512;
+  const origWidth = imageBitmap.width;
+  const origHeight = imageBitmap.height;
+
+  const canvas = new OffscreenCanvas(targetW, targetH);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Could not get 2D context from OffscreenCanvas');
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(imageBitmap, 0, 0, targetW, targetH);
+
+  const imageData = ctx.getImageData(0, 0, targetW, targetH);
+  const data = imageData.data;
+  const numPixels = targetW * targetH;
+  const tensorData = new Float32Array(3 * numPixels);
+
+  for (let i = 0; i < numPixels; i++) {
+    const px = i * 4;
+    tensorData[i] = (data[px] - 127.5) / 127.5;
+    tensorData[numPixels + i] = (data[px + 1] - 127.5) / 127.5;
+    tensorData[2 * numPixels + i] = (data[px + 2] - 127.5) / 127.5;
+  }
+
+  const tensor = new ort.Tensor('float32', tensorData, [1, 3, targetH, targetW]);
+  return { tensor, origWidth, origHeight };
+}
+
+/**
+ * Composites high-precision alpha matte onto original resolution ImageBitmap.
+ * Generates transparent cutout Blob AND black-and-white mask Blob for the brush editor.
+ */
+async function generateCutoutAndMask(
   imageBitmap: ImageBitmap,
   matteData: Float32Array | Float64Array | number[],
-  maskWidth = 512,
-  maskHeight = 512
-): Promise<Blob> {
+  maskWidth: number,
+  maskHeight: number,
+  isModnet = false
+): Promise<{ cutoutBlob: Blob; maskBlob: Blob; width: number; height: number }> {
   const origWidth = imageBitmap.width;
   const origHeight = imageBitmap.height;
   const numPixels = maskWidth * maskHeight;
 
-  // 1. Construct 512x512 Alpha Matte Canvas
+  // 1. Build mask canvas
   const maskCanvas = new OffscreenCanvas(maskWidth, maskHeight);
   const maskCtx = maskCanvas.getContext('2d');
   if (!maskCtx) throw new Error('Could not get mask canvas context');
 
   const maskImageData = maskCtx.createImageData(maskWidth, maskHeight);
-  const maskData = maskImageData.data;
+  const maskPixels = maskImageData.data;
+
+  // B&W mask representation (pure white foreground, pure black background)
+  const bwCanvas = new OffscreenCanvas(maskWidth, maskHeight);
+  const bwCtx = bwCanvas.getContext('2d');
+  if (!bwCtx) throw new Error('Could not get B&W mask canvas context');
+  const bwImageData = bwCtx.createImageData(maskWidth, maskHeight);
+  const bwPixels = bwImageData.data;
 
   for (let i = 0; i < numPixels; i++) {
     const px = i * 4;
-    const rawAlpha = matteData[i];
+    const rawVal = matteData[i];
 
-    // Clamp value between 0 and 1
-    let alphaFloat = Math.max(0, Math.min(1, rawAlpha));
+    let alpha = rawVal;
+    if (alpha < 0 || alpha > 1) {
+      alpha = 1 / (1 + Math.exp(-alpha));
+    }
+    alpha = Math.max(0, Math.min(1, alpha));
 
-    // Refinement curve:
-    // MODNet matte ranges from 0.0 (background) to 1.0 (subject).
-    // Subtle ear contours and thin protrusions often produce model confidence around 0.3 - 0.65.
-    // With previous high solid-threshold (0.95), ears stayed semi-transparent or got clipped at edges.
-    // New refined curve:
-    // - Background floor (< 0.04): 100% transparent (cleans up any faint background fog)
-    // - Foreground solid threshold (>= 0.60): 100% fully solid opaque (guarantees ears, hair rims, and collars are completely solid)
-    // - Smooth transition zone [0.04, 0.60]: smooth curve with gentle power gamma (0.75) ensuring thin protrusions like ears get full body
-    if (alphaFloat <= 0.04) {
-      alphaFloat = 0;
-    } else if (alphaFloat >= 0.60) {
-      alphaFloat = 1.0;
+    if (isModnet) {
+      // MODNet portrait refinement curve
+      if (alpha <= 0.04) {
+        alpha = 0;
+      } else if (alpha >= 0.60) {
+        alpha = 1.0;
+      } else {
+        const t = (alpha - 0.04) / (0.60 - 0.04);
+        alpha = Math.pow(t, 0.75);
+      }
     } else {
-      const t = (alphaFloat - 0.04) / (0.60 - 0.04);
-      // Gentle curve that boosts midtones (ears, thin hair strands) toward opacity
-      alphaFloat = Math.pow(t, 0.75);
+      // RMBG-1.4 universal refinement curve:
+      // Preserves fine hair strands, pet fur, thin glass/transparent contours
+      if (alpha <= 0.02) {
+        alpha = 0;
+      } else if (alpha >= 0.96) {
+        alpha = 1.0;
+      } else {
+        // Natural smooth sigmoid curve for semi-transparent edges, glass and fur
+        const t = (alpha - 0.02) / (0.96 - 0.02);
+        alpha = Math.pow(t, 0.90);
+      }
     }
 
-    const alphaByte = Math.round(alphaFloat * 255);
+    const alphaByte = Math.round(alpha * 255);
 
-    maskData[px] = 255;
-    maskData[px + 1] = 255;
-    maskData[px + 2] = 255;
-    maskData[px + 3] = alphaByte;
+    // Alpha mask canvas (white with alpha)
+    maskPixels[px] = 255;
+    maskPixels[px + 1] = 255;
+    maskPixels[px + 2] = 255;
+    maskPixels[px + 3] = alphaByte;
+
+    // B&W silhouette canvas
+    bwPixels[px] = alphaByte;
+    bwPixels[px + 1] = alphaByte;
+    bwPixels[px + 2] = alphaByte;
+    bwPixels[px + 3] = 255;
   }
 
   maskCtx.putImageData(maskImageData, 0, 0);
+  bwCtx.putImageData(bwImageData, 0, 0);
 
-  // 2. Composite onto full-resolution canvas preserving passport photo crispness
+  // 2. High-resolution composite on original dimensions (clamped to max 4096px for extreme mobile safety)
   let targetOutW = origWidth;
   let targetOutH = origHeight;
-  const MAX_DIM = 2000;
+  const MAX_DIM = 4096;
   if (targetOutW > MAX_DIM || targetOutH > MAX_DIM) {
     const scale = Math.min(MAX_DIM / targetOutW, Math.max(MAX_DIM / targetOutH, 0.1));
     targetOutW = Math.round(targetOutW * scale);
@@ -357,7 +426,7 @@ async function generateTransparentImage(
   const finalCtx = finalCanvas.getContext('2d');
   if (!finalCtx) throw new Error('Could not get final canvas context');
 
-  // Draw original image at target dimensions
+  // Draw original image
   finalCtx.drawImage(imageBitmap, 0, 0, targetOutW, targetOutH);
 
   // Apply alpha mask smoothly with high-quality bicubic interpolation
@@ -366,68 +435,114 @@ async function generateTransparentImage(
   finalCtx.imageSmoothingQuality = 'high';
   finalCtx.drawImage(maskCanvas, 0, 0, targetOutW, targetOutH);
 
-  const resultBlob = await finalCanvas.convertToBlob({ type: 'image/png' });
-  return resultBlob;
+  // Full-scale B&W mask canvas for brush editor
+  const finalBwCanvas = new OffscreenCanvas(targetOutW, targetOutH);
+  const finalBwCtx = finalBwCanvas.getContext('2d');
+  if (finalBwCtx) {
+    finalBwCtx.imageSmoothingEnabled = true;
+    finalBwCtx.imageSmoothingQuality = 'high';
+    finalBwCtx.drawImage(bwCanvas, 0, 0, targetOutW, targetOutH);
+  }
+
+  const cutoutBlob = await finalCanvas.convertToBlob({ type: 'image/png' });
+  const maskBlob = finalBwCtx ? await finalBwCanvas.convertToBlob({ type: 'image/png' }) : cutoutBlob;
+
+  return { cutoutBlob, maskBlob, width: targetOutW, height: targetOutH };
 }
 
 self.onmessage = async (e: MessageEvent) => {
-  const { type, blob, baseUrl } = e.data;
+  const { type, blob, baseUrl, modelType } = e.data;
 
   if (baseUrl && typeof baseUrl === 'string') {
     runtimeAppBaseUrl = baseUrl;
     try {
       ort.env.wasm.wasmPaths = getWasmBasePath();
-    } catch (err) {
-      // Ignored
-    }
+    } catch {}
   }
 
   if (type === 'preload') {
     try {
-      await getSession();
-      self.postMessage({ type: 'preload-success' });
+      // Preload requested model or default to RMBG-1.4
+      if (modelType === 'modnet') {
+        await getModnetSession();
+      } else {
+        await getRmbgSession();
+      }
+      self.postMessage({ type: 'preload-success', modelType });
     } catch (error: any) {
       self.postMessage({ type: 'preload-error', error: error?.message || String(error) });
     }
   } else if (type === 'removeBackground') {
     try {
       const startTime = performance.now();
-      self.postMessage({ type: 'progress', step: 'Loading AI Model...', percent: 25 });
+      const useModnet = modelType === 'modnet';
 
-      // Get or load cached session
-      const activeSession = await getSession();
+      self.postMessage({ 
+        type: 'progress', 
+        step: useModnet ? 'Loading Portrait Matting AI...' : 'Loading Universal Saliency AI (RMBG)...', 
+        percent: 20 
+      });
 
-      self.postMessage({ type: 'progress', step: 'Extracting portrait...', percent: 50 });
+      // 1. Get active session
+      let activeSession: ort.InferenceSession;
+      try {
+        activeSession = useModnet ? await getModnetSession() : await getRmbgSession();
+      } catch (err: any) {
+        // Fallback to MODNet if RMBG fails to load on memory-constrained device
+        if (!useModnet) {
+          console.warn('[AI Bg Worker] RMBG load failed, falling back to MODNet:', err?.message);
+          self.postMessage({ type: 'progress', step: 'Falling back to portrait matting model...', percent: 35 });
+          activeSession = await getModnetSession();
+        } else {
+          throw err;
+        }
+      }
+
+      self.postMessage({ type: 'progress', step: 'Extracting image tensors...', percent: 45 });
       const imageBitmap = await createImageBitmap(blob);
-      const { tensor, origWidth, origHeight } = preprocessImage(imageBitmap, 512, 512);
 
-      self.postMessage({ type: 'progress', step: 'Matting background...', percent: 75 });
+      const isModnetActive = activeSession.inputNames.length > 0 && activeSession.outputNames.includes('output') && activeSession === modnetSession;
+      const { tensor, origWidth, origHeight } = isModnetActive
+        ? preprocessModnetImage(imageBitmap)
+        : preprocessRmbgImage(imageBitmap);
+
+      self.postMessage({ type: 'progress', step: 'Analyzing subject & edges...', percent: 65 });
       const inputName = activeSession.inputNames[0] || 'input';
       const outputName = activeSession.outputNames[0] || 'output';
 
       const inferenceStart = performance.now();
       const results = await activeSession.run({ [inputName]: tensor });
       const inferenceElapsed = (performance.now() - inferenceStart).toFixed(1);
-      console.log(`[MODNet Worker] Inference completed in ${inferenceElapsed}ms`);
+      console.log(`[AI Bg Worker] Inference completed in ${inferenceElapsed}ms (${isModnetActive ? 'MODNet' : 'RMBG-1.4'})`);
 
-      self.postMessage({ type: 'progress', step: 'Rendering portrait...', percent: 90 });
+      self.postMessage({ type: 'progress', step: 'Matting hair, fur & transparent edges...', percent: 85 });
       const outputTensor = results[outputName];
       const matteData = outputTensor.data as Float32Array;
 
-      const finalBlob = await generateTransparentImage(imageBitmap, matteData, 512, 512);
-      
+      const maskDim = isModnetActive ? 512 : 1024;
+      const { cutoutBlob, maskBlob, width, height } = await generateCutoutAndMask(
+        imageBitmap, 
+        matteData, 
+        maskDim, 
+        maskDim, 
+        isModnetActive
+      );
+
       const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
-      console.log(`[MODNet Worker] Full portrait matting completed in ${totalTime}s (Original Size: ${origWidth}x${origHeight}px)`);
+      console.log(`[AI Bg Worker] Background removal complete in ${totalTime}s (${origWidth}x${origHeight}px -> ${width}x${height}px)`);
 
       self.postMessage({
         type: 'success',
-        blob: finalBlob,
+        blob: cutoutBlob,
+        maskBlob: maskBlob,
+        width,
+        height,
+        modelUsed: isModnetActive ? 'MODNet Portrait' : 'RMBG-1.4 Universal',
         inferenceTimeMs: Number(inferenceElapsed),
         totalTimeSec: Number(totalTime)
       });
     } catch (error: any) {
-      console.error('[MODNet Worker] Error during portrait background removal:', error);
-      session = null;
+      console.error('[AI Bg Worker] Error during background removal:', error);
       self.postMessage({ type: 'error', error: error?.message || String(error) });
     }
   }

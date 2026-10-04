@@ -18,7 +18,8 @@ import {
   Menu, 
   X,
   Search,
-  Sparkles
+  Sparkles,
+  Scissors
 } from 'lucide-react';
 import { AppTab, AppTheme, AppLanguage } from '../types';
 import { translations } from '../translations';
@@ -47,10 +48,11 @@ export default function TopNavigation({
   const t = translations[language];
   const isDark = theme === 'dark';
 
-  // Four Primary Navigation Items directly visible in top bar
+  // Primary Navigation Items directly visible in top bar
   const primaryNavItems = [
     { id: 'home' as AppTab, label: t.navHome || 'Home', icon: Home },
-    { id: 'passport' as AppTab, label: t.navPassport || 'Passport Size', icon: User, badge: 'Popular' },
+    { id: 'bgremover' as AppTab, label: (t as any).navBgRemover || 'AI Background Remover', icon: Scissors, badge: 'New' },
+    { id: 'passport' as AppTab, label: t.navPassport || 'Passport Size', icon: User },
     { id: 'documents' as AppTab, label: t.navDocuments || 'Documents', icon: FileText },
     { id: 'resizer' as AppTab, label: (t as any).navResizer || 'Photo Resizer', icon: Sliders },
   ];

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import TopNavigation from './components/TopNavigation';
+import BackgroundRemoverSection from './components/BackgroundRemoverSection';
 import PassportSection from './components/PassportSection';
 import DocumentsSection from './components/DocumentsSection';
 import PhotoSignatureResizerSection from './components/PhotoSignatureResizerSection';
@@ -117,6 +118,14 @@ export default function App() {
             onSelectTab={handleSelectTab} 
             language={language} 
             theme={theme} 
+          />
+        );
+      case 'bgremover':
+        return (
+          <BackgroundRemoverSection
+            language={language}
+            theme={theme}
+            onSelectTab={handleSelectTab}
           />
         );
       case 'passport':

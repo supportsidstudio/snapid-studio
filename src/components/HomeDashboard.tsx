@@ -16,7 +16,8 @@ import {
   Shirt,
   Star,
   Contact,
-  HelpCircle
+  HelpCircle,
+  Scissors
 } from 'lucide-react';
 import { AppTab, AppTheme, AppLanguage } from '../types';
 import SnapIdLogo from './SnapIdLogo';
@@ -118,6 +119,32 @@ export default function HomeDashboard({
           </h2>
 
           <div className="space-y-2">
+            {/* Quick Row 0: AI Background Remover */}
+            <div
+              onClick={() => onSelectTab('bgremover')}
+              className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-xl sm:rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 hover:bg-blue-100/80 dark:hover:bg-blue-900/40 border border-blue-200 dark:border-blue-800/60 hover:border-blue-500/60 cursor-pointer group transition-all"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/25">
+                  <Scissors className="w-4.5 h-4.5" />
+                </div>
+                <div className="text-left">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
+                      AI Background Remover
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded-md text-[9px] font-bold font-mono bg-blue-500/20 text-blue-500 border border-blue-500/30">
+                      NEW
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    People, Products, Fur &amp; Objects &rarr;
+                  </div>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-400 dark:text-slate-500 group-hover:text-blue-500 dark:group-hover:text-blue-400 group-hover:translate-x-1 transition-all" />
+            </div>
+
             {/* Quick Row 1: Passport Size */}
             <div
               onClick={() => onSelectTab('passport')}
@@ -204,9 +231,35 @@ export default function HomeDashboard({
           </p>
         </div>
 
-        {/* 6 Cards Grid (3 Columns, 2 Rows) */}
+        {/* Main Tools Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           
+          {/* Card 0: AI Background Remover */}
+          <div
+            onClick={() => onSelectTab('bgremover')}
+            className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-blue-500/40 dark:border-blue-500/50 bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-transparent dark:from-[#0f2048] dark:via-[#0c1836] dark:to-[#070e20] hover:border-blue-500 cursor-pointer group transition-all flex flex-col justify-between relative overflow-hidden shadow-md dark:shadow-[0_8px_30px_rgba(37,99,235,0.15)]"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/30">
+                <Scissors className="w-5 h-5" />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-500/20 text-blue-500 border border-blue-500/40">
+                  NEW
+                </span>
+                <ArrowRight className="w-4 h-4 text-blue-500 group-hover:translate-x-1 transition-all" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors flex items-center gap-2">
+                <span>AI Background Remover</span>
+              </h3>
+              <p className="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">
+                Universal neural matting for people, products, hair, fur &amp; glass with manual touch-up brush.
+              </p>
+            </div>
+          </div>
+
           {/* Card 1: Passport Size */}
           <div
             onClick={() => onSelectTab('passport')}

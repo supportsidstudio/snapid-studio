@@ -43,6 +43,36 @@ async function startServer() {
     });
   });
 
+  // POST /api/remove-background - Universal High-Accuracy AI Background Removal
+  app.post("/api/remove-background", async (req, res) => {
+    try {
+      const { image, modelType, category, customApiKey, customProvider } = req.body || {};
+      if (!image) {
+        return res.status(400).json({ success: false, error: "Image data is required" });
+      }
+
+      const { processServerBackgroundRemoval } = await import("./server/removeBgService");
+      const result = await processServerBackgroundRemoval({
+        image,
+        modelType,
+        category,
+        customApiKey,
+        customProvider,
+      });
+
+      return res.json({
+        success: true,
+        ...result,
+      });
+    } catch (err: any) {
+      console.error("Failed server background removal:", err);
+      return res.status(500).json({
+        success: false,
+        error: err?.message || "Failed to remove background on server",
+      });
+    }
+  });
+
   // POST /api/feedback - Save permanent feedback record
   app.post("/api/feedback", (req, res) => {
     try {

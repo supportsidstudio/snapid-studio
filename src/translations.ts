@@ -10,6 +10,7 @@ export const translations = {
     
     // Nav items
     navHome: 'Home',
+    navBgRemover: 'AI Background Remover',
     navPassport: 'Passport Size',
     navDocuments: 'Documents',
     navResizer: 'Photo Resizer',
@@ -199,6 +200,7 @@ export const translations = {
     
     // Nav items
     navHome: 'मुख्य पृष्ठ',
+    navBgRemover: 'एआई बैकग्राउंड रिमूवर',
     navPassport: 'पासपोर्ट साइज',
     navDocuments: 'दस्तावेज़',
     navResizer: 'फोटो रिसाइजर',
