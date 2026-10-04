@@ -43,3 +43,9 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Prevent Bun lockfiles from being committed
+bun.lock
+bun.lockb
+.bun/
+bunfig.toml
