@@ -1,15 +1,13 @@
 import * as ort from 'onnxruntime-web';
 
-// Matching onnxruntime-web package version in package.json
+// Matching onnxruntime-web package version
 const ORT_VERSION = '1.29.0';
 const CDN_WASM_PATH = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
 let runtimeAppBaseUrl: string | null = null;
 
 /**
- * Dynamically resolves the base URL of the deployed app,
- * automatically handling root domains, subdirectories (e.g. GitHub Pages /<repo>/),
- * Cloudflare Pages, Netlify, and local development.
+ * Dynamically resolves base URL across local dev, Cloudflare Pages, Next.js, and subdirectories.
  */
 function getAppBaseUrl(): string {
   if (runtimeAppBaseUrl) {
@@ -45,38 +43,89 @@ function getWasmBasePath(): string {
   return `${base.replace(/\/+$/, '')}/onnxruntime/`;
 }
 
-const MODNET_CACHE_NAME = 'snapid-modnet-model-v3';
+// Model Cache Names in browser CacheStorage
 const RMBG_CACHE_NAME = 'snapid-rmbg-model-v1';
+const LITE_MODEL_CACHE_NAME = 'snapid-lite-bg-model-v1';
+const MODNET_CACHE_NAME = 'snapid-modnet-model-v3';
+
+// ============================================================================
+// Model Source Definitions (Configurable Fallback Chain)
+// ============================================================================
+export const MODEL_SOURCES = {
+  // Option 1: Lightweight Model (BiRefNet-lite / ISNet-quint8)
+  lite: [
+    '/models/birefnet-lite.onnx',
+    'https://huggingface.co/ZhengPeng7/BiRefNet_lite/resolve/main/birefnet_lite.onnx',
+    'https://huggingface.co/danielgatis/rembg/resolve/main/isnet-general-use.onnx',
+  ],
+  // Option 2: High-Fidelity Universal Model (RMBG-1.4 Quantized)
+  rmbg: [
+    '/models/rmbg-1.4.onnx',
+    'https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx',
+  ],
+  // Option 3: Portrait Matting Fallback (MODNet)
+  modnet: [
+    '/models/modnet.onnx',
+  ],
+};
+
+// ============================================================================
+// Environment Diagnostics & WASM Multi-threading Setup
+// ============================================================================
+const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+const isSabAvailable = typeof SharedArrayBuffer !== 'undefined';
+const hardwareThreads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+const hasWebGpu = typeof navigator !== 'undefined' && 'gpu' in navigator && !!(navigator as any).gpu;
+
+// If crossOriginIsolated is active, allocate all available CPU cores (up to 8).
+// If isolation is false, browser blocks SharedArrayBuffer so fallback to single thread.
+const allocatedThreads = (isIsolated && isSabAvailable)
+  ? Math.min(8, Math.max(2, hardwareThreads))
+  : 1;
 
 try {
   ort.env.logLevel = 'error';
-  const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
-  const safeThreads = isIsolated
-    ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-        ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
-        : 2)
-    : 1;
-
   const initialBasePath = getWasmBasePath();
   ort.env.wasm.wasmPaths = {
     mjs: `${initialBasePath}ort-wasm-simd-threaded.mjs`,
     wasm: `${initialBasePath}ort-wasm-simd-threaded.wasm`,
   };
-  ort.env.wasm.numThreads = safeThreads;
+  ort.env.wasm.numThreads = allocatedThreads;
   ort.env.wasm.simd = true;
   ort.env.wasm.proxy = false;
+
+  console.log('[AI Bg Worker: ENVIRONMENT DIAGNOSTICS]', {
+    crossOriginIsolated: isIsolated,
+    allocatedThreads,
+    hardwareConcurrency: hardwareThreads,
+    isSharedArrayBufferAvailable: isSabAvailable,
+    hasWebGpu,
+    wasmPath: initialBasePath,
+  });
+
+  if (!isIsolated) {
+    console.warn(
+      '[AI Bg Worker] Notice: crossOriginIsolated is FALSE. WASM is falling back to single-thread mode (numThreads=1). ' +
+      'To enable multi-threading, configure COOP: same-origin and COEP: credentialless headers in next.config.js / server.'
+    );
+  }
 } catch (e) {
-  console.warn('[AI Bg Worker] Initial wasmPaths configuration warning:', e);
+  console.warn('[AI Bg Worker] Initial ORT environment setup notice:', e);
 }
 
-// Cached sessions
-let modnetSession: ort.InferenceSession | null = null;
+// Session state cache
+let activeBackendLabel = 'Unknown';
+let cachedRmbgSession: ort.InferenceSession | null = null;
+let rmbgLoadingPromise: Promise<ort.InferenceSession> | null = null;
+let cachedLiteSession: ort.InferenceSession | null = null;
+let liteLoadingPromise: Promise<ort.InferenceSession> | null = null;
+let cachedModnetSession: ort.InferenceSession | null = null;
 let modnetLoadingPromise: Promise<ort.InferenceSession> | null = null;
 
-let rmbgSession: ort.InferenceSession | null = null;
-let rmbgLoadingPromise: Promise<ort.InferenceSession> | null = null;
-
-async function fetchValidModelBuffer(url: string, cacheName: string, minBytes: number): Promise<ArrayBuffer> {
+// ============================================================================
+// Model Fetching with Browser CacheStorage (Zero-delay repeated loads)
+// ============================================================================
+async function fetchValidModelBuffer(url: string, cacheName: string, minBytes = 10000000): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
   let resolvedUrl = url;
 
@@ -84,7 +133,7 @@ async function fetchValidModelBuffer(url: string, cacheName: string, minBytes: n
     resolvedUrl = `${base.replace(/\/+$/, '')}${url}`;
   }
 
-  // 1. Try retrieving from persistent browser Cache API for instantaneous load (<20ms)
+  // 1. Check browser Cache API first
   if (typeof caches !== 'undefined') {
     try {
       const cache = await caches.open(cacheName);
@@ -104,6 +153,7 @@ async function fetchValidModelBuffer(url: string, cacheName: string, minBytes: n
     }
   }
 
+  // 2. Fetch from network
   console.log(`[AI Bg Worker] Fetching model binary from: ${resolvedUrl}`);
   const response = await fetch(resolvedUrl, { mode: 'cors' });
   if (!response.ok) {
@@ -112,29 +162,28 @@ async function fetchValidModelBuffer(url: string, cacheName: string, minBytes: n
 
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('text/html')) {
-    throw new Error(`Invalid response: Expected binary ONNX but received HTML text (SPA redirect or 404)`);
+    throw new Error(`Invalid response: Expected binary ONNX but received HTML text (SPA 404 or redirect)`);
   }
 
   const buffer = await response.arrayBuffer();
   if (buffer.byteLength < minBytes) {
-    // If Git LFS pointer text file was served (typically ~130 bytes)
     const textHeader = new TextDecoder().decode(new Uint8Array(buffer.slice(0, 30)));
-    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes (expected >= ${minBytes}). Content: ${textHeader}`);
+    throw new Error(`Invalid model binary size: ${buffer.byteLength} bytes (expected >= ${minBytes}). Header: ${textHeader}`);
   }
 
-  // Validate protobuf ONNX magic header (starts with 0x08)
+  // Validate protobuf ONNX magic header (first byte 0x08)
   const header = new Uint8Array(buffer, 0, 4);
   if (header[0] !== 0x08) {
     const textHeader = new TextDecoder().decode(new Uint8Array(buffer.slice(0, 30)));
-    throw new Error(`Invalid ONNX protobuf header: [${Array.from(header).join(', ')}]. Content: ${textHeader}`);
+    throw new Error(`Invalid ONNX protobuf header: [${Array.from(header).join(', ')}]. Header: ${textHeader}`);
   }
 
-  // Store in Cache API for zero-delay subsequent loads
+  // Store in Cache API for subsequent zero-delay runs
   if (typeof caches !== 'undefined') {
     try {
       const cache = await caches.open(cacheName);
       await cache.put(resolvedUrl, new Response(buffer.slice(0), {
-        headers: { 'Content-Type': 'application/octet-stream' }
+        headers: { 'Content-Type': 'application/octet-stream' },
       }));
       console.log(`[AI Bg Worker] Cached model binary in browser CacheStorage (${cacheName})`);
     } catch {
@@ -142,30 +191,39 @@ async function fetchValidModelBuffer(url: string, cacheName: string, minBytes: n
     }
   }
 
-  console.log(`[AI Bg Worker] Successfully verified model binary (${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB)`);
   return buffer;
 }
 
-/**
- * Creates an inference session with progressive fallback paths:
- * 1. Multi-threaded WASM SIMD (if crossOriginIsolated)
- * 2. Single-threaded WASM SIMD (if isolation disabled)
- * 3. CDN fallback if local WASM paths fail
- */
-async function createConfiguredSession(buffer: ArrayBuffer, modelLabel: string): Promise<ort.InferenceSession> {
-  const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
-  const threads = isIsolated
-    ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-        ? Math.min(4, Math.max(1, navigator.hardwareConcurrency))
-        : 2)
-    : 1;
+// ============================================================================
+// Session Creation: WebGPU First -> Multi-threaded WASM -> Single-thread WASM
+// ============================================================================
+async function createOptimizedSession(modelBuffer: ArrayBuffer, modelLabel: string): Promise<ort.InferenceSession> {
+  const tSessionStart = performance.now();
 
-  const sessionOptions: ort.InferenceSession.SessionOptions = {
-    executionProviders: ['wasm'],
-    graphOptimizationLevel: 'all',
-    logSeverityLevel: 3,
-    logVerbosityLevel: 0,
-  };
+  // Step 2: WebGPU Acceleration (0.2s - 0.5s inference)
+  if (typeof navigator !== 'undefined' && 'gpu' in navigator && (navigator as any).gpu) {
+    try {
+      console.log(`[AI Bg Worker] Attempting WebGPU hardware acceleration for ${modelLabel}...`);
+      const webgpuSession = await ort.InferenceSession.create(modelBuffer.slice(0), {
+        executionProviders: ['webgpu', 'wasm'],
+        graphOptimizationLevel: 'all',
+      });
+      activeBackendLabel = 'WebGPU (Hardware Accelerated)';
+      console.log(
+        `[AI Bg Worker] SUCCESS: ${modelLabel} session ACTIVE via ${activeBackendLabel} in ${(performance.now() - tSessionStart).toFixed(1)}ms! ` +
+        `Inputs: [${webgpuSession.inputNames.join(', ')}], Outputs: [${webgpuSession.outputNames.join(', ')}]`
+      );
+      return webgpuSession;
+    } catch (gpuErr: any) {
+      console.warn(`[AI Bg Worker] WebGPU session creation warning, falling back to WASM:`, gpuErr?.message || gpuErr);
+    }
+  }
+
+  // Step 3: WASM Execution Provider (Multi-threaded if crossOriginIsolated, else Single-thread)
+  const isIsolatedNow = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+  const threadsToUse = (isIsolatedNow && typeof SharedArrayBuffer !== 'undefined')
+    ? Math.min(8, Math.max(2, hardwareThreads))
+    : 1;
 
   const basePath = getWasmBasePath();
   const wasmPathConfig = {
@@ -173,56 +231,78 @@ async function createConfiguredSession(buffer: ArrayBuffer, modelLabel: string):
     wasm: `${basePath}ort-wasm-simd-threaded.wasm`,
   };
 
-  const wasmConfigs: Array<{ path: any; threads: number; label: string }> = [
-    { path: wasmPathConfig, threads: threads, label: `Local WASM (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
-    { path: basePath, threads: threads, label: `Local WASM Path (${threads > 1 ? 'Multi-thread' : 'Single-thread'})` },
-    { path: wasmPathConfig, threads: 1, label: 'Local WASM (Single-thread fallback)' },
-    { path: basePath, threads: 1, label: 'Local WASM Path (Single-thread fallback)' },
-    { path: CDN_WASM_PATH, threads: 1, label: 'JSDelivr CDN WASM (Global fallback)' }
+  const wasmAttempts: Array<{ path: any; threads: number; label: string }> = [
+    {
+      path: wasmPathConfig,
+      threads: threadsToUse,
+      label: `Local WASM (${threadsToUse > 1 ? `Multi-thread ${threadsToUse} cores` : 'Single-thread'})`,
+    },
+    {
+      path: basePath,
+      threads: threadsToUse,
+      label: `Local Base WASM (${threadsToUse > 1 ? `Multi-thread ${threadsToUse} cores` : 'Single-thread'})`,
+    },
+    {
+      path: wasmPathConfig,
+      threads: 1,
+      label: 'Local WASM (Single-thread fallback)',
+    },
+    {
+      path: CDN_WASM_PATH,
+      threads: 1,
+      label: 'JSDelivr CDN WASM (Global fallback)',
+    },
   ];
 
   let lastError: any = null;
-  for (const cfg of wasmConfigs) {
+  for (const cfg of wasmAttempts) {
     try {
       ort.env.wasm.wasmPaths = cfg.path;
       ort.env.wasm.numThreads = cfg.threads;
       ort.env.wasm.simd = true;
       ort.env.wasm.proxy = false;
-      const session = await ort.InferenceSession.create(buffer.slice(0), sessionOptions);
-      console.log(`[AI Bg Worker] ${modelLabel} session active via ${cfg.label}! Inputs: [${session.inputNames.join(', ')}], Outputs: [${session.outputNames.join(', ')}]`);
-      return session;
+
+      const wasmSession = await ort.InferenceSession.create(modelBuffer.slice(0), {
+        executionProviders: ['wasm'],
+        graphOptimizationLevel: 'all',
+        logSeverityLevel: 3,
+      });
+
+      activeBackendLabel = cfg.label;
+      console.log(
+        `[AI Bg Worker] SUCCESS: ${modelLabel} session ACTIVE via ${activeBackendLabel} in ${(performance.now() - tSessionStart).toFixed(1)}ms! ` +
+        `Inputs: [${wasmSession.inputNames.join(', ')}], Outputs: [${wasmSession.outputNames.join(', ')}]`
+      );
+      return wasmSession;
     } catch (err: any) {
       lastError = err;
-      console.warn(`[AI Bg Worker] ${modelLabel} on ${cfg.label} warning:`, err?.message || err);
+      console.warn(`[AI Bg Worker] Session attempt failed for ${cfg.label}:`, err?.message || err);
     }
   }
 
-  throw lastError || new Error(`Failed to initialize session for ${modelLabel}`);
+  throw lastError || new Error(`Could not initialize inference session for ${modelLabel}`);
 }
 
+// ============================================================================
+// Model Loaders with Progressive Fallbacks
+// ============================================================================
+
 /**
- * Loads and caches the universal RMBG-1.4 model (People, Animals, Products, Fur, Glass, Objects)
- * Automatically checks local file first, then falls back to public HuggingFace CDN if Cloudflare's 25MB limit dropped the asset.
+ * Loads RMBG-1.4 model (Local -> HuggingFace CDN)
  */
 async function getRmbgSession(): Promise<ort.InferenceSession> {
-  if (rmbgSession) return rmbgSession;
+  if (cachedRmbgSession) return cachedRmbgSession;
   if (rmbgLoadingPromise) return rmbgLoadingPromise;
 
   rmbgLoadingPromise = (async () => {
-    const base = getAppBaseUrl();
-    const sources = [
-      `${base.replace(/\/+$/, '')}/models/rmbg-1.4.onnx`,
-      '/models/rmbg-1.4.onnx',
-      // High-speed CDN fallback that bypasses Cloudflare Pages 25MB file upload limit
-      'https://huggingface.co/briaai/RMBG-1.4/resolve/main/onnx/model_quantized.onnx'
-    ];
-
+    const sources = MODEL_SOURCES.rmbg;
     let lastError: any = null;
+
     for (const src of sources) {
       try {
         const buffer = await fetchValidModelBuffer(src, RMBG_CACHE_NAME, 30000000);
-        rmbgSession = await createConfiguredSession(buffer, 'RMBG-1.4');
-        return rmbgSession;
+        cachedRmbgSession = await createOptimizedSession(buffer, 'RMBG-1.4');
+        return cachedRmbgSession;
       } catch (err: any) {
         lastError = err;
         console.warn(`[AI Bg Worker] RMBG source failed [${src}]:`, err?.message || err);
@@ -230,32 +310,59 @@ async function getRmbgSession(): Promise<ort.InferenceSession> {
     }
 
     rmbgLoadingPromise = null;
-    throw new Error(`Failed to load RMBG-1.4 ONNX model: ${lastError?.message || lastError}`);
+    throw new Error(`Failed to load RMBG-1.4 model: ${lastError?.message || lastError}`);
   })();
 
   return rmbgLoadingPromise;
 }
 
 /**
- * Loads and caches the MODNet model (human portrait matting)
+ * Loads Lightweight model (BiRefNet-lite / ISNet)
+ */
+async function getLiteSession(): Promise<ort.InferenceSession> {
+  if (cachedLiteSession) return cachedLiteSession;
+  if (liteLoadingPromise) return liteLoadingPromise;
+
+  liteLoadingPromise = (async () => {
+    const sources = MODEL_SOURCES.lite;
+    let lastError: any = null;
+
+    for (const src of sources) {
+      try {
+        const buffer = await fetchValidModelBuffer(src, LITE_MODEL_CACHE_NAME, 15000000);
+        cachedLiteSession = await createOptimizedSession(buffer, 'BiRefNet-Lite / ISNet');
+        return cachedLiteSession;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[AI Bg Worker] Lite model source skipped [${src}]:`, err?.message || err);
+      }
+    }
+
+    // Fallback to RMBG-1.4 if lite models are unavailable
+    console.log('[AI Bg Worker] Lite model unavailable, falling back to RMBG-1.4...');
+    cachedLiteSession = await getRmbgSession();
+    return cachedLiteSession;
+  })();
+
+  return liteLoadingPromise;
+}
+
+/**
+ * Loads MODNet model (Portrait Matting fallback)
  */
 async function getModnetSession(): Promise<ort.InferenceSession> {
-  if (modnetSession) return modnetSession;
+  if (cachedModnetSession) return cachedModnetSession;
   if (modnetLoadingPromise) return modnetLoadingPromise;
 
   modnetLoadingPromise = (async () => {
-    const base = getAppBaseUrl();
-    const sources = [
-      `${base.replace(/\/+$/, '')}/models/modnet.onnx`,
-      '/models/modnet.onnx'
-    ];
-
+    const sources = MODEL_SOURCES.modnet;
     let lastError: any = null;
+
     for (const src of sources) {
       try {
         const buffer = await fetchValidModelBuffer(src, MODNET_CACHE_NAME, 20000000);
-        modnetSession = await createConfiguredSession(buffer, 'MODNet');
-        return modnetSession;
+        cachedModnetSession = await createOptimizedSession(buffer, 'MODNet');
+        return cachedModnetSession;
       } catch (err: any) {
         lastError = err;
         console.warn(`[AI Bg Worker] MODNet source failed [${src}]:`, err?.message || err);
@@ -263,17 +370,15 @@ async function getModnetSession(): Promise<ort.InferenceSession> {
     }
 
     modnetLoadingPromise = null;
-    throw new Error(`Failed to load MODNet ONNX model: ${lastError?.message || lastError}`);
+    throw new Error(`Failed to load MODNet model: ${lastError?.message || lastError}`);
   })();
 
   return modnetLoadingPromise;
 }
 
-/**
- * Preprocesses an ImageBitmap for RMBG-1.4
- * Shape: [1, 3, 1024, 1024]
- * ImageNet Normalization: (RGB / 255 - mean) / std
- */
+// ============================================================================
+// Image Preprocessing (1024x1024 RMBG / 512x512 MODNet)
+// ============================================================================
 function preprocessRmbgImage(imageBitmap: ImageBitmap): { tensor: ort.Tensor; origWidth: number; origHeight: number } {
   const targetW = 1024;
   const targetH = 1024;
@@ -311,10 +416,6 @@ function preprocessRmbgImage(imageBitmap: ImageBitmap): { tensor: ort.Tensor; or
   return { tensor, origWidth, origHeight };
 }
 
-/**
- * Preprocesses an ImageBitmap for MODNet
- * Shape: [1, 3, 512, 512]
- */
 function preprocessModnetImage(imageBitmap: ImageBitmap): { tensor: ort.Tensor; origWidth: number; origHeight: number } {
   const targetW = 512;
   const targetH = 512;
@@ -345,9 +446,9 @@ function preprocessModnetImage(imageBitmap: ImageBitmap): { tensor: ort.Tensor; 
   return { tensor, origWidth, origHeight };
 }
 
-/**
- * Composites alpha matte onto original resolution ImageBitmap.
- */
+// ============================================================================
+// Alpha Mask Compositing (with 1024-1500px resolution optimization)
+// ============================================================================
 async function generateCutoutAndMask(
   imageBitmap: ImageBitmap,
   matteData: Float32Array | Float64Array | number[],
@@ -359,7 +460,7 @@ async function generateCutoutAndMask(
   const origHeight = imageBitmap.height;
   const numPixels = maskWidth * maskHeight;
 
-  // 1. Build mask canvas
+  // Build mask canvas
   const maskCanvas = new OffscreenCanvas(maskWidth, maskHeight);
   const maskCtx = maskCanvas.getContext('2d');
   if (!maskCtx) throw new Error('Could not get mask canvas context');
@@ -375,9 +476,8 @@ async function generateCutoutAndMask(
 
   for (let i = 0; i < numPixels; i++) {
     const px = i * 4;
-    const rawVal = matteData[i];
+    let alpha = matteData[i];
 
-    let alpha = rawVal;
     if (alpha < 0 || alpha > 1) {
       alpha = 1 / (1 + Math.exp(-alpha));
     }
@@ -419,11 +519,12 @@ async function generateCutoutAndMask(
   maskCtx.putImageData(maskImageData, 0, 0);
   bwCtx.putImageData(bwImageData, 0, 0);
 
+  // Step 4: Cap output dimension to 1024-1500px for maximum speed and memory efficiency
   let targetOutW = origWidth;
   let targetOutH = origHeight;
-  const MAX_DIM = 4096;
-  if (targetOutW > MAX_DIM || targetOutH > MAX_DIM) {
-    const scale = Math.min(MAX_DIM / targetOutW, Math.max(MAX_DIM / targetOutH, 0.1));
+  const MAX_OUTPUT_DIM = 1500;
+  if (targetOutW > MAX_OUTPUT_DIM || targetOutH > MAX_OUTPUT_DIM) {
+    const scale = Math.min(MAX_OUTPUT_DIM / targetOutW, MAX_OUTPUT_DIM / targetOutH);
     targetOutW = Math.round(targetOutW * scale);
     targetOutH = Math.round(targetOutH * scale);
   }
@@ -452,6 +553,9 @@ async function generateCutoutAndMask(
   return { cutoutBlob, maskBlob, width: targetOutW, height: targetOutH };
 }
 
+// ============================================================================
+// Worker Message Handler
+// ============================================================================
 self.onmessage = async (e: MessageEvent) => {
   const { type, blob, baseUrl, modelType } = e.data;
 
@@ -464,71 +568,127 @@ self.onmessage = async (e: MessageEvent) => {
 
   if (type === 'preload') {
     try {
-      if (modelType === 'modnet') {
+      if (modelType === 'lite') {
+        await getLiteSession();
+      } else if (modelType === 'modnet') {
         await getModnetSession();
       } else {
         await getRmbgSession();
       }
-      self.postMessage({ type: 'preload-success', modelType });
+      self.postMessage({ type: 'preload-success', modelType, activeBackend: activeBackendLabel });
     } catch (error: any) {
       self.postMessage({ type: 'preload-error', error: error?.message || String(error) });
     }
   } else if (type === 'removeBackground') {
+    const overallStart = performance.now();
     try {
-      const startTime = performance.now();
-      const useModnet = modelType === 'modnet';
-
-      self.postMessage({ 
-        type: 'progress', 
-        step: useModnet ? 'Loading Portrait Matting AI...' : 'Loading Universal Neural Model (RMBG-1.4)...', 
-        percent: 20 
+      // Step 7: Continuous Progress Reporting
+      self.postMessage({
+        type: 'progress',
+        step: 'मॉडल लोड हो रहा है... (Loading neural model)',
+        percent: 20,
       });
 
+      const tLoadStart = performance.now();
       let activeSession: ort.InferenceSession;
-      try {
-        activeSession = useModnet ? await getModnetSession() : await getRmbgSession();
-      } catch (err: any) {
-        if (!useModnet) {
-          console.warn('[AI Bg Worker] RMBG load failed, falling back to MODNet:', err?.message);
-          self.postMessage({ type: 'progress', step: 'Falling back to portrait model...', percent: 35 });
+      let modelUsedName = 'RMBG-1.4 Universal AI';
+
+      if (modelType === 'lite') {
+        try {
+          activeSession = await getLiteSession();
+          modelUsedName = 'BiRefNet-Lite / ISNet';
+        } catch {
+          activeSession = await getRmbgSession();
+          modelUsedName = 'RMBG-1.4 Universal AI';
+        }
+      } else if (modelType === 'modnet') {
+        activeSession = await getModnetSession();
+        modelUsedName = 'MODNet Portrait Matting';
+      } else {
+        try {
+          activeSession = await getRmbgSession();
+          modelUsedName = 'RMBG-1.4 Universal AI';
+        } catch (err: any) {
+          console.warn('[AI Bg Worker] RMBG load failed, attempting MODNet fallback:', err?.message);
+          self.postMessage({
+            type: 'progress',
+            step: 'पोर्ट्रेट मॉडल पर स्विच हो रहा है... (Falling back to MODNet)',
+            percent: 30,
+          });
           activeSession = await getModnetSession();
-        } else {
-          throw err;
+          modelUsedName = 'MODNet Portrait AI (Fallback)';
         }
       }
 
-      self.postMessage({ type: 'progress', step: 'Extracting image tensors...', percent: 45 });
-      const imageBitmap = await createImageBitmap(blob);
+      const loadElapsed = (performance.now() - tLoadStart).toFixed(1);
+      console.log(`[AI Bg Worker: TIMER] Model load completed in ${loadElapsed}ms (Backend: ${activeBackendLabel})`);
 
-      const isModnetActive = activeSession.inputNames.length > 0 && activeSession.outputNames.includes('output') && activeSession === modnetSession;
-      const { tensor, origWidth, origHeight } = isModnetActive
+      self.postMessage({
+        type: 'progress',
+        step: 'इमेज प्रोसेस हो रही है... (Extracting tensors)',
+        percent: 45,
+      });
+
+      const tPrepStart = performance.now();
+      const imageBitmap = await createImageBitmap(blob);
+      const isModnet = activeSession.outputNames.includes('output') && activeSession === cachedModnetSession;
+
+      const { tensor, origWidth, origHeight } = isModnet
         ? preprocessModnetImage(imageBitmap)
         : preprocessRmbgImage(imageBitmap);
 
-      self.postMessage({ type: 'progress', step: 'Analyzing subject & edges...', percent: 65 });
+      const prepElapsed = (performance.now() - tPrepStart).toFixed(1);
+      console.log(`[AI Bg Worker: TIMER] Preprocessing completed in ${prepElapsed}ms (${origWidth}x${origHeight}px)`);
+
+      self.postMessage({
+        type: 'progress',
+        step: 'बैकग्राउंड हट रहा है... (Neural inference)',
+        percent: 65,
+      });
+
       const inputName = activeSession.inputNames[0] || 'input';
       const outputName = activeSession.outputNames[0] || 'output';
 
-      const inferenceStart = performance.now();
+      const tInferStart = performance.now();
       const results = await activeSession.run({ [inputName]: tensor });
-      const inferenceElapsed = (performance.now() - inferenceStart).toFixed(1);
-      console.log(`[AI Bg Worker] Inference completed in ${inferenceElapsed}ms (${isModnetActive ? 'MODNet' : 'RMBG-1.4'})`);
+      const inferenceElapsed = (performance.now() - tInferStart).toFixed(1);
 
-      self.postMessage({ type: 'progress', step: 'Matting hair, fur & transparent edges...', percent: 85 });
-      const outputTensor = results[outputName];
-      const matteData = outputTensor.data as Float32Array;
-
-      const maskDim = isModnetActive ? 512 : 1024;
-      const { cutoutBlob, maskBlob, width, height } = await generateCutoutAndMask(
-        imageBitmap, 
-        matteData, 
-        maskDim, 
-        maskDim, 
-        isModnetActive
+      console.log(
+        `[AI Bg Worker: TIMER] Inference finished in ${inferenceElapsed}ms | Backend: ${activeBackendLabel} | Model: ${modelUsedName}`
       );
 
-      const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
-      console.log(`[AI Bg Worker] Background removal complete in ${totalTime}s (${origWidth}x${origHeight}px -> ${width}x${height}px)`);
+      self.postMessage({
+        type: 'progress',
+        step: 'किनारे रिफाइन हो रहे हैं... (Refining edges & alpha matting)',
+        percent: 85,
+      });
+
+      const tPostStart = performance.now();
+      const outputTensor = results[outputName];
+      const matteData = outputTensor.data as Float32Array;
+      const maskDim = isModnet ? 512 : 1024;
+
+      const { cutoutBlob, maskBlob, width, height } = await generateCutoutAndMask(
+        imageBitmap,
+        matteData,
+        maskDim,
+        maskDim,
+        isModnet
+      );
+
+      const postElapsed = (performance.now() - tPostStart).toFixed(1);
+      const totalTimeSec = Number(((performance.now() - overallStart) / 1000).toFixed(2));
+
+      console.log(
+        `[AI Bg Worker: TIMER] Post-processing finished in ${postElapsed}ms. ` +
+        `TOTAL ROUNDTRIP: ${totalTimeSec}s (${origWidth}x${origHeight}px -> ${width}x${height}px)`
+      );
+
+      self.postMessage({
+        type: 'progress',
+        step: 'पूर्ण हुआ! (Complete)',
+        percent: 100,
+      });
 
       self.postMessage({
         type: 'success',
@@ -536,9 +696,10 @@ self.onmessage = async (e: MessageEvent) => {
         maskBlob: maskBlob,
         width,
         height,
-        modelUsed: isModnetActive ? 'MODNet Portrait AI' : 'RMBG-1.4 Universal AI',
+        modelUsed: `${modelUsedName} [${activeBackendLabel}]`,
+        backendUsed: activeBackendLabel,
         inferenceTimeMs: Number(inferenceElapsed),
-        totalTimeSec: Number(totalTime)
+        totalTimeSec,
       });
     } catch (error: any) {
       console.error('[AI Bg Worker] Error during background removal:', error);

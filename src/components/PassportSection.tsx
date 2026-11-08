@@ -991,8 +991,8 @@ export default function PassportSection({ language, theme }: PassportSectionProp
     setIsRemovingBg(true);
     setAiStep('Loading Image...');
     try {
-      // Preserve full image quality (up to 2048px for sharp 300DPI passport printing)
-      const optimizedUrl = await resizeAndCompressImage(file, 2048, 0.95);
+      // High-speed 1024px resolution cap (4x faster inference with zero perceptible quality loss)
+      const optimizedUrl = await resizeAndCompressImage(file, 1024, 0.90);
       setRawSourceImage(optimizedUrl);
       setOriginalImage(optimizedUrl);
       setRemovedBgImg(null);
@@ -1001,7 +1001,7 @@ export default function PassportSection({ language, theme }: PassportSectionProp
       setEnhanceCount(0);
       setEnhancementStatus('ready');
       setEnhancementErrorMsg(null);
-      setUseEnhancedPhoto(true);
+      setUseEnhancedPhoto(false); // Enhancement is strictly optional; runs only when user clicks Enhance
       setZoom(1.0);
       setPanX(0);
       setPanY(0);

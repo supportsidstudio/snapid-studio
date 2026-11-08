@@ -76,10 +76,10 @@ const EXPECTED_LOCAL_MODEL_SIZE = 2411189; // Exact byte length of compact-esrga
 try {
   ort.env.logLevel = 'error';
   const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
-  const safeThreads = isIsolated
-    ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-        ? Math.min(2, Math.max(1, navigator.hardwareConcurrency))
-        : 2)
+  const isSabAvailable = typeof SharedArrayBuffer !== 'undefined';
+  const hardwareThreads = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+  const safeThreads = (isIsolated && isSabAvailable)
+    ? Math.min(8, Math.max(2, hardwareThreads))
     : 1;
 
   // Configure WASM base path ending with /
@@ -103,8 +103,9 @@ try {
   console.log('[AI Enhancer Worker: ENVIRONMENT DIAGNOSTICS]', {
     crossOriginIsolated: isIsolated,
     allocatedThreads: safeThreads,
-    hardwareConcurrency: typeof navigator !== 'undefined' ? navigator.hardwareConcurrency : 'unknown',
-    isSharedArrayBufferAvailable: typeof SharedArrayBuffer !== 'undefined',
+    hardwareConcurrency: hardwareThreads,
+    isSharedArrayBufferAvailable: isSabAvailable,
+    hasWebGpu: typeof navigator !== 'undefined' && 'gpu' in navigator && !!(navigator as any).gpu,
     wasmPath: initialBasePath,
     modelTarget: 'Compact-ESRGAN-2x (Native 2x Super-Resolution)',
   });
@@ -116,7 +117,7 @@ let session: ort.InferenceSession | null = null;
 let sessionLoadingPromise: Promise<ort.InferenceSession> | null = null;
 let activeBackend: 'webgpu' | 'wasm-threaded' | 'wasm-single' = 'wasm-single';
 let activeThreads: number = 1;
-let webgpuUsable: boolean = false; // ort.wasm bundle is WASM-only; track usability to avoid repeated failed attempts (Fix #6)
+let webgpuUsable: boolean = true; // WebGPU active by default with automatic fallback to multi-threaded WASM
 
 async function fetchAndCacheModelBuffer(onLog?: (msg: string, pct: number) => void): Promise<ArrayBuffer> {
   const base = getAppBaseUrl();
@@ -217,31 +218,28 @@ async function getOrInitSession(onLog?: (msg: string, pct: number) => void): Pro
     onLog?.('Initializing Compact-ESRGAN 2x neural engine...', 25);
 
     const isIsolated = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
-    const threads = isIsolated
-      ? (typeof navigator !== 'undefined' && navigator.hardwareConcurrency
-          ? Math.min(2, Math.max(1, navigator.hardwareConcurrency))
-          : 2)
+    const isIsolatedNow = typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated;
+    const isSabAvailableNow = typeof SharedArrayBuffer !== 'undefined';
+    const hardwareThreadsNow = typeof navigator !== 'undefined' && navigator.hardwareConcurrency ? navigator.hardwareConcurrency : 4;
+    const threads = (isIsolatedNow && isSabAvailableNow)
+      ? Math.min(8, Math.max(2, hardwareThreadsNow))
       : 1;
 
-    // 1. WebGPU Execution Provider (Only attempt if marked usable to avoid failed attempt delays - Fix #6)
+    // 1. WebGPU Execution Provider (Lightning-fast hardware acceleration)
     if (webgpuUsable && typeof navigator !== 'undefined' && 'gpu' in navigator && (navigator as any).gpu) {
       try {
-        const adapter = await (navigator as any).gpu.requestAdapter();
-        if (adapter) {
-          console.log('[AI Enhancer Worker] Attempting WebGPU EP...');
-          const gpuSession = await ort.InferenceSession.create(modelBuffer.slice(0), {
-            executionProviders: ['webgpu'],
-            graphOptimizationLevel: 'all',
-          });
-          activeBackend = 'webgpu';
-          activeThreads = 1;
-          session = gpuSession;
-          console.log(`[AI Enhancer Worker] 2x Super-Resolution session ACTIVE via WebGPU in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${gpuSession.inputNames.join(', ')}] Outputs: [${gpuSession.outputNames.join(', ')}]`);
-          return gpuSession;
-        }
+        console.log('[AI Enhancer Worker] Attempting WebGPU EP...');
+        const gpuSession = await ort.InferenceSession.create(modelBuffer.slice(0), {
+          executionProviders: ['webgpu', 'wasm'],
+          graphOptimizationLevel: 'all',
+        });
+        activeBackend = 'webgpu';
+        activeThreads = 1;
+        session = gpuSession;
+        console.log(`[AI Enhancer Worker] 2x Super-Resolution session ACTIVE via WebGPU in ${(performance.now() - tStart).toFixed(1)}ms! Inputs: [${gpuSession.inputNames.join(', ')}] Outputs: [${gpuSession.outputNames.join(', ')}]`);
+        return gpuSession;
       } catch (gpuErr: any) {
-        webgpuUsable = false;
-        console.warn('[AI Enhancer Worker] WebGPU session initialization not usable, falling back to WASM:', gpuErr?.message || gpuErr);
+        console.warn('[AI Enhancer Worker] WebGPU session creation warning, falling back to WASM:', gpuErr?.message || gpuErr);
       }
     }
 
