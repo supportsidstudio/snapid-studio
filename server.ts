@@ -73,6 +73,43 @@ async function startServer() {
     }
   });
 
+  // POST /api/process-image - Direct binary endpoint calling process_image(image_bytes) -> returns PNG bytes
+  app.post("/api/process-image", express.raw({ type: ["image/*", "application/octet-stream"], limit: "25mb" }), async (req, res) => {
+    try {
+      let imageBuffer: Buffer | null = null;
+      if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+        imageBuffer = req.body;
+      } else if (req.body?.image) {
+        const matches = String(req.body.image).match(/^data:([^;]+);base64,(.+)$/);
+        imageBuffer = matches ? Buffer.from(matches[2], "base64") : Buffer.from(req.body.image, "base64");
+      }
+
+      if (!imageBuffer || imageBuffer.length === 0) {
+        return res.status(400).send("No image bytes provided");
+      }
+
+      const { runPythonBiRefNet, processServerBackgroundRemoval } = await import("./server/removeBgService");
+      const processedPng = await runPythonBiRefNet(imageBuffer);
+
+      if (processedPng) {
+        res.setHeader("Content-Type", "image/png");
+        return res.send(processedPng);
+      }
+
+      // Graceful fallback to server ONNX engine if Python environment is unpopulated
+      const base64Input = `data:image/png;base64,${imageBuffer.toString("base64")}`;
+      const result = await processServerBackgroundRemoval({ image: base64Input });
+      const outMatches = result.cutoutImage.match(/^data:([^;]+);base64,(.+)$/);
+      const outBuf = outMatches ? Buffer.from(outMatches[2], "base64") : Buffer.from(result.cutoutImage, "base64");
+
+      res.setHeader("Content-Type", "image/png");
+      return res.send(outBuf);
+    } catch (err: any) {
+      console.error("Error in /api/process-image:", err);
+      return res.status(500).send(err?.message || "Error processing image");
+    }
+  });
+
   // POST /api/feedback - Save permanent feedback record
   app.post("/api/feedback", (req, res) => {
     try {

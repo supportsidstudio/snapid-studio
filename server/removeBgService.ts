@@ -2,8 +2,63 @@ import path from 'path';
 import fs from 'fs';
 import { PNG } from 'pngjs';
 
+import { spawn } from 'child_process';
+
 let rmbgSession: any = null;
 let rmbgLoadingPromise: Promise<any> | null = null;
+
+/**
+ * Attempts to execute the high-fidelity BiRefNet model via image_processor.py
+ */
+export async function runPythonBiRefNet(inputBuffer: Buffer): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    try {
+      const scriptPath = path.join(process.cwd(), 'image_processor.py');
+      if (!fs.existsSync(scriptPath)) {
+        return resolve(null);
+      }
+
+      const pyProcess = spawn('python3', [scriptPath], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      const chunks: Buffer[] = [];
+      let errorData = '';
+
+      pyProcess.stdout.on('data', (data) => {
+        chunks.push(data);
+      });
+
+      pyProcess.stderr.on('data', (data) => {
+        errorData += data.toString();
+      });
+
+      pyProcess.on('error', (err) => {
+        console.warn('[Python BiRefNet Engine] python3 execution error:', err.message);
+        resolve(null);
+      });
+
+      pyProcess.on('close', (code) => {
+        if (code === 0 && chunks.length > 0) {
+          const resultBuf = Buffer.concat(chunks);
+          console.log(`[Python BiRefNet Engine] Processed image with image_processor.py (${resultBuf.length} bytes)`);
+          resolve(resultBuf);
+        } else {
+          if (errorData) {
+            console.warn('[Python BiRefNet Engine] Non-zero exit or error:', errorData.trim().slice(0, 300));
+          }
+          resolve(null);
+        }
+      });
+
+      pyProcess.stdin.write(inputBuffer);
+      pyProcess.stdin.end();
+    } catch (err: any) {
+      console.warn('[Python BiRefNet Engine] Could not spawn python3:', err.message);
+      resolve(null);
+    }
+  });
+}
 
 async function getRmbgServerSession() {
   if (rmbgSession) return rmbgSession;
@@ -149,8 +204,27 @@ export async function processServerBackgroundRemoval(options: RemoveBgOptions): 
     }
   }
 
-  // 2. Server-side ONNX RMBG-1.4 processing
+  // 2. Try Python BiRefNet pipeline (image_processor.py with BiRefNet-general)
   const startTime = Date.now();
+  try {
+    const pythonResult = await runPythonBiRefNet(buffer);
+    if (pythonResult && pythonResult.length > 0) {
+      const parsedPng = PNG.sync.read(pythonResult);
+      const cutoutDataUrl = `data:image/png;base64,${pythonResult.toString('base64')}`;
+      return {
+        cutoutImage: cutoutDataUrl,
+        maskImage: cutoutDataUrl,
+        width: parsedPng.width,
+        height: parsedPng.height,
+        modelUsed: 'BiRefNet (image_processor.py)',
+        inferenceTimeMs: Date.now() - startTime
+      };
+    }
+  } catch (pyErr) {
+    console.warn('[Server Bg Engine] BiRefNet Python pipeline skipped, falling back to local engine:', pyErr);
+  }
+
+  // 3. Fallback: Server-side ONNX processing
   const session = await getRmbgServerSession();
   const ort = await import('onnxruntime-web');
 

@@ -1,0 +1,5 @@
+rembg>=2.0.50
+pillow>=10.0.0
+onnxruntime>=1.16.0
+# For NVIDIA GPU acceleration with CUDA, use onnxruntime-gpu instead:
+# onnxruntime-gpu>=1.16.0
