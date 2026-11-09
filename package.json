@@ -39,5 +39,15 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "overrides": {
+    "@imgly/background-removal": {
+      "onnxruntime-web": "$onnxruntime-web"
+    },
+    "react": "$react",
+    "react-dom": "$react-dom"
   }
 }
