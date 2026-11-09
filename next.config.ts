@@ -1,9 +1,19 @@
 // @ts-nocheck
 import type { NextConfig } from "next";
 
+const isGithubPages = process.env.GITHUB_ACTIONS || process.env.NODE_ENV === "production";
+const repoName = "/snapid-studio";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // 1. COOP और COEP हेडर पूरी साइट पर लागू करने के लिए
+  output: "export", // GitHub Pages requires static HTML export
+  basePath: isGithubPages ? repoName : "",
+  assetPrefix: isGithubPages ? `${repoName}/` : "",
+  images: {
+    unoptimized: true, // Required for static export on GitHub Pages
+  },
+
+  // Headers (works in local dev and servers, while coi-serviceworker handles GitHub Pages)
   async headers() {
     return [
       {
@@ -14,7 +24,6 @@ const nextConfig: NextConfig = {
             value: "same-origin",
           },
           {
-            // credentialless बाहरी इमेज/फ़ॉन्ट्स को ब्लॉक किए बिना crossOriginIsolated: true सक्षम करता है
             key: "Cross-Origin-Embedder-Policy",
             value: "credentialless",
           },
@@ -26,7 +35,7 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  // WebAssembly और ONNX मॉडल बाइनरी सपोर्ट
+
   webpack: (config) => {
     config.experiments = {
       ...config.experiments,

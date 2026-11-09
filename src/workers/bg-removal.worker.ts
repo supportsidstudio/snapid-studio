@@ -22,6 +22,10 @@ function getAppBaseUrl(): string {
     } catch {}
 
     const href = self.location.href || '';
+    if (href.includes('/snapid-studio')) {
+      return origin ? `${origin}/snapid-studio/` : '/snapid-studio/';
+    }
+
     const assetsIndex = href.lastIndexOf('/assets/');
     if (assetsIndex !== -1 && origin) {
       try {
@@ -35,7 +39,7 @@ function getAppBaseUrl(): string {
       return `${origin}/`;
     }
   }
-  return '/';
+  return '/snapid-studio/';
 }
 
 function getWasmBasePath(): string {

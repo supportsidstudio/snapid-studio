@@ -25,6 +25,8 @@
   },
   "exclude": [
     "next.config.ts",
+    "app",
+    "scripts",
     "node_modules",
     "dist"
   ]
