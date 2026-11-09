@@ -115,7 +115,37 @@ export async function removeBackgroundInBrowser(
         reader1.readAsDataURL(cutoutBlob);
       } else if (e.data.type === 'error') {
         worker.removeEventListener('message', handleMessage);
-        reject(new Error(e.data.error || 'Failed to remove background'));
+        console.warn('[AI Bg Engine] Worker failed, engaging @imgly/background-removal fallback:', e.data.error);
+
+        // Fallback to @imgly/background-removal (Automatic WebGPU -> WASM)
+        import('./imgly-fallback')
+          .then(({ removeBgWithImgly }) => {
+            onProgress?.({ step: 'बैकएंड स्विच हो रहा है... (@imgly WebGPU/WASM)', percent: 30 });
+            const tStart = performance.now();
+            return removeBgWithImgly(imageBlob, (step, pct) => {
+              onProgress?.({ step, percent: pct });
+            }).then((imglyBlob) => {
+              const r1 = new FileReader();
+              r1.onload = () => {
+                const cutoutDataUrl = r1.result as string;
+                const totalSec = Number(((performance.now() - tStart) / 1000).toFixed(2));
+                resolve({
+                  cutoutDataUrl,
+                  maskDataUrl: cutoutDataUrl,
+                  width: 1024,
+                  height: 1024,
+                  modelUsed: '@imgly/background-removal (ISNet Fallback)',
+                  inferenceTimeMs: Math.round(totalSec * 1000),
+                  totalTimeSec: totalSec,
+                });
+              };
+              r1.onerror = reject;
+              r1.readAsDataURL(imglyBlob);
+            });
+          })
+          .catch((imglyErr) => {
+            reject(new Error(e.data.error || imglyErr?.message || 'Failed to remove background'));
+          });
       }
     };
 

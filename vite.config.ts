@@ -25,7 +25,9 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-        'onnxruntime-web': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort.wasm.min.mjs'),
+        'onnxruntime-web/webgpu': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs'),
+        'onnxruntime-web/all': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort.all.bundle.min.mjs'),
+        'onnxruntime-web': path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort.all.bundle.min.mjs'),
       },
     },
     optimizeDeps: {
@@ -37,7 +39,7 @@ export default defineConfig(() => {
     server: {
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Embedder-Policy': 'credentialless',
         'Cross-Origin-Resource-Policy': 'cross-origin',
       },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
@@ -49,7 +51,7 @@ export default defineConfig(() => {
     preview: {
       headers: {
         'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Embedder-Policy': 'credentialless',
         'Cross-Origin-Resource-Policy': 'cross-origin',
       },
     },
